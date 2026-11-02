@@ -16,6 +16,7 @@
 import { syntheticGuardian, syntheticPatients } from "@emb/db/synthetic";
 import { decide, type Rule } from "@emb/progression";
 import { scheduleDates } from "@emb/contracts";
+import { timerPositionFor, timerShown } from "@emb/session-rules";
 import type {
   AssignmentView,
   ConsentState,
@@ -99,7 +100,7 @@ function step(s: Partial<StepInput>): StepInput {
     lives: 3,
     difficulty_start: 2,
     hemisphere: "left",
-    timer_position: "left",
+    timer_position: "right", // opposite the hemisphere (ADR 0008)
     practice: "auto",
     trial_window_ms: null,
     game_params: {},
@@ -155,7 +156,7 @@ function seed(): Db {
     clinic_id: null,
     steps: [
       { ...step({}), id: uid(), ordinal: 1 },
-      { ...step({ session_mode: "timed", duration_s: 120, lives: null, hemisphere: "right", timer_position: "right" }), id: uid(), ordinal: 2 },
+      { ...step({ session_mode: "timed", duration_s: 120, lives: null, hemisphere: "right", timer_position: "left" }), id: uid(), ordinal: 2 },
     ],
   };
   const discrimination: TemplateDetail = {
@@ -371,7 +372,7 @@ function params(s: Assignment["steps"][number], p: Patient) {
     difficulty: s.current_difficulty,
     start_level: "from_difficulty",
     hemisphere: s.hemisphere,
-    timer_position: s.timer_position,
+    timer_position: timerPositionFor(s.hemisphere, timerShown(s.timer_position)),
     trial_window_ms: s.trial_window_ms,
     practice: s.practice === "auto" ? (s.sessions_completed === 0 ? "on" : "off") : s.practice,
     instructions: s.sessions_completed < 2 ? "always" : "short",

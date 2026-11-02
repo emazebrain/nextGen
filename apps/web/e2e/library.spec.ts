@@ -71,7 +71,7 @@ test("the library lists games and previews Catch Me If You Can in both palettes"
   await expect(page.getByRole("heading", { level: 1, name: "Catch Me If You Can" })).toBeVisible();
 });
 
-test("cold palette, timed, in Hebrew: the clock waits for the first tap, and the timer stays on the right", async ({ browser }) => {
+test("cold palette, timed, in Hebrew: the clock waits for the first tap, and the bar sits top left", async ({ browser }) => {
   const context = await browser.newContext();
   const page = await context.newPage();
   await enrol(page, "shira@synthetic.test");
@@ -85,15 +85,18 @@ test("cold palette, timed, in Hebrew: the clock waits for the first tap, and the
   const game = page.frameLocator("iframe.gameframe");
   await game.getByRole("button", { name: "משחקים!" }).click();
   const timer = game.locator(".hud-timer");
-  await expect(timer).toHaveClass(/side-right/);
+  await expect(timer).toHaveClass(/side-left/); // opposite the right hemisphere (ADR 0008)
+  await expect(timer).toHaveClass(/t-bar/); // cold: an emptying bar, not a clock
   await expect(timer.locator(".time")).toHaveText("2:00");
   await page.waitForTimeout(1500);
   await expect(timer.locator(".time")).toHaveText("2:00"); // not started: no tap yet
   const box = (await page.locator("iframe.gameframe").boundingBox())!;
   await page.mouse.click(box.x + box.width / 2 - 60, box.y + box.height / 2 - 40);
   await expect(timer.locator(".time")).not.toHaveText("2:00", { timeout: 4000 });
+  // The bar empties as time passes.
+  await expect.poll(async () => timer.locator(".fill").evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).a), { timeout: 4000 }).toBeLessThan(1);
   const tb = (await timer.boundingBox())!;
-  expect(tb.x).toBeGreaterThan(box.width / 2); // physical right, not mirrored
+  expect(tb.x + tb.width).toBeLessThan(box.width / 2); // physical left, not mirrored in Hebrew
   await shot(page, "34-game-cold-he");
   await stopFromPauseMenu(page);
   await expect(game.getByRole("heading", { name: "כל הכבוד על המאמץ!" })).toBeVisible();

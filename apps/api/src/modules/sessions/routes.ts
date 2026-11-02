@@ -25,6 +25,7 @@ import { GAME_MANIFESTS } from "../../games.ts";
 import { paramsHash, type TicketSigner } from "../../tickets.ts";
 import { parseBody } from "../../validate.ts";
 import { UUID } from "../patients/routes.ts";
+import { timerPositionFor, timerShown } from "@emb/session-rules";
 
 const CLINIC_TICKET_TTL_S = 24 * 3600;
 const GAME_LANGS = new Set(["he", "en", "ar", "ru", "fr", "es", "zh"]);
@@ -57,7 +58,8 @@ export function buildParams(step: StepRow, patient: { preferred_locale: string; 
     difficulty: step.current_difficulty,
     start_level: "from_difficulty",
     hemisphere: step.hemisphere,
-    timer_position: step.timer_position,
+    // Older steps may hold the v1 same-side value: the corner always follows the hemisphere (ADR 0008).
+    timer_position: timerPositionFor(step.hemisphere, timerShown(step.timer_position)),
     trial_window_ms: step.trial_window_ms,
     // "Auto" practice: on for a step's first session, then off.
     practice: step.practice === "auto" ? (step.sessions_completed === 0 ? "on" : "off") : step.practice,

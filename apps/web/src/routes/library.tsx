@@ -4,6 +4,7 @@
  * (nothing saved).
  */
 import { useState, type FormEvent } from "react";
+import { timerPositionFor } from "@emb/session-rules";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useIntl } from "react-intl";
 import { ArrowLeft, Clock, Gamepad2, Play, X } from "lucide-react";
@@ -243,7 +244,7 @@ export function GamePreviewPage() {
       lives: Number(q.get("lives") ?? 3),
       difficulty: Number(q.get("difficulty") ?? 3) as PlatformParams["difficulty"],
       hemisphere,
-      timer_position: hemisphere,
+      timer_position: timerPositionFor(hemisphere, true),
       practice: q.get("practice") === "off" ? "off" : "on",
       lang: (q.get("lang") as PlatformParams["lang"]) || "he",
     });

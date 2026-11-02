@@ -344,9 +344,9 @@
   "stepEditor.hemisphere": "Hemisphere",
   "stepEditor.hemiLeft": "Left, warm palette",
   "stepEditor.hemiRight": "Right, cold palette",
-  "stepEditor.timer": "Timer side",
-  "stepEditor.timerValue": "{side, select, left {Left} right {Right} other {Hidden}}",
-  "stepEditor.timerHelp": "Follows the hemisphere unless you change it. It isn't mirrored in Hebrew.",
+  "stepEditor.timer": "Timer",
+  "stepEditor.timerValue": "{v, select, shown {Show} other {Hide}}",
+  "stepEditor.timerHelp": "{h, select, left {Top right corner: a warm digital clock showing minutes and seconds.} other {Top left corner: a cold bar that empties as time runs out.}} The timer always sits opposite the hemisphere and isn't mirrored in Hebrew.",
   "stepEditor.practice": "Practice round",
   "stepEditor.practiceValue": "{p, select, auto {First sessions} on {Always} other {Never}}",
   "stepEditor.trialWindow": "Time for each board",
@@ -483,5 +483,7 @@
   "progress.history.title": "Session history",
   "progress.history.caption": "Every game played, newest first",
   "progress.history.more": "Show {count, plural, one {# more session} other {# more sessions}}",
-  "progress.note": "Compared only with {name}'s own earlier sessions. Not a measure against other children."
+  "progress.note": "Compared only with {name}'s own earlier sessions. Not a measure against other children.",
+  "stepEditor.timerHidden": "The child won't see the time. The session still ends when time is up.",
+  "step.timer": "{h, select, left {clock top right} other {bar top left}}"
 }

@@ -32,6 +32,9 @@ test("Noam runs a session: hand-off, two games, therapist controls, saved result
   // Game 1. Therapist controls by keyboard: a wrong PIN, then the right one, then skip.
   const game = page.frameLocator("iframe.gameframe");
   await expect(game.getByRole("button", { name: /Play|משחקים|Let's go/ }).first()).toBeVisible({ timeout: 20_000 });
+  // Game 1 trains the left hemisphere: a warm digital clock, top right. (ADR 0008)
+  await expect(game.locator(".hud-timer")).toHaveClass(/t-digital/);
+  await expect(game.locator(".hud-timer")).toHaveClass(/side-right/);
   await shot(page, "51-session-game1");
   await page.getByRole("button", { name: "Therapist controls" }).focus();
   await page.keyboard.press("Enter");
@@ -53,6 +56,10 @@ test("Noam runs a session: hand-off, two games, therapist controls, saved result
 
   // Game 2. Long press on the corner (a tap does nothing), then end the session.
   await expect(game.getByRole("button", { name: /Play|משחקים|Let's go/ }).first()).toBeVisible({ timeout: 20_000 });
+  // Game 2 trains the right hemisphere: a cold emptying bar, top left.
+  await expect(game.locator(".hud-timer")).toHaveClass(/t-bar/);
+  await expect(game.locator(".hud-timer")).toHaveClass(/side-left/);
+  await shot(page, "53b-session-game2");
   const corner = page.getByRole("button", { name: "Therapist controls" });
   await corner.click();
   await expect(controls).toHaveCount(0);

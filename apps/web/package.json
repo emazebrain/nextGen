@@ -21,6 +21,7 @@
     "@emb/game-sdk": "workspace:*",
     "@emb/metrics": "workspace:*",
     "@emb/progression": "workspace:*",
+    "@emb/session-rules": "workspace:*",
     "@emb/ui": "workspace:*",
     "@fontsource-variable/inter": "5.3.0",
     "@fontsource-variable/rubik": "5.3.0",

@@ -4,6 +4,7 @@
  * loaded only when someone plays, so the app's own bundle stays small.
  */
 import type { GameManifest, LocalText, PlatformParams } from "@emb/game-sdk";
+import { timerPositionFor } from "@emb/session-rules";
 import { manifest as catchMe } from "@emb/game-catch-me/manifest";
 
 export interface GameEntry {
@@ -41,7 +42,7 @@ export function launchParams(overrides: Partial<PlatformParams> & Record<string,
     difficulty: 3,
     start_level: "from_difficulty",
     hemisphere,
-    timer_position: hemisphere,
+    timer_position: timerPositionFor(hemisphere, true),
     trial_window_ms: null,
     practice: "auto",
     instructions: "auto",

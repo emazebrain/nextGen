@@ -5,6 +5,7 @@
  * offered, and the game's own settings come from its manifest schema.
  */
 import { useId, useState } from "react";
+import { timerPositionFor, timerShown } from "@emb/session-rules";
 import { useIntl } from "react-intl";
 import { ArrowDown, ArrowUp, ChevronDown, Gamepad2, Pencil, Plus, Trash2 } from "lucide-react";
 import { DEFAULT_PROGRESSION, stepInput, type SessionMode, type StepInput } from "@emb/contracts";
@@ -27,7 +28,7 @@ export function defaultStep(m: GameManifest): StepInput {
     lives: mode === "timed" ? null : 3,
     difficulty_start: 3,
     hemisphere: "left",
-    timer_position: "left",
+    timer_position: timerPositionFor("left", true),
     practice: "auto",
     trial_window_ms: null,
     game_params,
@@ -56,6 +57,7 @@ export function useStepSummary() {
       s.lives !== null ? t("step.hearts", { n: s.lives }) : null,
       t("step.difficulty", { n: s.difficulty_start }),
       t("step.palette", { h: s.hemisphere }),
+      s.duration_s !== null && timerShown(s.timer_position) ? t("step.timer", { h: s.hemisphere }) : null,
     ]
       .filter(Boolean)
       .join(" · ");
@@ -187,8 +189,9 @@ function StepEditor({ step: s, manifest: m, onChange }: { step: StepInput; manif
       duration_s: mode === "lives" ? null : (s.duration_s ?? m.recommendedDurationS ?? 300),
       lives: mode === "timed" ? null : (s.lives ?? 3),
     });
-  const setHemisphere = (h: "left" | "right") =>
-    onChange({ ...s, hemisphere: h, timer_position: s.timer_position === s.hemisphere ? h : s.timer_position });
+  // The timer's corner and look follow the hemisphere (ADR 0008); the therapist only chooses whether it shows.
+  const showTimer = timerShown(s.timer_position);
+  const setHemisphere = (h: "left" | "right") => onChange({ ...s, hemisphere: h, timer_position: timerPositionFor(h, showTimer) });
 
   const tw = m.capabilities.trialWindow;
   const windows = tw ? WINDOWS_S.filter((x) => x * 1000 >= tw.minMs && x * 1000 <= tw.maxMs) : [];
@@ -248,14 +251,14 @@ function StepEditor({ step: s, manifest: m, onChange }: { step: StepInput; manif
       />
       {s.duration_s !== null && (
         <div className="stepedit__group">
-          <Segmented<"left" | "right" | "hidden">
+          <Segmented<"shown" | "hidden">
             legend={t("stepEditor.timer")}
             name={`${id}-timer`}
-            value={s.timer_position}
-            onChange={(v) => set("timer_position", v)}
-            options={(["left", "right", "hidden"] as const).map((v) => ({ value: v, label: t("stepEditor.timerValue", { side: v }) }))}
+            value={showTimer ? "shown" : "hidden"}
+            onChange={(v) => set("timer_position", timerPositionFor(s.hemisphere, v === "shown"))}
+            options={(["shown", "hidden"] as const).map((v) => ({ value: v, label: t("stepEditor.timerValue", { v }) }))}
           />
-          <p className="emb-field__hint">{t("stepEditor.timerHelp")}</p>
+          <p className="emb-field__hint">{showTimer ? t("stepEditor.timerHelp", { h: s.hemisphere }) : t("stepEditor.timerHidden")}</p>
         </div>
       )}
       <div className="pform__row">

@@ -99,11 +99,33 @@ describe("game runtime", () => {
     expect(messages.filter((m) => m.type === "ended")).toHaveLength(1);
   });
 
-  it("puts the timer on the hemisphere's side, even in Hebrew", async () => {
-    await launch(params({ hemisphere: "right", timer_position: "right", lang: "he" }));
-    expect(document.documentElement.dir).toBe("rtl");
-    expect(document.querySelector(".hud-timer")!.classList.contains("side-right")).toBe(true);
+  it("left hemisphere: a warm four-digit clock in the top right corner", async () => {
+    await launch(params({ hemisphere: "left", timer_position: "right" }));
+    const timer = document.querySelector(".hud-timer")!;
+    expect([...timer.classList]).toEqual(expect.arrayContaining(["t-digital", "side-right"]));
     expect(document.querySelector(".hud-hearts")!.classList.contains("side-left")).toBe(true);
+    // 2:00 lit as 0, 2, 0, 0 on the seven-segment display.
+    const lit = [...timer.querySelectorAll(".lcd .digit")].map((g) => [...g.querySelectorAll(".seg")].map((x) => (x.classList.contains("on") ? 1 : 0)).join(""));
+    expect(lit).toEqual(["1111110", "1101101", "1111110", "1111110"]);
+    expect(timer.querySelector(".bar")).toBeNull();
+  });
+
+  it("right hemisphere: a cold emptying bar in the top left corner, even in Hebrew", async () => {
+    await launch(params({ hemisphere: "right", timer_position: "left", lang: "he" }));
+    expect(document.documentElement.dir).toBe("rtl");
+    const timer = document.querySelector(".hud-timer")!;
+    expect([...timer.classList]).toEqual(expect.arrayContaining(["t-bar", "side-left"]));
+    expect(document.querySelector(".hud-hearts")!.classList.contains("side-right")).toBe(true);
+    expect((timer.querySelector(".bar .fill") as HTMLElement).style.transform).toBe("scaleX(1)"); // full before the first tap
+    expect(timer.querySelector(".lcd")).toBeNull();
+  });
+
+  it("follows the hemisphere even for steps saved with the old same-side timer, and can hide it", async () => {
+    await launch(params({ hemisphere: "right", timer_position: "right" }));
+    expect(document.querySelector(".hud-timer")!.classList.contains("side-left")).toBe(true);
+    document.body.innerHTML = "";
+    await launch(params({ hemisphere: "left", timer_position: "hidden" }));
+    expect((document.querySelector(".hud-timer") as HTMLElement).hidden).toBe(true);
   });
 
   it("hides hearts in timed mode, and records mistakes without ending the session", async () => {

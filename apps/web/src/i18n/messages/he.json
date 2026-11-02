@@ -344,9 +344,9 @@
   "stepEditor.hemisphere": "המיספרה",
   "stepEditor.hemiLeft": "שמאל, פלטה חמה",
   "stepEditor.hemiRight": "ימין, פלטה קרה",
-  "stepEditor.timer": "צד הטיימר",
-  "stepEditor.timerValue": "{side, select, left {שמאל} right {ימין} other {מוסתר}}",
-  "stepEditor.timerHelp": "בצד של ההמיספרה, אלא אם משנים. הצד לא מתהפך בעברית.",
+  "stepEditor.timer": "טיימר",
+  "stepEditor.timerValue": "{v, select, shown {להציג} other {להסתיר}}",
+  "stepEditor.timerHelp": "{h, select, left {בפינה הימנית העליונה: שעון דיגיטלי בצבעים חמים, עם דקות ושניות.} other {בפינה השמאלית העליונה: פס בצבעים קרים שמתרוקן ככל שהזמן עובר.}} הטיימר תמיד בצד הנגדי להמיספרה, והצד לא מתהפך בעברית.",
   "stepEditor.practice": "סבב אימון",
   "stepEditor.practiceValue": "{p, select, auto {במפגשים הראשונים} on {תמיד} other {אף פעם}}",
   "stepEditor.trialWindow": "זמן לכל לוח",
@@ -483,5 +483,7 @@
   "progress.history.title": "היסטוריית מפגשים",
   "progress.history.caption": "כל המשחקים ששוחקו, מהחדש לישן",
   "progress.history.more": "{count, plural, one {הצגת מפגש נוסף} two {הצגת שני מפגשים נוספים} other {הצגת # מפגשים נוספים}}",
-  "progress.note": "ההשוואה היא רק למפגשים הקודמים של {name}. זו לא השוואה לילדים אחרים."
+  "progress.note": "ההשוואה היא רק למפגשים הקודמים של {name}. זו לא השוואה לילדים אחרים.",
+  "stepEditor.timerHidden": "הילד לא יראה את הזמן. המפגש עדיין מסתיים כשהזמן נגמר.",
+  "step.timer": "{h, select, left {שעון בימין למעלה} other {פס בשמאל למעלה}}"
 }

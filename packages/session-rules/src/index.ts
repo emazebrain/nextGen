@@ -314,3 +314,39 @@ export class Session {
 export function createSession(config: SessionRulesConfig): Session {
   return new Session(config);
 }
+
+// ---------------------------------------------------------------- timer display (ADR 0008)
+
+export type Hemisphere = "left" | "right";
+/** `digital`: a four-digit MM:SS clock in warm colours. `bar`: a bar in cold colours that empties as time runs out. */
+export type TimerStyle = "digital" | "bar";
+export interface TimerLayout {
+  /** Physical top corner. Never mirrored in RTL: the side carries clinical meaning. */
+  side: Hemisphere;
+  style: TimerStyle;
+  palette: "warm" | "cold";
+}
+
+/**
+ * Where and how the countdown is shown for the hemisphere a step trains
+ * (design doc §8.1 Timer rules; decided in ADR 0008): the timer goes in the
+ * OPPOSITE top corner. Left (warm) → top right, digital clock. Right (cold) →
+ * top left, emptying bar.
+ */
+export function timerLayout(hemisphere: Hemisphere): TimerLayout {
+  return hemisphere === "left" ? { side: "right", style: "digital", palette: "warm" } : { side: "left", style: "bar", palette: "cold" };
+}
+
+/**
+ * The value to store in a step's `timer_position`: the corner `timerLayout`
+ * gives, or `hidden`. Older rows may hold the v1 same-side value; read them
+ * through `timerShown` and `timerLayout`, never as a side.
+ */
+export function timerPositionFor(hemisphere: Hemisphere, shown: boolean): Hemisphere | "hidden" {
+  return shown ? timerLayout(hemisphere).side : "hidden";
+}
+
+/** Whether a stored `timer_position` shows the timer at all. */
+export function timerShown(position: Hemisphere | "hidden"): boolean {
+  return position !== "hidden";
+}

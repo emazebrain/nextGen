@@ -100,11 +100,11 @@ if (existing.rowCount) {
   // eMazeBrain library templates (content pipeline in production) and a running protocol for a few patients.
   const steps = {
     starter: [
-      { game_id: "catch-me-if-you-can", session_mode: "timed_lives", duration_s: 180, lives: 3, difficulty_start: 2, hemisphere: "left", timer_position: "left", trial_window_ms: null },
-      { game_id: "catch-me-if-you-can", session_mode: "timed", duration_s: 120, lives: null, difficulty_start: 2, hemisphere: "right", timer_position: "right", trial_window_ms: null },
+      { game_id: "catch-me-if-you-can", session_mode: "timed_lives", duration_s: 180, lives: 3, difficulty_start: 2, hemisphere: "left", timer_position: "right", trial_window_ms: null },
+      { game_id: "catch-me-if-you-can", session_mode: "timed", duration_s: 120, lives: null, difficulty_start: 2, hemisphere: "right", timer_position: "left", trial_window_ms: null },
     ],
     discrimination: [
-      { game_id: "catch-me-if-you-can", session_mode: "lives", duration_s: null, lives: 5, difficulty_start: 3, hemisphere: "left", timer_position: "left", trial_window_ms: 8000 },
+      { game_id: "catch-me-if-you-can", session_mode: "lives", duration_s: null, lives: 5, difficulty_start: 3, hemisphere: "left", timer_position: "right", trial_window_ms: 8000 },
     ],
   };
   const progression = JSON.stringify({ metric: "accuracy", up_at: 0.8, up_after: 2, down_below: 0.5, down_after: 1 });

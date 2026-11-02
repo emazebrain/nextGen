@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createSession, SessionConfigError } from "../src/index.js";
+import { createSession, SessionConfigError, timerLayout, timerPositionFor, timerShown } from "../src/index.js";
 
 describe("configuration", () => {
   it("requires a duration of 30–1800 s for modes with time", () => {
@@ -216,5 +216,20 @@ describe("determinism", () => {
     };
     expect(run()).toEqual(run());
     expect(run()).toMatchObject({ activeMs: 43_000, pausedMs: 6000, livesRemaining: 1, lifeLossEvents: 3 });
+  });
+});
+
+describe("timer display", () => {
+  it("puts the timer in the corner opposite the trained hemisphere, styled by palette", () => {
+    expect(timerLayout("left")).toEqual({ side: "right", style: "digital", palette: "warm" });
+    expect(timerLayout("right")).toEqual({ side: "left", style: "bar", palette: "cold" });
+  });
+
+  it("stores the derived corner, or hidden", () => {
+    expect(timerPositionFor("left", true)).toBe("right");
+    expect(timerPositionFor("right", true)).toBe("left");
+    expect(timerPositionFor("left", false)).toBe("hidden");
+    expect(timerShown("hidden")).toBe(false);
+    expect(timerShown("left")).toBe(true); // a v1 same-side row still shows the timer, in the derived corner
   });
 });

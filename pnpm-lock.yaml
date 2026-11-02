@@ -20,6 +20,9 @@ importers:
       '@emb/game-sdk':
         specifier: workspace:*
         version: link:../../packages/game-sdk
+      '@emb/session-rules':
+        specifier: workspace:*
+        version: link:../../packages/session-rules
       '@hono/node-server':
         specifier: ^1.14.0
         version: 1.19.17(hono@4.13.13)
@@ -72,6 +75,9 @@ importers:
       '@emb/progression':
         specifier: workspace:*
         version: link:../../packages/progression
+      '@emb/session-rules':
+        specifier: workspace:*
+        version: link:../../packages/session-rules
       '@emb/ui':
         specifier: workspace:*
         version: link:../../packages/ui

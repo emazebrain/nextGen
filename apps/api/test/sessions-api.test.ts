@@ -125,6 +125,8 @@ describe.skipIf(!ADMIN_URL)("sessions API", () => {
       "catch_me_if_you_can.cvd_mode": true,
     });
     expect(launch.steps[1].params.hemisphere).toBe("right");
+    // Timer in the corner opposite the hemisphere: left → top right, right → top left (ADR 0008).
+    expect(launch.steps.map((s: { params: { timer_position: string } }) => s.params.timer_position)).toEqual(["right", "left"]);
     expect(launch.steps[0].ticket.split(".")).toHaveLength(3);
     // Someone outside the clinic can't launch it.
     expect((await dana(`/v1/planned-sessions/${sessions[0]!.id}/launch`, { method: "POST", body: {} })).status).toBe(404);

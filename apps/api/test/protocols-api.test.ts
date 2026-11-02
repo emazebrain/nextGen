@@ -62,6 +62,8 @@ describe.skipIf(!ADMIN_URL)("protocols API", () => {
     templateId = res.body.template.id;
     expect(res.body.template).toMatchObject({ version: 1, can_edit: true, games: ["catch-me-if-you-can", "catch-me-if-you-can"] });
     expect(res.body.template.steps[1]).toMatchObject({ session_mode: "timed", lives: null, duration_s: 180, game_params: { cvd_mode: true } });
+    // The timer corner is stored opposite the hemisphere, whatever side the client sent (ADR 0008).
+    expect(res.body.template.steps.map((s: { timer_position: string }) => s.timer_position)).toEqual(["right", "left"]);
     const list = await dana(`/v1/templates?clinic=${ids.clinic}`);
     expect(list.body.templates).toEqual([expect.objectContaining({ id: templateId, can_edit: false, owner_name: "Yael Bar" })]);
   });

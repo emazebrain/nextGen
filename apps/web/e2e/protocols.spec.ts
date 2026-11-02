@@ -30,6 +30,15 @@ test("Tal builds a template from the library and assigns it", async ({ page }) =
   await page.getByLabel("Name").fill("Attention, both sides");
 
   await page.getByRole("button", { name: "Edit Step 1" }).click();
+  // The timer corner and look follow the hemisphere, opposite side (ADR 0008).
+  await expect(page.getByText(/Top right corner: a warm digital clock/)).toBeVisible();
+  await page.getByRole("radio", { name: "Right, cold palette" }).check();
+  await expect(page.getByText(/Top left corner: a cold bar that empties/)).toBeVisible();
+  await page.getByRole("radio", { name: "Hide" }).check();
+  await expect(page.getByText("The child won't see the time. The session still ends when time is up.")).toBeVisible();
+  await page.getByRole("radio", { name: "Show" }).check();
+  await page.getByRole("radio", { name: "Left, warm palette" }).check();
+  await shot(page, "41a-builder-timer");
   await page.getByRole("radio", { name: "Lives", exact: true }).check();
   await expect(page.getByLabel("Time limit")).toHaveCount(0); // Lives mode: no time limit
   await page.getByLabel("Hearts").selectOption("5");

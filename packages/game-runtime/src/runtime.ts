@@ -5,7 +5,7 @@
  * (timer ring on the hemisphere's side, hearts), the instructions, practice,
  * pause menu and the child's summary, and posts one results envelope.
  */
-import { Session, type EndReason, type SessionRulesConfig, type SessionSnapshot } from "@emb/session-rules";
+import { Session, timerLayout, timerShown, type EndReason, type SessionRulesConfig, type SessionSnapshot, type TimerLayout } from "@emb/session-rules";
 import type { GameDefinition, GameModule, LevelHistoryRow, PauseReason, SessionApi, TrialEvent } from "@emb/game-sdk";
 import { isHostMessage, type FrameToHost, type HostToFrame, type LaunchParams, type ResultEnvelope } from "./protocol.ts";
 import { HIGH_CONTRAST, PALETTES } from "./palettes.ts";
@@ -63,9 +63,10 @@ class Run {
   private rafId = 0;
   private heartbeat = 0;
   private blurTimer = 0;
+  private timerUi!: TimerLayout;
   private lang: "en" | "he";
   private reducedMotion: boolean;
-  private els!: { root: HTMLElement; stage: HTMLElement; timer: HTMLElement; ring: SVGCircleElement; time: HTMLElement; hearts: HTMLElement; overlay: HTMLElement; freeze: HTMLElement; glow: HTMLElement; chip: HTMLElement; pause: HTMLButtonElement };
+  private els!: { root: HTMLElement; stage: HTMLElement; timer: HTMLElement; segs: SVGElement[][]; fill: HTMLElement | null; time: HTMLElement; hearts: HTMLElement; overlay: HTMLElement; freeze: HTMLElement; glow: HTMLElement; chip: HTMLElement; pause: HTMLButtonElement };
 
   constructor(
     private readonly def: GameDefinition,
@@ -284,6 +285,7 @@ class Run {
     d.documentElement.dir = this.lang === "he" ? "rtl" : "ltr";
     const style = d.createElement("style");
     style.textContent = css({
+      hc,
       hudBg: hc ? HIGH_CONTRAST.hudBg : p.hudBg,
       hudFg: hc ? HIGH_CONTRAST.hudFg : p.hudFg,
       hudAccent: p.hudAccent,
@@ -299,16 +301,22 @@ class Run {
     d.head.appendChild(style);
     const root = d.createElement("div");
     root.className = "emb-root";
-    // The timer side is clinical (hemisphere), so it is physical and never mirrored in RTL (§7.8).
-    const timerSide = this.params.timer_position === "hidden" ? "hidden" : this.params.timer_position === "right" ? "right" : "left";
+    // The timer goes in the corner opposite the trained hemisphere, styled by its palette (ADR 0008):
+    // left (warm) → top right, digital clock; right (cold) → top left, emptying bar.
+    // The side is clinical, so it is physical and never mirrored in RTL (§7.8).
+    const ui = (this.timerUi = timerLayout(this.params.hemisphere === "right" ? "right" : "left"));
+    const face =
+      ui.style === "digital"
+        ? `<svg class="lcd" viewBox="0 0 ${LCD_W} 44" aria-hidden="true">${[0, 1, 2, 3].map((i) => digitSvg(i)).join("")}<circle class="colon" cx="${LCD_COLON}" cy="15" r="2.6"/><circle class="colon" cx="${LCD_COLON}" cy="29" r="2.6"/></svg>`
+        : `<span class="bar" aria-hidden="true"><span class="fill"></span></span>`;
     root.innerHTML = `
       <div class="stage" aria-hidden="true"></div>
       <div class="hud" dir="ltr">
-        <div class="hud-timer side-${timerSide}" role="timer" aria-live="off">
-          <svg viewBox="0 0 56 56" aria-hidden="true"><circle class="track" cx="28" cy="28" r="24"/><circle class="ring" cx="28" cy="28" r="24"/></svg>
-          <span class="time"></span>
+        <div class="hud-timer t-${ui.style} side-${ui.side}" role="timer" aria-live="off">
+          ${face}
+          <span class="time vh"></span>
         </div>
-        <div class="hud-hearts side-${timerSide === "right" ? "left" : "right"}" role="img"></div>
+        <div class="hud-hearts side-${ui.side === "right" ? "left" : "right"}" role="img"></div>
         <button class="hud-pause" type="button"><span aria-hidden="true">❚❚</span></button>
         <div class="hud-chip" hidden></div>
         ${this.demo ? `<div class="hud-demo">${this.t("demo")}</div>` : ""}
@@ -322,7 +330,8 @@ class Run {
       root,
       stage: q(".stage"),
       timer: q(".hud-timer"),
-      ring: q("circle.ring"),
+      segs: [...root.querySelectorAll(".lcd .digit")].map((g) => [...g.querySelectorAll<SVGElement>(".seg")]),
+      fill: root.querySelector<HTMLElement>(".bar .fill"),
       time: q(".time"),
       hearts: q(".hud-hearts"),
       overlay: q(".overlay"),
@@ -334,19 +343,26 @@ class Run {
     this.els.pause.setAttribute("aria-label", this.t("pause"));
     this.els.pause.addEventListener("click", () => this.pause("manual"));
     if (this.session.snapshot().remainingMs === null) this.els.timer.hidden = true;
-    if (timerSide === "hidden") this.els.timer.hidden = true;
+    if (!timerShown(this.params.timer_position)) this.els.timer.hidden = true;
+  }
+
+  /** Lights the seven-segment digits of the MM:SS clock. */
+  private setDigits(digits: string) {
+    [...digits].forEach((ch, i) => {
+      const on = SEGMENTS[Number(ch)] ?? "";
+      this.els.segs[i]?.forEach((seg, k) => seg.classList.toggle("on", on.includes("abcdefg"[k]!)));
+    });
   }
 
   private renderHud(s: SessionSnapshot) {
     const total = (this.session.config.durationS ?? 0) * 1000;
     if (s.remainingMs !== null && !this.els.timer.hidden) {
-      const frac = total ? s.remainingMs / total : 0;
-      const c = 2 * Math.PI * 24;
-      this.els.ring.style.strokeDasharray = `${c}`;
-      this.els.ring.style.strokeDashoffset = `${c * (1 - frac)}`;
+      const frac = total ? Math.max(0, Math.min(1, s.remainingMs / total)) : 0;
+      if (this.els.fill) this.els.fill.style.transform = `scaleX(${frac})`;
       const label = formatTime(s.remainingMs);
       if (this.els.time.textContent !== label) {
         this.els.time.textContent = label;
+        if (this.timerUi.style === "digital") this.setDigits(clockDigits(s.remainingMs));
         this.els.timer.setAttribute("aria-label", s.phase === "ready" ? this.t("timeTotal", { time: label }) : this.t("timeLeft", { time: label }));
       }
       this.els.timer.classList.toggle("warning", s.timerWarning);
@@ -499,10 +515,38 @@ class Run {
   }
 }
 
+/** Timer colours (ADR 0008): warm amber digits for the clock, cold blues for the bar. Warnings stay in the same family. */
+const TIMER = {
+  warm: { bg: "#2A0E0B", rim: "#7A2420", on: "#FFB547", off: "rgb(255 181 71 / .12)", glow: "rgb(255 143 61 / .55)", warn: "#F5C431" },
+  cold: { bg: "rgb(14 21 48 / .9)", rim: "#232C6B", track: "rgb(108 196 232 / .16)", from: "#2FB3C8", to: "#6CC4E8", warn: "#B39BFF" },
+} as const;
+
+/** Seven-segment digits: which of a–g are lit for 0–9. */
+const SEGMENTS = ["abcdef", "bc", "abdeg", "abcdg", "bcfg", "acdfg", "acdefg", "abc", "abcdefg", "abcdfg"];
+const DIGIT_X = [2, 26, 56, 80]; // MM:SS, with the colon between the second and third digit
+const LCD_W = 104;
+const LCD_COLON = 51;
+
+/** One seven-segment digit in a 20 × 40 cell, its segments in a–g order (top, upper right, lower right, bottom, lower left, upper left, middle). */
+function digitSvg(i: number): string {
+  const x = DIGIT_X[i]!;
+  const hz = (y: number) => { const x1 = x + 3, x2 = x + 17; return `M${x1} ${y}L${x1 + 2} ${y - 2}H${x2 - 2}L${x2} ${y}L${x2 - 2} ${y + 2}H${x1 + 2}Z`; };
+  const vt = (xx: number, y1: number, y2: number) => `M${xx} ${y1}L${xx + 2} ${y1 + 2}V${y2 - 2}L${xx} ${y2}L${xx - 2} ${y2 - 2}V${y1 + 2}Z`;
+  const l = x + 2, r = x + 18;
+  const segs = [hz(4), vt(r, 5, 21), vt(r, 23, 39), hz(40), vt(l, 23, 39), vt(l, 5, 21), hz(22)];
+  return `<g class="digit">${segs.map((d) => `<path class="seg" d="${d}"/>`).join("")}</g>`;
+}
+
+/** MM:SS as four digits, rounded up like the spoken time (a clock never shows 00:00 while time remains). */
+function clockDigits(ms: number): string {
+  const total = Math.min(99 * 60 + 59, Math.ceil(Math.max(0, ms) / 1000));
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}${String(total % 60).padStart(2, "0")}`;
+}
+
 const HEART = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.1 0 3.6 1.2 4.3 2.4.7-1.2 2.2-2.4 4.3-2.4 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z"/></svg>`;
 const STAR = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z"/></svg>`;
 
-function css(v: { hudBg: string; hudFg: string; hudAccent: string; hudWarning: string; btn: string; btnText: string; heart: string; surface: string; ink: string; outline: string; reduced: boolean }) {
+function css(v: { hc: boolean; hudBg: string; hudFg: string; hudAccent: string; hudWarning: string; btn: string; btnText: string; heart: string; surface: string; ink: string; outline: string; reduced: boolean }) {
   return `
   *{box-sizing:border-box}
   [hidden]{display:none!important}
@@ -514,13 +558,19 @@ function css(v: { hudBg: string; hudFg: string; hudAccent: string; hudWarning: s
   /* physical-ok: the timer side follows the hemisphere and is never mirrored */
   .side-left{position:absolute;top:16px;left:24px}
   .side-right{position:absolute;top:16px;right:24px}
-  .hud-timer{display:grid;place-items:center;width:72px;height:72px;border-radius:50%;background:${v.hudBg};color:${v.hudFg};outline:3px solid ${v.outline}}
-  .hud-timer svg{position:absolute;inset:6px;width:60px;height:60px;transform:rotate(-90deg)}
-  .hud-timer circle{fill:none;stroke-width:5}
-  .hud-timer .track{stroke:rgb(255 255 255 / .18)}
-  .hud-timer .ring{stroke:${v.hudAccent};stroke-linecap:round;transition:stroke .3s}
-  .hud-timer .time{position:relative;font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
-  .hud-timer.warning .ring{stroke:${v.hudWarning}}
+  .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  /* Left hemisphere: a warm four-digit digital clock (MM:SS), top right. */
+  .t-digital{display:grid;place-items:center;padding:8px 12px;border-radius:12px;background:${v.hc ? "#000" : TIMER.warm.bg};border:2px solid ${TIMER.warm.rim};outline:3px solid ${v.outline}}
+  .t-digital .lcd{display:block;width:${LCD_W * 1.25}px;height:55px}
+  .t-digital .seg{fill:${TIMER.warm.off}}
+  .t-digital .seg.on,.t-digital .colon{fill:${TIMER.warm.on}}
+  .t-digital .lcd{filter:drop-shadow(0 0 4px ${TIMER.warm.glow})}
+  .t-digital.warning .seg.on,.t-digital.warning .colon{fill:${TIMER.warm.warn}}
+  /* Right hemisphere: a cold bar that empties as time runs out, top left. */
+  .t-bar{display:block;width:min(36vw,300px);padding:5px;border-radius:999px;background:${v.hc ? "#000" : TIMER.cold.bg};border:2px solid ${TIMER.cold.rim};outline:3px solid ${v.outline}}
+  .t-bar .bar{display:block;height:22px;border-radius:999px;background:${TIMER.cold.track};overflow:hidden}
+  .t-bar .fill{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,${TIMER.cold.from},${TIMER.cold.to});transform-origin:0 50%;${v.reduced ? "" : "transition:transform .25s linear,background .3s"}}
+  .t-bar.warning .fill{background:${TIMER.cold.warn}}
   ${v.reduced ? "" : `.hud-timer.warning{animation:pulse 1s ease-in-out infinite}`}
   @keyframes pulse{50%{transform:scale(1.06)}}
   .hud-hearts{display:flex;gap:6px;align-items:center;padding:10px 14px;border-radius:999px;background:${v.hudBg};color:${v.hudFg};outline:3px solid ${v.outline}}

@@ -20,11 +20,13 @@ import { checkStepAgainstGame } from "../../games.ts";
 import { uuidv7 } from "../../ids.ts";
 import { parseBody } from "../../validate.ts";
 import { UUID } from "../patients/routes.ts";
+import { timerPositionFor, timerShown } from "@emb/session-rules";
 
 const STEP_COLUMNS = `game_id, session_mode, duration_s, lives, difficulty_start, hemisphere, timer_position, practice, trial_window_ms, game_params, progression`;
 
 function stepValues(s: StepInput) {
-  return [s.game_id, s.session_mode, s.duration_s, s.lives, s.difficulty_start, s.hemisphere, s.timer_position, s.practice, s.trial_window_ms, JSON.stringify(s.game_params), s.progression ? JSON.stringify(s.progression) : null];
+  // The timer corner is derived from the hemisphere (ADR 0008); only shown or hidden comes from the client.
+  return [s.game_id, s.session_mode, s.duration_s, s.lives, s.difficulty_start, s.hemisphere, timerPositionFor(s.hemisphere, timerShown(s.timer_position)), s.practice, s.trial_window_ms, JSON.stringify(s.game_params), s.progression ? JSON.stringify(s.progression) : null];
 }
 
 function gameIssues(steps: StepInput[]) {
