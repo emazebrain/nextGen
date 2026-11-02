@@ -18,7 +18,7 @@ async function stopFromPauseMenu(page: Page) {
 }
 
 // The game renders continuously with software WebGL in CI, which is slow: allow more than the default 30 s.
-test.describe.configure({ timeout: 90_000 });
+test.describe.configure({ timeout: 150_000 });
 
 test("the library lists games and previews Catch Me If You Can in both palettes", async ({ page }) => {
   await enrol(page, "gil@synthetic.test");
@@ -63,8 +63,10 @@ test("the library lists games and previews Catch Me If You Can in both palettes"
   await stopFromPauseMenu(page);
   await expect(game.getByRole("heading", { name: "Great effort!" })).toBeVisible();
   await expect(game.getByRole("img", { name: /of 3 stars/ })).toBeVisible();
-  await game.getByRole("button", { name: "Done" }).click();
-  await expect(page.getByText("Preview finished. Nothing was saved.")).toBeVisible();
+  // The summary closes by itself after 10 s; on a slow machine it may already have gone.
+  const finished = page.getByText("Preview finished. Nothing was saved.");
+  await Promise.race([game.getByRole("button", { name: "Done" }).click().catch(() => {}), finished.waitFor()]);
+  await expect(finished).toBeVisible();
   await expect(page.getByText("Stopped early")).toBeVisible();
   await axe(page, "preview finished");
   await page.getByRole("button", { name: "Done" }).click();
