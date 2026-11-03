@@ -16,7 +16,7 @@
 | Timer (ADR 0008) | Warm clock, top right | Cold bar, top left |
 
 **The task stays measurable.**
-- 3D tiles get their depth only from a bevelled rim and a shadow. Each tile's face is one flat colour, so the ΔE the engine sets is the ΔE the child sees.
+- 3D tiles get their depth only from a bevelled rim and a shadow (superseded for the tile look by ADR 0010: mitred bevel facets, no drop shadow). Each tile's face is one flat colour, so the ΔE the engine sets is the ΔE the child sees.
 - The background never touches the tiles. Each board keeps its plain light frame, so a background colour or pattern can't change how the tile colours look (simultaneous contrast).
 - Rewards last under a second and never delay the next board beyond the existing 750 ms. With reduced motion, nothing moves.
 

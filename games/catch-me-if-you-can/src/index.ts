@@ -430,12 +430,7 @@ class CatchMe implements GameModule {
         const r = tile * 0.16;
         const face = k === board.oddIndex ? board.odd : board.base;
         if (this.side === "right") {
-          // 3D button (ADR 0009): depth from a neutral side wall and a shadow, identical for every tile.
-          // The face is one flat, exact colour, so the ΔE the engine set is the ΔE the child sees.
-          const depth = Math.max(4, tile * 0.09);
-          g.roundRect(depth * 0.4, depth + 3, tile, tile, r).fill({ color: "#000000", alpha: 0.16 });
-          g.roundRect(0, depth, tile, tile, r).fill({ color: "#1E1E24", alpha: 0.55 });
-          g.roundRect(0, 0, tile, tile, r).fill({ color: face }).stroke({ width: 1.5, color: "#000000", alpha: 0.22 });
+          drawBevelTile(g, tile, tile * 0.12, face);
         } else {
           // Flat 2D tile: the face, with a fine neutral outline for definition.
           g.roundRect(0, 0, tile, tile, r).fill({ color: face }).stroke({ width: 2, color: "#000000", alpha: 0.12 });
@@ -670,6 +665,54 @@ function shade(hex: string, amount: number): string {
   const to = amount > 0 ? 255 : 0;
   const k = Math.abs(amount);
   return rgbToHex([r + (to - r) * k, g + (to - g) * k, b + (to - b) * k]);
+}
+
+/** Points along a circular arc, angles in degrees (screen space: 0° = right, 90° = down). */
+function arc(cx: number, cy: number, rad: number, from: number, to: number, steps = 5): number[] {
+  const out: number[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const a = ((from + ((to - from) * i) / steps) * Math.PI) / 180;
+    out.push(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad);
+  }
+  return out;
+}
+
+/** How each bevel facet is lit (light from above, a little from the left), as a shade() amount. */
+const BEVEL_TONES = { top: 0.46, left: 0.16, right: -0.22, bottom: -0.44 } as const;
+
+/**
+ * A bevelled 3D block (ADR 0010), like a glossy toy block lit from above: four mitred edge facets in
+ * tones of the tile's own colour around a raised face, no drop shadow. Each facet is drawn in bands that
+ * ease from its full tone at the outer edge towards the face, so the edges look rounded, not cut.
+ * Every tile gets the same geometry and tone steps, and the face, most of the tile, stays one flat exact
+ * colour, so the ΔE the engine set between the odd tile and the rest is the ΔE the child sees.
+ */
+function drawBevelTile(g: Graphics, T: number, r: number, face: string) {
+  const depth = { top: T * 0.075, side: T * 0.085, bottom: T * 0.115 };
+  const ri = Math.max(2, r * 0.6);
+  // The rounded rectangle k of the way from the block's outline (k = 0) to the face's (k = 1).
+  const ring = (k: number) => {
+    const rad = r + (ri - r) * k;
+    const l = depth.side * k, t = depth.top * k, rr = T - depth.side * k, b = T - depth.bottom * k;
+    return { rad, l: l + rad, t: t + rad, r: rr - rad, b: b - rad };
+  };
+  const BANDS = 6;
+  for (let j = 0; j < BANDS; j++) {
+    const o = ring(j / BANDS), i = ring((j + 1) / BANDS);
+    const ease = 1 - 0.5 * (j / (BANDS - 1)); // full tone outside, half tone next to the face
+    const facet = (outer: number[], inner: number[], amount: number) => g.poly([...outer, ...inner]).fill({ color: shade(face, amount * ease) });
+    facet([...arc(o.l, o.t, o.rad, 225, 270), ...arc(o.r, o.t, o.rad, 270, 315)], [...arc(i.r, i.t, i.rad, 315, 270), ...arc(i.l, i.t, i.rad, 270, 225)], BEVEL_TONES.top);
+    facet([...arc(o.r, o.t, o.rad, 315, 360), ...arc(o.r, o.b, o.rad, 0, 45)], [...arc(i.r, i.b, i.rad, 45, 0), ...arc(i.r, i.t, i.rad, 360, 315)], BEVEL_TONES.right);
+    facet([...arc(o.r, o.b, o.rad, 45, 90), ...arc(o.l, o.b, o.rad, 90, 135)], [...arc(i.l, i.b, i.rad, 135, 90), ...arc(i.r, i.b, i.rad, 90, 45)], BEVEL_TONES.bottom);
+    facet([...arc(o.l, o.b, o.rad, 135, 180), ...arc(o.l, o.t, o.rad, 180, 225)], [...arc(i.l, i.t, i.rad, 225, 180), ...arc(i.l, i.b, i.rad, 180, 135)], BEVEL_TONES.left);
+  }
+  // The face: one flat, exact colour.
+  const f = ring(1);
+  g.roundRect(f.l - f.rad, f.t - f.rad, f.r - f.l + f.rad * 2, f.b - f.t + f.rad * 2, f.rad).fill({ color: face });
+  // Gloss: a thin bright line where light catches the top edge, the same on every tile.
+  g.roundRect(r * 0.8, depth.top * 0.18, T - r * 1.6, Math.max(1.5, depth.top * 0.22), depth.top * 0.11).fill({ color: "#FFFFFF", alpha: 0.45 });
+  // A fine dark outline keeps light tiles crisp against the light board.
+  g.roundRect(0, 0, T, T, r).stroke({ width: 1.5, color: "#000000", alpha: 0.32 });
 }
 
 /** A shaded sphere with a soft shadow: light from the top left. */
