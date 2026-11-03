@@ -346,7 +346,7 @@
   "stepEditor.hemiRight": "Right, cold palette",
   "stepEditor.timer": "Timer",
   "stepEditor.timerValue": "{v, select, shown {Show} other {Hide}}",
-  "stepEditor.timerHelp": "{h, select, left {Top right corner: a warm digital clock showing minutes and seconds.} other {Top left corner: a cold bar that empties as time runs out.}} The timer always sits opposite the hemisphere and isn't mirrored in Hebrew.",
+  "stepEditor.timerHelp": "{h, select, left {Top right corner: a {mono, select, yes {grey} other {warm}} digital clock showing minutes and seconds.} other {Top left corner: a {mono, select, yes {grey} other {cold}} bar that empties as time runs out.}} The timer always sits opposite the hemisphere and isn't mirrored in Hebrew.",
   "stepEditor.practice": "Practice round",
   "stepEditor.practiceValue": "{p, select, auto {First sessions} on {Always} other {Never}}",
   "stepEditor.trialWindow": "Time for each board",
@@ -485,5 +485,13 @@
   "progress.history.more": "Show {count, plural, one {# more session} other {# more sessions}}",
   "progress.note": "Compared only with {name}'s own earlier sessions. Not a measure against other children.",
   "stepEditor.timerHidden": "The child won't see the time. The session still ends when time is up.",
-  "step.timer": "{h, select, left {clock top right} other {bar top left}}"
+  "step.timer": "{h, select, left {clock top right} other {bar top left}}",
+  "stepEditor.monochrome": "Black and white",
+  "stepEditor.monochromeHelp": "Tiles, background, rewards and timer in shades of grey. Tiles differ in lightness only.",
+  "step.monochrome": "black and white",
+  "preview.background": "Background",
+  "preview.backgroundValue": "{v, select, solid {Solid} other {Textured}}",
+  "preview.motion": "Moving background",
+  "preview.temperature": "Background colours",
+  "preview.temperatureValue": "{v, select, warm {Warm} cold {Cold} other {Follow the palette}}"
 }

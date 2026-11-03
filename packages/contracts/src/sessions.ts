@@ -94,6 +94,8 @@ export interface GameSessionView {
   session_mode: "timed" | "lives" | "timed_lives";
   difficulty: number;
   hemisphere: "left" | "right";
+  /** Played in black and white (ADR 0009); older sessions count as colour. */
+  monochrome: boolean;
   started_at: string | null;
   ended_at: string;
   active_ms: number;

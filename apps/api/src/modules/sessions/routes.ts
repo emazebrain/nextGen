@@ -40,6 +40,7 @@ interface StepRow {
   current_difficulty: number;
   hemisphere: "left" | "right";
   timer_position: "left" | "right" | "hidden";
+  monochrome: boolean;
   practice: "auto" | "on" | "off";
   trial_window_ms: number | null;
   game_params: Record<string, unknown>;
@@ -60,6 +61,8 @@ export function buildParams(step: StepRow, patient: { preferred_locale: string; 
     hemisphere: step.hemisphere,
     // Older steps may hold the v1 same-side value: the corner always follows the hemisphere (ADR 0008).
     timer_position: timerPositionFor(step.hemisphere, timerShown(step.timer_position)),
+    // Black and white only for games that support it (ADR 0009).
+    monochrome: step.monochrome === true && GAME_MANIFESTS[step.game_id]?.capabilities.monochrome === true,
     trial_window_ms: step.trial_window_ms,
     // "Auto" practice: on for a step's first session, then off.
     practice: step.practice === "auto" ? (step.sessions_completed === 0 ? "on" : "off") : step.practice,
@@ -105,7 +108,7 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
       if (row.assignment_status !== "active") return { error: "protocol_not_active" as const };
       if (row.status !== "planned" && row.status !== "in_progress") return { error: "session_closed" as const };
       const steps = await db.query<StepRow & { done: boolean }>(
-        `SELECT s.id, s.ordinal, s.game_id, s.session_mode, s.duration_s, s.lives, s.current_difficulty, s.hemisphere, s.timer_position, s.practice, s.trial_window_ms,
+        `SELECT s.id, s.ordinal, s.game_id, s.session_mode, s.duration_s, s.lives, s.current_difficulty, s.hemisphere, s.timer_position, s.monochrome, s.practice, s.trial_window_ms,
                 s.game_params, s.sessions_completed,
                 EXISTS (SELECT 1 FROM app.game_session g WHERE g.planned_session_id = $2 AND g.assignment_step_id = s.id) AS done
            FROM app.assignment_step s WHERE s.assignment_id = $1 ORDER BY s.ordinal`,
@@ -188,7 +191,7 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
       const { rows } = await db.query<GameSessionView>(
         `SELECT g.id, g.game_id, g.status, g.session_mode, g.difficulty, g.hemisphere, g.started_at, g.ended_at, g.active_ms,
                 g.accuracy::float8 AS accuracy, g.rt_median_ms, g.trials_total, g.correct, g.errors, g.lives_lost, g.highest_level,
-                g.planned_session_id, ps.seq, g.metrics
+                g.planned_session_id, ps.seq, g.metrics, COALESCE((g.config_echo->>'monochrome')::boolean, false) AS monochrome
            FROM app.game_session g LEFT JOIN app.planned_session ps ON ps.id = g.planned_session_id
           WHERE g.patient_id = $1 AND g.is_valid
           ORDER BY g.ended_at DESC LIMIT 500`,

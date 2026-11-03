@@ -31,9 +31,9 @@ const params = (extra: Partial<LaunchParams> = {}): LaunchParams => ({
   ...extra,
 });
 
-function fakeGame(onInit: (ctx: InitContext) => void): GameDefinition {
+function fakeGame(onInit: (ctx: InitContext) => void, monochrome = false): GameDefinition {
   return {
-    manifest: { id: "fake", version: "1.0.0", capabilities: { practice: false } } as GameDefinition["manifest"],
+    manifest: { id: "fake", version: "1.0.0", capabilities: { practice: false, monochrome } } as GameDefinition["manifest"],
     strings: { en: { "instructions.title": "Fake", "instructions.text": "Tap things." } },
     create: () => ({
       init: async (ctx) => onInit(ctx),
@@ -67,9 +67,10 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-async function launch(p: LaunchParams): Promise<InitContext> {
+async function launch(p: LaunchParams, monochrome = false): Promise<InitContext> {
   let ctx: InitContext | undefined;
-  boot(fakeGame((c) => (ctx = c)), window);
+  messages.length = 0;
+  boot(fakeGame((c) => (ctx = c), monochrome), window);
   await until(() => messages.find((m) => m.type === "ready"));
   send({ type: "launch", sessionId: "0192f3a0-0000-7000-8000-000000000001", params: p, demo: false });
   await until(() => ctx);
@@ -126,6 +127,20 @@ describe("game runtime", () => {
     document.body.innerHTML = "";
     await launch(params({ hemisphere: "left", timer_position: "hidden" }));
     expect((document.querySelector(".hud-timer") as HTMLElement).hidden).toBe(true);
+  });
+
+  it("black and white: grey tokens for the game and grey HUD, only for games that support it (ADR 0009)", async () => {
+    const ctx = await launch(params({ monochrome: true }), true);
+    expect(ctx.monochrome).toBe(true);
+    for (const hex of [ctx.tokens.g300!, ctx.tokens.g700!, ctx.tokens.heart!]) {
+      const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+      expect(r).toBe(g);
+      expect(g).toBe(b);
+    }
+    expect([...document.querySelectorAll("style")].map((x) => x.textContent).join("")).toContain("#F7F7F7"); // grey clock digits
+    document.body.innerHTML = "";
+    const plain = await launch(params({ monochrome: true }), false);
+    expect(plain.monochrome).toBe(false); // not supported: stays in colour
   });
 
   it("hides hearts in timed mode, and records mistakes without ending the session", async () => {

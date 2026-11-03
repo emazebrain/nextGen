@@ -16,6 +16,15 @@ export const PALETTES = {
     btn: "#3D63D6", btnText: "#FFFFFF",
     heart: "#FF5A5F", success: "#1F9D55", error: "#D63A3A",
   },
+  /** Black and white (ADR 0009): greys only, for every game and the HUD. */
+  mono: {
+    g50: "#F7F7F7", g100: "#E9E9E9", g200: "#D4D4D4", g300: "#B8B8B8", g400: "#9A9A9A",
+    g500: "#7C7C7C", g600: "#5F5F5F", g700: "#444444", g800: "#2B2B2B", g900: "#141414",
+    accent1: "#FFFFFF", accent2: "#9A9A9A",
+    hudBg: "rgb(20 20 20 / 0.88)", hudFg: "#F7F7F7", hudAccent: "#D4D4D4", hudWarning: "#FFFFFF",
+    btn: "#2B2B2B", btnText: "#FFFFFF",
+    heart: "#E9E9E9", success: "#2B2B2B", error: "#141414",
+  },
 } as const;
 
 export const HIGH_CONTRAST = { hudBg: "#000000", hudFg: "#FFFFFF", outline: "#FFE14D" } as const;

@@ -6,7 +6,7 @@
  * stage cleared (×0.95, floor 1.5). A wrong tile reshuffles the stage; in
  * timed mode ΔE also steps back one stage (1-up/1-down staircase).
  */
-import { deltaE76, hexToLab, oddHex, TILE_COLOURS } from "./colors.ts";
+import { BACKGROUND_COLOURS, deltaE76, hexToLab, oddHex, TILE_COLOURS } from "./colors.ts";
 
 export const LEVEL_MIN = 2;
 export const LEVEL_MAX = 9;
@@ -56,7 +56,8 @@ export interface EngineConfig {
   difficulty: 1 | 2 | 3 | 4 | 5;
   startLevel?: number;
   maxLevel?: number;
-  palette: "warm" | "cold";
+  /** Tile colours; "mono" is black and white and always uses lightness-only differences (ADR 0009). */
+  palette: "warm" | "cold" | "mono";
   cvdMode?: boolean;
   /** Timed mode: a wrong answer makes the next stage one step easier. */
   staircase?: boolean;
@@ -142,6 +143,16 @@ export class CatchMeEngine {
     return this.current;
   }
 
+  /** The level being played. */
+  get currentLevel(): number {
+    return this.level;
+  }
+
+  /** Whether clearing the current stage completes its level (for the level-up reward). */
+  get completesLevel(): boolean {
+    return !!this.current && !this.current.practice && this.stageNo >= this.level;
+  }
+
   deltaE(step = this.step): number {
     const start = DELTA_E_START[this.cfg.difficulty] ?? DELTA_E_START[3]!;
     return Math.max(DELTA_E_FLOOR, start * DELTA_E_DECAY ** (step - 1));
@@ -157,7 +168,7 @@ export class CatchMeEngine {
         role: i === 0 ? "anchor" : "companion",
         size,
         base: colours[i]!,
-        odd: oddHex(colours[i]!, deltaE, this.cfg.rng, this.cfg.cvdMode),
+        odd: oddHex(colours[i]!, deltaE, this.cfg.rng, this.cfg.cvdMode || this.cfg.palette === "mono"),
         oddIndex: Math.floor(this.cfg.rng() * size * size),
         side: i === 0 ? anchorSide : anchorSide === "left" ? "right" : "left",
       };
@@ -287,4 +298,40 @@ export function seeded(seed: number): () => number {
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+/**
+ * Picks one of `count` items at random, never one of the last `memory` picks
+ * (the praise messages, ADR 0009), so the child doesn't see the same words twice in a row.
+ */
+export class NoRepeatPicker {
+  private recent: number[] = [];
+  constructor(
+    private readonly count: number,
+    private readonly rng: () => number,
+    private readonly memory = 4,
+  ) {}
+  next(): number {
+    const keep = Math.min(this.memory, this.count - 1);
+    const choices = Array.from({ length: this.count }, (_, i) => i).filter((i) => !this.recent.includes(i));
+    const pick = choices[Math.floor(this.rng() * choices.length)]!;
+    this.recent.push(pick);
+    if (this.recent.length > keep) this.recent.shift();
+    return pick;
+  }
+}
+
+export type BackgroundTone = "warm" | "cold" | "mono";
+
+/** The background palette: black and white wins; "auto" follows the hemisphere (left warm, right cold). */
+export function backgroundTone(setting: unknown, hemisphere: "left" | "right", monochrome: boolean): BackgroundTone {
+  if (monochrome) return "mono";
+  if (setting === "warm" || setting === "cold") return setting;
+  return hemisphere === "left" ? "warm" : "cold";
+}
+
+/** One background colour for the session, drawn with the seeded random generator so a replay looks the same. */
+export function pickBackground(tone: BackgroundTone, rng: () => number): string {
+  const band = BACKGROUND_COLOURS[tone];
+  return band[Math.floor(rng() * band.length)]!;
 }

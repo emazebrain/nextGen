@@ -20,7 +20,7 @@ export interface ParamsSchema {
       minimum?: number;
       maximum?: number;
       default?: unknown;
-      "x-ui"?: { label: LocalText; help?: LocalText; widget?: "slider" | "switch" | "select" | "segmented"; step?: number; options?: Record<string, LocalText> };
+      "x-ui"?: { label: LocalText; help?: LocalText; widget?: "slider" | "switch" | "select" | "segmented"; step?: number; options?: Record<string, LocalText>; /** Show this setting only when other settings have these values. */ visibleWhen?: Record<string, string | number | boolean> };
     }
   >;
   additionalProperties?: false;
@@ -54,6 +54,8 @@ export interface GameManifest {
     trialWindow: false | { minMs: number; maxMs: number; defaultMs: number | null };
     practice: boolean;
     rng: "seeded";
+    /** The game can run in black and white (platform parameter `monochrome`, ADR 0009). */
+    monochrome?: boolean;
   };
   recommendedMode?: SessionMode;
   recommendedDurationS?: number;
@@ -81,6 +83,8 @@ export interface PlatformParams {
   max_level?: number;
   hemisphere: "left" | "right";
   timer_position: "left" | "right" | "hidden";
+  /** Black and white: greys only, for the game and the HUD (ADR 0009). */
+  monochrome?: boolean;
   trial_window_ms?: number | null;
   practice: "auto" | "on" | "off";
   instructions: "auto" | "always" | "short";
@@ -158,6 +162,8 @@ export interface InitContext {
   /** Palette tokens for the hemisphere (design doc §7.1): g50…g900, accent1, accent2, heart, success, error. */
   palette: Palette;
   tokens: Record<string, string>;
+  /** Black and white (params.monochrome): tokens are greys; the game draws greys only. */
+  monochrome: boolean;
 }
 
 export type PauseReason = "app_hidden" | "manual" | "instructions" | "therapist_hold" | "focus_lost";

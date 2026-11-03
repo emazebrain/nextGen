@@ -39,6 +39,14 @@ test("Tal builds a template from the library and assigns it", async ({ page }) =
   await page.getByRole("radio", { name: "Show" }).check();
   await page.getByRole("radio", { name: "Left, warm palette" }).check();
   await shot(page, "41a-builder-timer");
+  // Black and white, and the background settings (ADR 0009). Movement only shows for a textured background.
+  await expect(page.getByLabel("Black and white")).not.toBeChecked();
+  await expect(page.getByLabel("Moving background")).toHaveCount(0);
+  await page.getByRole("radio", { name: "Textured" }).check();
+  await expect(page.getByLabel("Moving background")).toBeVisible();
+  await expect(page.getByLabel("Background colours")).toHaveValue("auto");
+  await page.getByRole("radio", { name: "Solid" }).check();
+  await expect(page.getByLabel("Moving background")).toHaveCount(0);
   await page.getByRole("radio", { name: "Lives", exact: true }).check();
   await expect(page.getByLabel("Time limit")).toHaveCount(0); // Lives mode: no time limit
   await page.getByLabel("Hearts").selectOption("5");

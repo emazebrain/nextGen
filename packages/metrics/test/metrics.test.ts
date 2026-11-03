@@ -67,6 +67,19 @@ describe("trend", () => {
     expect(t.summary).toBe("improving"); // mean(112.5, 110)
   });
 
+  it("keeps separate baselines per side and for black and white (ADR 0009)", () => {
+    const sessions = [
+      s(1, 3, 0.8, { hemisphere: "left" }), s(2, 3, 0.8, { hemisphere: "left" }),
+      s(3, 3, 0.5, { hemisphere: "right" }), s(4, 3, 0.5, { hemisphere: "right" }),
+      s(5, 3, 0.6, { hemisphere: "left", monochrome: true }), s(6, 3, 0.6, { hemisphere: "left", monochrome: true }),
+      s(7, 3, 0.88, { hemisphere: "left" }), s(8, 3, 0.55, { hemisphere: "right" }), s(9, 3, 0.66, { hemisphere: "left", monochrome: true }),
+    ];
+    const t = trend(sessions, games, { kind: "standard", key: "accuracy" });
+    // Each of the three groups sets its own baseline, so every later session scores 110 against its own start.
+    expect(t.points.map((p) => p.isBaseline)).toEqual([true, true, true, true, true, true, false, false, false]);
+    expect(t.points.slice(6).map((p) => p.score)).toEqual([110, 110, 110]);
+  });
+
   it("treats reaction time as lower-is-better", () => {
     const t = trend(
       [s(1, 2, 0.8, { rt_median_ms: 1000 }), s(2, 2, 0.8, { rt_median_ms: 1000 }), s(3, 2, 0.8, { rt_median_ms: 1300 })],

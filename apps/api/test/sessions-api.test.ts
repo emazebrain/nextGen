@@ -92,7 +92,7 @@ describe.skipIf(!ADMIN_URL)("sessions API", () => {
     await env.db.query(`INSERT INTO app.patient_care_team (patient_id, user_id) VALUES ($1,$2)`, [patient, y.userId]);
     const a = await yael(`/v1/patients/${patient}/assignment`, {
       method: "POST",
-      body: { template_id: null, name: "Attention", description: null, weeks: 2, sessions_per_week: 2, setting: "clinic", start_date: "2026-10-23", steps: [step(), step({ hemisphere: "right", timer_position: "right" })] },
+      body: { template_id: null, name: "Attention", description: null, weeks: 2, sessions_per_week: 2, setting: "clinic", start_date: "2026-10-23", steps: [step(), step({ hemisphere: "right", timer_position: "right", monochrome: true })] },
     });
     expect(a.status).toBe(201);
     const rows = await env.db.query(`SELECT id, seq FROM app.planned_session WHERE patient_id = $1 ORDER BY seq`, [patient]);
@@ -125,6 +125,8 @@ describe.skipIf(!ADMIN_URL)("sessions API", () => {
       "catch_me_if_you_can.cvd_mode": true,
     });
     expect(launch.steps[1].params.hemisphere).toBe("right");
+    // Black and white travels as a platform parameter (ADR 0009).
+    expect(launch.steps.map((s: { params: { monochrome: boolean } }) => s.params.monochrome)).toEqual([false, true]);
     // Timer in the corner opposite the hemisphere: left → top right, right → top left (ADR 0008).
     expect(launch.steps.map((s: { params: { timer_position: string } }) => s.params.timer_position)).toEqual(["right", "left"]);
     expect(launch.steps[0].ticket.split(".")).toHaveLength(3);
@@ -202,6 +204,9 @@ describe.skipIf(!ADMIN_URL)("sessions API", () => {
     expect(res.status).toBe(200);
     expect(res.body.sessions).toHaveLength(4);
     expect(res.body.sessions[0]).toMatchObject({ game_id: "catch-me-if-you-can", seq: expect.any(Number) });
+    // Each result says its side and colour mode, so progress keeps their baselines apart (ADR 0009).
+    const kinds = new Set(res.body.sessions.map((x: { hemisphere: string; monochrome: boolean }) => `${x.hemisphere}|${x.monochrome}`));
+    expect([...kinds].sort()).toEqual(["left|false", "right|true"]);
     expect((await dana(`/v1/patients/${patient}/sessions`)).status).toBe(404);
   });
 

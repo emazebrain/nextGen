@@ -20,6 +20,7 @@ export function checkStepAgainstGame(step: StepInput, index: number): Array<{ pa
     const tw = m.capabilities.trialWindow;
     if (!tw || step.trial_window_ms < tw.minMs || step.trial_window_ms > tw.maxMs) issues.push({ path: at("trial_window_ms"), code: "trial_window_not_supported" });
   }
+  if (step.monochrome && !m.capabilities.monochrome) issues.push({ path: at("monochrome"), code: "monochrome_not_supported" });
   for (const [key, value] of Object.entries(step.game_params)) {
     const def = m.paramsSchema.properties[key];
     if (!def) {

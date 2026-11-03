@@ -104,6 +104,7 @@ class Run {
     this.buildDom();
     const palette = this.params.hemisphere === "right" ? "cold" : "warm";
     const api = this.sessionApi();
+    const mono = this.monochrome();
     await this.game.init({
       params: this.params,
       assets: null,
@@ -113,7 +114,8 @@ class Run {
       mount: this.els.stage,
       reducedMotion: this.reducedMotion,
       palette,
-      tokens: { ...PALETTES[palette] },
+      tokens: { ...PALETTES[mono ? "mono" : palette] },
+      monochrome: mono,
     });
     this.watchFocus();
     this.heartbeat = this.win.setInterval(() => this.post({ type: "heartbeat", activeMs: Math.round(this.session.tick(this.now()).activeMs), phase: this.session.tick(this.now()).phase }), 1000);
@@ -279,13 +281,15 @@ class Run {
   private buildDom() {
     const d = this.win.document;
     const palette = this.params.hemisphere === "right" ? "cold" : "warm";
-    const p = PALETTES[palette];
+    const mono = this.monochrome();
+    const p = PALETTES[mono ? "mono" : palette];
     const hc = this.params.high_contrast;
     d.documentElement.lang = this.lang;
     d.documentElement.dir = this.lang === "he" ? "rtl" : "ltr";
     const style = d.createElement("style");
     style.textContent = css({
       hc,
+      timer: mono ? TIMER_MONO : TIMER,
       hudBg: hc ? HIGH_CONTRAST.hudBg : p.hudBg,
       hudFg: hc ? HIGH_CONTRAST.hudFg : p.hudFg,
       hudAccent: p.hudAccent,
@@ -352,6 +356,11 @@ class Run {
       const on = SEGMENTS[Number(ch)] ?? "";
       this.els.segs[i]?.forEach((seg, k) => seg.classList.toggle("on", on.includes("abcdefg"[k]!)));
     });
+  }
+
+  /** Black and white, when the step asks for it and the game supports it (ADR 0009). */
+  private monochrome(): boolean {
+    return this.params.monochrome === true && this.def.manifest.capabilities.monochrome === true;
   }
 
   private renderHud(s: SessionSnapshot) {
@@ -516,10 +525,20 @@ class Run {
 }
 
 /** Timer colours (ADR 0008): warm amber digits for the clock, cold blues for the bar. Warnings stay in the same family. */
-const TIMER = {
+interface TimerColours {
+  warm: { bg: string; rim: string; on: string; off: string; glow: string; warn: string };
+  cold: { bg: string; rim: string; track: string; from: string; to: string; warn: string };
+}
+const TIMER: TimerColours = {
   warm: { bg: "#2A0E0B", rim: "#7A2420", on: "#FFB547", off: "rgb(255 181 71 / .12)", glow: "rgb(255 143 61 / .55)", warn: "#F5C431" },
   cold: { bg: "rgb(14 21 48 / .9)", rim: "#232C6B", track: "rgb(108 196 232 / .16)", from: "#2FB3C8", to: "#6CC4E8", warn: "#B39BFF" },
 } as const;
+
+/** The same two timers in greys, for black and white (ADR 0009). */
+const TIMER_MONO: TimerColours = {
+  warm: { bg: "#141414", rim: "#5F5F5F", on: "#F7F7F7", off: "rgb(247 247 247 / .1)", glow: "rgb(255 255 255 / .35)", warn: "#FFFFFF" },
+  cold: { bg: "rgb(20 20 20 / .9)", rim: "#444444", track: "rgb(255 255 255 / .14)", from: "#9A9A9A", to: "#E9E9E9", warn: "#FFFFFF" },
+};
 
 /** Seven-segment digits: which of a–g are lit for 0–9. */
 const SEGMENTS = ["abcdef", "bc", "abdeg", "abcdg", "bcfg", "acdfg", "acdefg", "abc", "abcdefg", "abcdfg"];
@@ -546,7 +565,7 @@ function clockDigits(ms: number): string {
 const HEART = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.1 0 3.6 1.2 4.3 2.4.7-1.2 2.2-2.4 4.3-2.4 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z"/></svg>`;
 const STAR = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z"/></svg>`;
 
-function css(v: { hc: boolean; hudBg: string; hudFg: string; hudAccent: string; hudWarning: string; btn: string; btnText: string; heart: string; surface: string; ink: string; outline: string; reduced: boolean }) {
+function css(v: { hc: boolean; timer: TimerColours; hudBg: string; hudFg: string; hudAccent: string; hudWarning: string; btn: string; btnText: string; heart: string; surface: string; ink: string; outline: string; reduced: boolean }) {
   return `
   *{box-sizing:border-box}
   [hidden]{display:none!important}
@@ -560,17 +579,17 @@ function css(v: { hc: boolean; hudBg: string; hudFg: string; hudAccent: string; 
   .side-right{position:absolute;top:16px;right:24px}
   .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   /* Left hemisphere: a warm four-digit digital clock (MM:SS), top right. */
-  .t-digital{display:grid;place-items:center;padding:8px 12px;border-radius:12px;background:${v.hc ? "#000" : TIMER.warm.bg};border:2px solid ${TIMER.warm.rim};outline:3px solid ${v.outline}}
+  .t-digital{display:grid;place-items:center;padding:8px 12px;border-radius:12px;background:${v.hc ? "#000" : v.timer.warm.bg};border:2px solid ${v.timer.warm.rim};outline:3px solid ${v.outline}}
   .t-digital .lcd{display:block;width:${LCD_W * 1.25}px;height:55px}
-  .t-digital .seg{fill:${TIMER.warm.off}}
-  .t-digital .seg.on,.t-digital .colon{fill:${TIMER.warm.on}}
-  .t-digital .lcd{filter:drop-shadow(0 0 4px ${TIMER.warm.glow})}
-  .t-digital.warning .seg.on,.t-digital.warning .colon{fill:${TIMER.warm.warn}}
+  .t-digital .seg{fill:${v.timer.warm.off}}
+  .t-digital .seg.on,.t-digital .colon{fill:${v.timer.warm.on}}
+  .t-digital .lcd{filter:drop-shadow(0 0 4px ${v.timer.warm.glow})}
+  .t-digital.warning .seg.on,.t-digital.warning .colon{fill:${v.timer.warm.warn}}
   /* Right hemisphere: a cold bar that empties as time runs out, top left. */
-  .t-bar{display:block;width:min(36vw,300px);padding:5px;border-radius:999px;background:${v.hc ? "#000" : TIMER.cold.bg};border:2px solid ${TIMER.cold.rim};outline:3px solid ${v.outline}}
-  .t-bar .bar{display:block;height:22px;border-radius:999px;background:${TIMER.cold.track};overflow:hidden}
-  .t-bar .fill{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,${TIMER.cold.from},${TIMER.cold.to});transform-origin:0 50%;${v.reduced ? "" : "transition:transform .25s linear,background .3s"}}
-  .t-bar.warning .fill{background:${TIMER.cold.warn}}
+  .t-bar{display:block;width:min(36vw,300px);padding:5px;border-radius:999px;background:${v.hc ? "#000" : v.timer.cold.bg};border:2px solid ${v.timer.cold.rim};outline:3px solid ${v.outline}}
+  .t-bar .bar{display:block;height:22px;border-radius:999px;background:${v.timer.cold.track};overflow:hidden}
+  .t-bar .fill{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,${v.timer.cold.from},${v.timer.cold.to});transform-origin:0 50%;${v.reduced ? "" : "transition:transform .25s linear,background .3s"}}
+  .t-bar.warning .fill{background:${v.timer.cold.warn}}
   ${v.reduced ? "" : `.hud-timer.warning{animation:pulse 1s ease-in-out infinite}`}
   @keyframes pulse{50%{transform:scale(1.06)}}
   .hud-hearts{display:flex;gap:6px;align-items:center;padding:10px 14px;border-radius:999px;background:${v.hudBg};color:${v.hudFg};outline:3px solid ${v.outline}}

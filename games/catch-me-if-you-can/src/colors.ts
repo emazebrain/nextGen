@@ -96,4 +96,16 @@ export function oddHex(baseHex: string, deltaE: number, rng: () => number, cvdMo
 export const TILE_COLOURS = {
   warm: ["#DC143C", "#E87411", "#E0A800", "#CB6843", "#E07060", "#E05040", "#CD5C5C", "#CD853F"],
   cold: ["#1D4ED8", "#0FBDE8", "#48D1CC", "#6A8FE0", "#4B0082", "#5F9EA6", "#7B68EE", "#2FB3C8"],
+  // Black and white (ADR 0009): mid greys (L* about 25–71), so a lightness shift has room both ways.
+  mono: ["#3C3C3C", "#4F4F4F", "#5E5E5E", "#6E6E6E", "#7E7E7E", "#8E8E8E", "#9E9E9E", "#ADADAD"],
+} as const;
+
+/**
+ * Background colours by temperature (ADR 0009). Soft tones, so the HUD stays readable;
+ * one is drawn at random per session. The boards' own light frames keep them away from the tiles.
+ */
+export const BACKGROUND_COLOURS = {
+  warm: ["#FFE3BF", "#FFD6B3", "#FCE1CF", "#FFEDC2", "#F8D3C1", "#FFDDA6", "#F6CFAE", "#FBE4B4"],
+  cold: ["#D3E9FF", "#CDEFF3", "#DCE1FF", "#C9E5F2", "#D9F3EA", "#D5E2F7", "#CCE0EE", "#E0DCF7"],
+  mono: ["#EDEDED", "#E0E0E0", "#D2D2D2", "#C4C4C4", "#B6B6B6"],
 } as const;

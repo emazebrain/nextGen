@@ -82,6 +82,10 @@ export function GamePage() {
   const [difficulty, setDifficulty] = useState("3");
   const [practice, setPractice] = useState(true);
   const [lang, setLang] = useState<Locale>(locale);
+  const [mono, setMono] = useState(false);
+  const [background, setBackground] = useState("solid");
+  const [motion, setMotion] = useState(false);
+  const [temperature, setTemperature] = useState("auto");
   useTitle(m ? localText(m.name, locale) : t("library.title"));
 
   if (!m) {
@@ -94,9 +98,16 @@ export function GamePage() {
     );
   }
 
+  const hasBackground = !!m.paramsSchema.properties.background;
   const start = (e: FormEvent) => {
     e.preventDefault();
     const q = new URLSearchParams({ palette, mode, minutes, lives, difficulty, practice: practice ? "on" : "off", lang });
+    if (mono) q.set("mono", "1");
+    if (hasBackground) {
+      q.set("bg", background);
+      q.set("temp", temperature);
+      if (background === "textured" && motion) q.set("motion", "1");
+    }
     navigate(`/library/${m.id}/preview?${q}`);
   };
 
@@ -207,6 +218,29 @@ export function GamePage() {
               options={["1", "2", "3", "4", "5"].map((d) => ({ value: d, label: d }))}
             />
             <CheckboxField label={t("preview.practice")} checked={practice} onChange={(e) => setPractice(e.target.checked)} />
+            {m.capabilities.monochrome && <CheckboxField label={t("stepEditor.monochrome")} hint={t("stepEditor.monochromeHelp")} checked={mono} onChange={(e) => setMono(e.target.checked)} />}
+            {hasBackground && (
+              <>
+                <Segmented
+                  legend={t("preview.background")}
+                  name="background"
+                  value={background}
+                  onChange={setBackground}
+                  options={[
+                    { value: "solid", label: t("preview.backgroundValue", { v: "solid" }) },
+                    { value: "textured", label: t("preview.backgroundValue", { v: "textured" }) },
+                  ]}
+                />
+                {background === "textured" && <CheckboxField label={t("preview.motion")} checked={motion} onChange={(e) => setMotion(e.target.checked)} />}
+                <SelectField label={t("preview.temperature")} value={temperature} onChange={(e) => setTemperature(e.target.value)}>
+                  {["auto", "warm", "cold"].map((v) => (
+                    <option key={v} value={v}>
+                      {t("preview.temperatureValue", { v })}
+                    </option>
+                  ))}
+                </SelectField>
+              </>
+            )}
             <div className="pform__actions">
               <Button type="submit" size="lg" icon={<Play size={20} aria-hidden="true" />}>
                 {t("preview.start")}
@@ -247,6 +281,14 @@ export function GamePreviewPage() {
       timer_position: timerPositionFor(hemisphere, true),
       practice: q.get("practice") === "off" ? "off" : "on",
       lang: (q.get("lang") as PlatformParams["lang"]) || "he",
+      monochrome: q.get("mono") === "1",
+      ...(q.get("bg") && game
+        ? {
+            [`${game.manifest.id.replace(/-/g, "_")}.background`]: q.get("bg") === "textured" ? "textured" : "solid",
+            [`${game.manifest.id.replace(/-/g, "_")}.bg_motion`]: q.get("motion") === "1",
+            [`${game.manifest.id.replace(/-/g, "_")}.bg_temperature`]: ["warm", "cold"].includes(q.get("temp") ?? "") ? q.get("temp") : "auto",
+          }
+        : {}),
     });
   });
 

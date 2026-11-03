@@ -291,6 +291,7 @@ function row(
     session_mode: mode,
     difficulty,
     hemisphere: "left",
+    monochrome: false,
     started_at: new Date(ended - activeMs).toISOString(),
     ended_at: new Date(ended).toISOString(),
     active_ms: activeMs,
@@ -373,6 +374,7 @@ function params(s: Assignment["steps"][number], p: Patient) {
     start_level: "from_difficulty",
     hemisphere: s.hemisphere,
     timer_position: timerPositionFor(s.hemisphere, timerShown(s.timer_position)),
+    monochrome: s.monochrome === true && findGame(s.game_id)?.manifest.capabilities.monochrome === true,
     trial_window_ms: s.trial_window_ms,
     practice: s.practice === "auto" ? (s.sessions_completed === 0 ? "on" : "off") : s.practice,
     instructions: s.sessions_completed < 2 ? "always" : "short",
@@ -701,6 +703,7 @@ async function handle(path: string, method: string, q: URLSearchParams, body: Re
     db.games.push({
       ...row(claims.pid, st.id, ps.id, ps.seq, env.status as GameSessionView["status"], env.mode as GameSessionView["session_mode"], Number(env.params.difficulty ?? st.current_difficulty), ended, Number(env.active_ms ?? 0), env.std.accuracy ?? null, env.std.rt_median_ms !== null && env.std.rt_median_ms !== undefined ? Math.round(env.std.rt_median_ms) : null, env.metrics, sid),
       hemisphere: (env.params.hemisphere as "left" | "right") ?? st.hemisphere,
+      monochrome: env.params.monochrome === true,
       trials_total: Number(env.std.trials_total ?? 0),
       correct: Number(env.std.correct ?? 0),
       errors: Number(env.std.errors ?? 0),

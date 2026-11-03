@@ -38,6 +38,8 @@ export const stepInput = z
     trial_window_ms: z.number().int().min(1000).max(300000).nullable(),
     game_params: z.record(z.string(), z.union([z.boolean(), z.number(), z.string()])),
     progression: progressionRule.nullable(),
+    /** Black and white (ADR 0009). Only for games whose manifest supports it. */
+    monochrome: z.boolean().default(false),
   })
   .superRefine((s, ctx) => {
     // Only the fields the mode uses are set (§8.1), so a step can never be "timed" without a time limit.
@@ -48,7 +50,8 @@ export const stepInput = z
     if (needLives && s.lives === null) ctx.addIssue({ code: "custom", path: ["lives"], message: "needs_lives" });
     if (!needLives && s.lives !== null) ctx.addIssue({ code: "custom", path: ["lives"], message: "no_lives_in_timed" });
   });
-export type StepInput = z.infer<typeof stepInput>;
+/** As sent by clients: `monochrome` may be left out (it defaults to false). */
+export type StepInput = z.input<typeof stepInput>;
 
 const planFields = {
   name: z.string().trim().min(1).max(120),
@@ -64,7 +67,7 @@ export const templateInput = z.object({
   visibility: z.enum(["private", "clinic"]),
   steps: z.array(stepInput).min(1).max(12),
 });
-export type TemplateInput = z.infer<typeof templateInput>;
+export type TemplateInput = z.input<typeof templateInput>;
 
 export const assignInput = z.object({
   template_id: z.string().uuid().nullable(),
@@ -72,7 +75,7 @@ export const assignInput = z.object({
   start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   steps: z.array(stepInput).min(1).max(12),
 });
-export type AssignInput = z.infer<typeof assignInput>;
+export type AssignInput = z.input<typeof assignInput>;
 
 export interface TemplateSummary {
   id: string;

@@ -58,6 +58,7 @@ export function useStepSummary() {
       t("step.difficulty", { n: s.difficulty_start }),
       t("step.palette", { h: s.hemisphere }),
       s.duration_s !== null && timerShown(s.timer_position) ? t("step.timer", { h: s.hemisphere }) : null,
+      s.monochrome ? t("step.monochrome") : null,
     ]
       .filter(Boolean)
       .join(" · ");
@@ -249,6 +250,14 @@ function StepEditor({ step: s, manifest: m, onChange }: { step: StepInput; manif
           { value: "right", label: <span className="swatchlabel"><span className="swatch swatch--cold" aria-hidden="true" />{t("stepEditor.hemiRight")}</span> },
         ]}
       />
+      {m.capabilities.monochrome && (
+        <CheckboxField
+          label={t("stepEditor.monochrome")}
+          hint={t("stepEditor.monochromeHelp")}
+          checked={s.monochrome === true}
+          onChange={(e) => set("monochrome", e.target.checked)}
+        />
+      )}
       {s.duration_s !== null && (
         <div className="stepedit__group">
           <Segmented<"shown" | "hidden">
@@ -258,7 +267,7 @@ function StepEditor({ step: s, manifest: m, onChange }: { step: StepInput; manif
             onChange={(v) => set("timer_position", timerPositionFor(s.hemisphere, v === "shown"))}
             options={(["shown", "hidden"] as const).map((v) => ({ value: v, label: t("stepEditor.timerValue", { v }) }))}
           />
-          <p className="emb-field__hint">{showTimer ? t("stepEditor.timerHelp", { h: s.hemisphere }) : t("stepEditor.timerHidden")}</p>
+          <p className="emb-field__hint">{showTimer ? t("stepEditor.timerHelp", { h: s.hemisphere, mono: s.monochrome ? "yes" : "no" }) : t("stepEditor.timerHidden")}</p>
         </div>
       )}
       <div className="pform__row">
@@ -290,6 +299,10 @@ function StepEditor({ step: s, manifest: m, onChange }: { step: StepInput; manif
         <fieldset className="stepedit__fieldset">
           <legend className="emb-field__label">{t("stepEditor.gameSettings")}</legend>
           {params.map(([key, def]) => {
+            // A setting can depend on another (e.g. movement only for a textured background).
+            const when = def["x-ui"]?.visibleWhen;
+            const valueOf = (k: string) => s.game_params[k] ?? (m.paramsSchema.properties[k]?.default as boolean | number | string | undefined);
+            if (when && Object.entries(when).some(([k, v]) => valueOf(k) !== v)) return null;
             const label = def["x-ui"] ? localText(def["x-ui"].label, locale) : key;
             const help = def["x-ui"]?.help ? localText(def["x-ui"].help, locale) : undefined;
             const value = s.game_params[key] ?? (def.default as boolean | number | string | undefined);
@@ -305,14 +318,30 @@ function StepEditor({ step: s, manifest: m, onChange }: { step: StepInput; manif
               );
             }
             const options = def.enum ?? (def.minimum !== undefined && def.maximum !== undefined ? Array.from({ length: def.maximum - def.minimum + 1 }, (_, i) => def.minimum! + i) : []);
+            const optionLabel = (o: string | number) => {
+              const l = def["x-ui"]?.options?.[String(o)];
+              return l ? localText(l, locale) : String(o);
+            };
+            const setValue = (v: string) => set("game_params", { ...s.game_params, [key]: def.type === "string" ? v : Number(v) });
+            if (def["x-ui"]?.widget === "segmented") {
+              return (
+                <div key={key} className="stepedit__group">
+                  <Segmented legend={label} name={`${id}-${key}`} value={String(value ?? "")} onChange={setValue} options={options.map((o) => ({ value: String(o), label: optionLabel(o) }))} />
+                  {help && <p className="emb-field__hint">{help}</p>}
+                </div>
+              );
+            }
             return (
-              <SelectField key={key} label={label} value={String(value ?? "")} onChange={(e) => set("game_params", { ...s.game_params, [key]: def.type === "string" ? e.target.value : Number(e.target.value) })}>
-                {options.map((o) => (
-                  <option key={String(o)} value={String(o)}>
-                    {String(o)}
-                  </option>
-                ))}
-              </SelectField>
+              <div key={key} className="emb-field">
+                <SelectField label={label} value={String(value ?? "")} onChange={(e) => setValue(e.target.value)}>
+                  {options.map((o) => (
+                    <option key={String(o)} value={String(o)}>
+                      {optionLabel(o)}
+                    </option>
+                  ))}
+                </SelectField>
+                {help && <p className="emb-field__hint">{help}</p>}
+              </div>
             );
           })}
         </fieldset>

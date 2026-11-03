@@ -2,7 +2,9 @@
  * Progress maths for the patient Progress view (design doc §5.9, §11.6).
  *
  * Every point is compared with this child's own baseline: the mean of their
- * first sessions of the same game at the same difficulty. Scores are
+ * first sessions of the same game at the same difficulty, on the same side
+ * (hemisphere) and in the same colour mode (ADR 0009: the sides look and
+ * reward differently, so they are different visual tasks). Scores are
  * direction-adjusted so that higher is always better and 100 means "the same
  * as their baseline". A harder level gets a fresh baseline, so moving up a
  * difficulty never reads as a decline.
@@ -25,6 +27,15 @@ export interface SessionInput {
   metrics: Record<string, unknown>;
   /** Play time with pauses excluded. */
   active_ms?: number;
+  /** Side trained; baselines are kept per side (ADR 0009). Missing counts as one shared side. */
+  hemisphere?: "left" | "right";
+  /** Black and white; baselines are kept apart from colour (ADR 0009). Missing counts as colour. */
+  monochrome?: boolean;
+}
+
+/** What makes two sessions comparable for a baseline: game, difficulty, side and colour mode. */
+export function baselineGroup(s: SessionInput): string {
+  return `${s.game_id}|${s.difficulty}|${s.hemisphere ?? "-"}|${s.monochrome ? "bw" : "colour"}`;
 }
 
 /** What a metric means, from the game's manifest. */
@@ -136,7 +147,7 @@ export function trend(sessions: readonly SessionInput[], games: readonly GameInf
   const o = { ...DEFAULTS, ...options };
   const ordered = [...sessions].sort(byTime);
 
-  // Baselines: per game × difficulty × metric, mean of the first N sessions that have a value.
+  // Baselines: per game × difficulty × side × colour mode × metric, mean of the first N sessions that have a value.
   const seen = new Map<string, number[]>(); // key → values so far
   const lastDifficulty = new Map<string, number>(); // game → difficulty
   const points: TrendPoint[] = [];
@@ -153,7 +164,7 @@ export function trend(sessions: readonly SessionInput[], games: readonly GameInf
       const v = metricValue(s, m.key);
       if (v === null) continue;
       values += 1;
-      const k = `${s.game_id}|${s.difficulty}|${m.key}`;
+      const k = `${baselineGroup(s)}|${m.key}`;
       const prior = seen.get(k) ?? [];
       if (prior.length < o.baselineSessions) {
         // This session helps set the baseline; score it against the baseline as it will stand.
@@ -192,7 +203,7 @@ export function trend(sessions: readonly SessionInput[], games: readonly GameInf
     const scores: number[] = [];
     for (const m of metricsForView(games.find((g) => g.id === s.game_id), view)) {
       const v = metricValue(s, m.key);
-      const base = seen.get(`${s.game_id}|${s.difficulty}|${m.key}`);
+      const base = seen.get(`${baselineGroup(s)}|${m.key}`);
       if (v === null || !base?.length) continue;
       const sc = scoreAgainst(v, mean(base), m.lowerIsBetter);
       if (sc !== null) scores.push(sc);

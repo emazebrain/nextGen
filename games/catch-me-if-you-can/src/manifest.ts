@@ -23,6 +23,7 @@ export const manifest: GameManifest = {
     trialWindow: { minMs: 1000, maxMs: 30000, defaultMs: null },
     practice: true,
     rng: "seeded",
+    monochrome: true,
   },
   recommendedMode: "timed_lives",
   lifeLossEvents: [
@@ -41,6 +42,39 @@ export const manifest: GameManifest = {
           label: { en: "Brightness differences only", he: "הבדלי בהירות בלבד" },
           help: { en: "For children with colour-vision deficiency. Set automatically from the patient record.", he: "לילדים עם עיוורון צבעים. נקבע אוטומטית לפי רשומת המטופל." },
           widget: "switch",
+        },
+      },
+      // Backgrounds (ADR 0009). The background never touches the tiles: each board keeps its plain light frame.
+      background: {
+        type: "string",
+        enum: ["solid", "textured"],
+        default: "solid",
+        "x-ui": {
+          label: { en: "Background", he: "רקע" },
+          help: { en: "Textured: flat patterns for the left hemisphere, 3D shapes for the right.", he: "עם טקסטורה: דוגמאות שטוחות להמיספרה השמאלית, צורות תלת־ממדיות לימנית." },
+          widget: "segmented",
+          options: { solid: { en: "Solid", he: "אחיד" }, textured: { en: "Textured", he: "עם טקסטורה" } },
+        },
+      },
+      bg_motion: {
+        type: "boolean",
+        default: false,
+        "x-ui": {
+          label: { en: "Moving background", he: "רקע בתנועה" },
+          help: { en: "Slow movement behind the boards. Off when the device asks for reduced motion.", he: "תנועה איטית מאחורי הלוחות. כבויה כשהמכשיר מוגדר להפחתת תנועה." },
+          widget: "switch",
+          visibleWhen: { background: "textured" },
+        },
+      },
+      bg_temperature: {
+        type: "string",
+        enum: ["auto", "warm", "cold"],
+        default: "auto",
+        "x-ui": {
+          label: { en: "Background colours", he: "צבעי הרקע" },
+          help: { en: "A colour is picked at random from this palette for each session.", he: "בכל מפגש נבחר צבע אקראי מהפלטה הזו." },
+          widget: "select",
+          options: { auto: { en: "Follow the hemisphere", he: "לפי ההמיספרה" }, warm: { en: "Warm", he: "חמים" }, cold: { en: "Cold", he: "קרים" } },
         },
       },
     },

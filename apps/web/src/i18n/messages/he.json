@@ -346,7 +346,7 @@
   "stepEditor.hemiRight": "ימין, פלטה קרה",
   "stepEditor.timer": "טיימר",
   "stepEditor.timerValue": "{v, select, shown {להציג} other {להסתיר}}",
-  "stepEditor.timerHelp": "{h, select, left {בפינה הימנית העליונה: שעון דיגיטלי בצבעים חמים, עם דקות ושניות.} other {בפינה השמאלית העליונה: פס בצבעים קרים שמתרוקן ככל שהזמן עובר.}} הטיימר תמיד בצד הנגדי להמיספרה, והצד לא מתהפך בעברית.",
+  "stepEditor.timerHelp": "{h, select, left {בפינה הימנית העליונה: שעון דיגיטלי {mono, select, yes {בגווני אפור} other {בצבעים חמים}}, עם דקות ושניות.} other {בפינה השמאלית העליונה: פס {mono, select, yes {בגווני אפור} other {בצבעים קרים}} שמתרוקן ככל שהזמן עובר.}} הטיימר תמיד בצד הנגדי להמיספרה, והצד לא מתהפך בעברית.",
   "stepEditor.practice": "סבב אימון",
   "stepEditor.practiceValue": "{p, select, auto {במפגשים הראשונים} on {תמיד} other {אף פעם}}",
   "stepEditor.trialWindow": "זמן לכל לוח",
@@ -485,5 +485,13 @@
   "progress.history.more": "{count, plural, one {הצגת מפגש נוסף} two {הצגת שני מפגשים נוספים} other {הצגת # מפגשים נוספים}}",
   "progress.note": "ההשוואה היא רק למפגשים הקודמים של {name}. זו לא השוואה לילדים אחרים.",
   "stepEditor.timerHidden": "הילד לא יראה את הזמן. המפגש עדיין מסתיים כשהזמן נגמר.",
-  "step.timer": "{h, select, left {שעון בימין למעלה} other {פס בשמאל למעלה}}"
+  "step.timer": "{h, select, left {שעון בימין למעלה} other {פס בשמאל למעלה}}",
+  "stepEditor.monochrome": "שחור־לבן",
+  "stepEditor.monochromeHelp": "משבצות, רקע, תגמולים וטיימר בגווני אפור. המשבצות שונות רק בבהירות.",
+  "step.monochrome": "שחור־לבן",
+  "preview.background": "רקע",
+  "preview.backgroundValue": "{v, select, solid {אחיד} other {עם טקסטורה}}",
+  "preview.motion": "רקע בתנועה",
+  "preview.temperature": "צבעי הרקע",
+  "preview.temperatureValue": "{v, select, warm {חמים} cold {קרים} other {לפי הפלטה}}"
 }
