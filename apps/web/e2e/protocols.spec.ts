@@ -32,8 +32,10 @@ test("Tal builds a template from the library and assigns it", async ({ page }) =
   await page.getByRole("button", { name: "Edit Step 1" }).click();
   // The timer corner and look follow the hemisphere, opposite side (ADR 0008).
   await expect(page.getByText(/Top right corner: a warm digital clock/)).toBeVisible();
+  await expect(page.getByText("From stage 2, the larger grid appears on the right of the screen and the smaller grid on the left.")).toBeVisible();
   await page.getByRole("radio", { name: "Right, cold palette" }).check();
   await expect(page.getByText(/Top left corner: a cold bar that empties/)).toBeVisible();
+  await expect(page.getByText("From stage 2, the larger grid appears on the left of the screen and the smaller grid on the right.")).toBeVisible();
   await page.getByRole("radio", { name: "Hide" }).check();
   await expect(page.getByText("The child won't see the time. The session still ends when time is up.")).toBeVisible();
   await page.getByRole("radio", { name: "Show" }).check();
