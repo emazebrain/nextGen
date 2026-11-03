@@ -4,7 +4,7 @@ import { backgroundTone, CatchMeEngine, DELTA_E_FLOOR, NoRepeatPicker, pickBackg
 import { LEVEL_UP_COUNT, PRAISE_COUNT, strings } from "../src/strings.ts";
 
 const engine = (extra: Partial<ConstructorParameters<typeof CatchMeEngine>[0]> = {}) =>
-  new CatchMeEngine({ difficulty: 3, palette: "warm", rng: seeded(1), ...extra });
+  new CatchMeEngine({ difficulty: 3, palette: "warm", hemisphere: "left", rng: seeded(1), ...extra });
 
 /** Answers every board of the stage correctly (or wrongly). */
 function answer(e: CatchMeEngine, s: Stage, right = true) {
@@ -53,6 +53,27 @@ describe("colour maths", () => {
 });
 
 describe("stages and levels", () => {
+  it("puts the larger board on the side of the screen the chosen hemisphere sees, on every stage (ADR 0011)", () => {
+    for (const [hemisphere, anchor, companion] of [["left", "right", "left"], ["right", "left", "right"]] as const) {
+      for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+        const e = engine({ hemisphere, rng: seeded(seed), startLevel: 4 });
+        let s = e.start();
+        expect(s.boards.map((b) => b.side)).toEqual(["center"]);
+        for (let stage = 2; stage <= 4; stage++) {
+          answer(e, s);
+          s = e.advance().stage!;
+          const [a, c] = s.boards;
+          expect([a!.role, a!.side, c!.role, c!.side]).toEqual(["anchor", anchor, "companion", companion]);
+          expect(a!.size).toBeGreaterThanOrEqual(c!.size); // equal on the last stage of a level
+        }
+      }
+    }
+  });
+
+  it("keeps the practice board alone in the centre", () => {
+    expect(engine({ hemisphere: "right" }).practiceStage().boards.map((b) => b.side)).toEqual(["center"]);
+  });
+
   it("level L has L stages; stage 1 has one board, later stages add a second on the other side", () => {
     const e = engine();
     let s = e.start();
@@ -62,7 +83,7 @@ describe("stages and levels", () => {
     s = e.advance().stage!;
     expect(s.stage).toBe(2);
     expect(s.boards.map((b) => b.size)).toEqual([2, 2]);
-    expect(new Set(s.boards.map((b) => b.side))).toEqual(new Set(["left", "right"]));
+    expect(s.boards.map((b) => [b.role, b.side])).toEqual([["anchor", "right"], ["companion", "left"]]);
     expect(s.boards[0]!.base).not.toBe(s.boards[1]!.base);
     answer(e, s);
     const next = e.advance();
@@ -167,7 +188,7 @@ describe("metrics", () => {
 
 describe("black and white (ADR 0009)", () => {
   it("draws grey tiles that differ only in lightness, at the requested ΔE", () => {
-    const e = new CatchMeEngine({ difficulty: 3, palette: "mono", rng: seeded(11) });
+    const e = new CatchMeEngine({ difficulty: 3, palette: "mono", hemisphere: "left", rng: seeded(11) });
     let st = e.start();
     for (let i = 0; i < 12; i++) {
       for (const b of st.boards) {
@@ -197,7 +218,7 @@ describe("rewards (ADR 0009)", () => {
   });
 
   it("knows when clearing a stage completes the level", () => {
-    const e = new CatchMeEngine({ difficulty: 3, palette: "warm", rng: seeded(5) });
+    const e = new CatchMeEngine({ difficulty: 3, palette: "warm", hemisphere: "left", rng: seeded(5) });
     e.start(); // level 2 has 2 stages
     expect(e.completesLevel).toBe(false);
     e.advance();

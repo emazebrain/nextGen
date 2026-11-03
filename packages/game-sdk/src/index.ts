@@ -57,6 +57,11 @@ export interface GameManifest {
     /** The game can run in black and white (platform parameter `monochrome`, ADR 0009). */
     monochrome?: boolean;
   };
+  /**
+   * What the hemisphere choice changes in this game, shown under it in the protocol builder (ADR 0011),
+   * e.g. which side the larger board appears on.
+   */
+  hemisphereNote?: { left: LocalText; right: LocalText };
   recommendedMode?: SessionMode;
   recommendedDurationS?: number;
   lifeLossEvents: Array<{ id: string; label: LocalText }>;

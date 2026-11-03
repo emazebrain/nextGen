@@ -25,6 +25,16 @@ export const manifest: GameManifest = {
     rng: "seeded",
     monochrome: true,
   },
+  hemisphereNote: {
+    left: {
+      en: "From stage 2, the larger grid appears on the right of the screen and the smaller grid on the left.",
+      he: "משלב 2, הלוח הגדול מופיע בצד ימין של המסך והלוח הקטן בצד שמאל.",
+    },
+    right: {
+      en: "From stage 2, the larger grid appears on the left of the screen and the smaller grid on the right.",
+      he: "משלב 2, הלוח הגדול מופיע בצד שמאל של המסך והלוח הקטן בצד ימין.",
+    },
+  },
   recommendedMode: "timed_lives",
   lifeLossEvents: [
     { id: "wrong_tile", label: { en: "Wrong tile", he: "משבצת לא נכונה" } },

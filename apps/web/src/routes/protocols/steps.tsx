@@ -250,6 +250,7 @@ function StepEditor({ step: s, manifest: m, onChange }: { step: StepInput; manif
           { value: "right", label: <span className="swatchlabel"><span className="swatch swatch--cold" aria-hidden="true" />{t("stepEditor.hemiRight")}</span> },
         ]}
       />
+      {m.hemisphereNote && <p className="emb-field__hint">{localText(m.hemisphereNote[s.hemisphere], locale)}</p>}
       {m.capabilities.monochrome && (
         <CheckboxField
           label={t("stepEditor.monochrome")}

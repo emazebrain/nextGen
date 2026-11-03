@@ -61,7 +61,18 @@ export interface EngineConfig {
   cvdMode?: boolean;
   /** Timed mode: a wrong answer makes the next stage one step easier. */
   staircase?: boolean;
+  /**
+   * The brain side the step is set to activate (ADR 0011). On two-board stages the larger, anchor board goes
+   * on the opposite side of the screen, the visual field that side of the brain sees: left → anchor on the
+   * right, right → anchor on the left. The smaller companion board takes the other side.
+   */
+  hemisphere: "left" | "right";
   rng: () => number;
+}
+
+/** Where the anchor board goes on two-board stages: the side of the screen the chosen hemisphere sees. */
+export function anchorSideFor(hemisphere: "left" | "right"): "left" | "right" {
+  return hemisphere === "left" ? "right" : "left";
 }
 
 export function quadrantOf(index: number, size: number): 1 | 2 | 3 | 4 {
@@ -161,8 +172,8 @@ export class CatchMeEngine {
   private build(level: number, stage: number, deltaE: number, practice: boolean): Stage {
     const sizes = stage === 1 ? [level] : [level, stage];
     const colours = this.bag.draw(sizes.length);
-    // No side bias (v2): the anchor board goes left or right at random.
-    const anchorSide: Side = sizes.length === 1 ? "center" : this.cfg.rng() < 0.5 ? "left" : "right";
+    // Stage 1 shows the anchor alone, centred; from stage 2 its side follows the chosen hemisphere (ADR 0011).
+    const anchorSide: Side = sizes.length === 1 ? "center" : anchorSideFor(this.cfg.hemisphere);
     const boards = sizes.map((size, i): Board => {
       return {
         role: i === 0 ? "anchor" : "companion",

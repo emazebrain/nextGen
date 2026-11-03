@@ -74,6 +74,7 @@ class CatchMe implements GameModule {
       palette: this.mono ? "mono" : ctx.palette,
       cvdMode: p["catch_me_if_you_can.cvd_mode"] === true, // game settings arrive namespaced by game id
       staircase: p.session_mode === "timed",
+      hemisphere: this.side,
       rng: ctx.rng,
     });
     this.app = new Application();
