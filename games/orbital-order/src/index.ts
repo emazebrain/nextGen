@@ -230,13 +230,12 @@ class OrbitalOrder implements GameModule {
       this.qualified = true;
       this.ctx.session.qualifyingInteraction(); // the session clock starts on the first probe tap (§8.4)
     }
+    // A planet tapped while the rule is still showing ends the reveal and counts as the first tap, so a quick
+    // child's tap is never swallowed.
+    if (this.engine.phase === "reveal") this.endReveal();
     const stimulusOn = this.clock - this.sinceTarget();
     const r = this.engine.tap(id, this.clock);
-    if (r.kind === "ignored") return;
-    if (r.kind === "skipReveal") {
-      this.endReveal();
-      return;
-    }
+    if (r.kind === "ignored" || r.kind === "skipReveal") return;
     if (r.kind === "motor") {
       this.pulse(this.views.get(id)!);
       this.locked = true;
@@ -609,7 +608,9 @@ class OrbitalOrder implements GameModule {
     const g = this.trailG;
     g.clear();
     if (!t || t.committed.length < 2) return;
+    // After a board is cleared the trial still lists its taps but the planets are gone: draw nothing.
     const pts = t.committed.map((id) => this.views.get(id)).filter((v): v is SphereView => !!v);
+    if (pts.length < 2) return;
     g.moveTo(pts[0]!.x, pts[0]!.y);
     for (const p of pts.slice(1)) g.lineTo(p.x, p.y);
     g.stroke({ width: Math.max(4, this.R * 0.14), color: this.look.trail, alpha: 0.75, cap: "round", join: "round" });
