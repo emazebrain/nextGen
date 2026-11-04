@@ -25,7 +25,9 @@ export function defaultStep(m: GameManifest): StepInput {
     game_id: m.id,
     session_mode: mode,
     duration_s: mode === "lives" ? null : (m.recommendedDurationS ?? 300),
-    lives: mode === "timed" ? null : 3,
+    // Games with their own board budget start on it: the manifest recommends it (§8.4 Peek Peek).
+    lives: mode === "timed" || m.capabilities.livesAuto ? null : 3,
+    lives_auto: mode !== "timed" && m.capabilities.livesAuto,
     difficulty_start: 3,
     hemisphere: "left",
     timer_position: timerPositionFor("left", true),
@@ -54,7 +56,7 @@ export function useStepSummary() {
     [
       t("game.mode", { mode: s.session_mode }),
       s.duration_s !== null ? (s.duration_s < 60 ? t("stepEditor.seconds", { n: s.duration_s }) : t("step.minutes", { n: Math.round((s.duration_s / 60) * 10) / 10 })) : null,
-      s.lives !== null ? t("step.hearts", { n: s.lives }) : null,
+      s.lives_auto ? t("step.heartsAuto") : s.lives !== null ? t("step.hearts", { n: s.lives }) : null,
       t("step.difficulty", { n: s.difficulty_start }),
       t("step.palette", { h: s.hemisphere }),
       s.duration_s !== null && timerShown(s.timer_position) ? t("step.timer", { h: s.hemisphere }) : null,
@@ -188,7 +190,8 @@ function StepEditor({ step: s, manifest: m, onChange }: { step: StepInput; manif
       ...s,
       session_mode: mode,
       duration_s: mode === "lives" ? null : (s.duration_s ?? m.recommendedDurationS ?? 300),
-      lives: mode === "timed" ? null : (s.lives ?? 3),
+      lives: mode === "timed" || s.lives_auto ? null : (s.lives ?? 3),
+      lives_auto: mode !== "timed" && s.lives_auto === true,
     });
   // The timer's corner and look follow the hemisphere (ADR 0008); the therapist only chooses whether it shows.
   const showTimer = timerShown(s.timer_position);
@@ -220,16 +223,23 @@ function StepEditor({ step: s, manifest: m, onChange }: { step: StepInput; manif
             ))}
           </SelectField>
         )}
-        {s.lives !== null && (
+        {(s.lives !== null || s.lives_auto) && (
           <div className="emb-field">
-            <SelectField label={t("stepEditor.lives")} value={String(s.lives)} onChange={(e) => set("lives", Number(e.target.value))}>
+            <SelectField
+              label={t("stepEditor.lives")}
+              value={s.lives_auto ? "auto" : String(s.lives)}
+              onChange={(e) => onChange({ ...s, ...(e.target.value === "auto" ? { lives: null, lives_auto: true } : { lives: Number(e.target.value), lives_auto: false }) })}
+            >
+              {m.capabilities.livesAuto && <option value="auto">{t("stepEditor.livesAuto")}</option>}
               {Array.from({ length: 9 }, (_, i) => i + 1).map((n) => (
                 <option key={n} value={n}>
                   {n}
                 </option>
               ))}
             </SelectField>
-            <p className="emb-field__hint">{t("stepEditor.livesHelp", { events: m.lifeLossEvents.map((e) => localText(e.label, locale)).join(", ") })}</p>
+            <p className="emb-field__hint">
+              {s.lives_auto ? t("stepEditor.livesAutoHelp") : t("stepEditor.livesHelp", { events: m.lifeLossEvents.map((e) => localText(e.label, locale)).join(", ") })}
+            </p>
           </div>
         )}
       </div>

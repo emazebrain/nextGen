@@ -40,6 +40,8 @@ export const stepInput = z
     progression: progressionRule.nullable(),
     /** Black and white (ADR 0009). Only for games whose manifest supports it. */
     monochrome: z.boolean().default(false),
+    /** lives = auto: the game's per-board heart budget instead of a session count (Peek Peek, ADR 0012). `lives` is then null. */
+    lives_auto: z.boolean().default(false),
   })
   .superRefine((s, ctx) => {
     // Only the fields the mode uses are set (§8.1), so a step can never be "timed" without a time limit.
@@ -47,10 +49,11 @@ export const stepInput = z
     const needLives = s.session_mode !== "timed";
     if (needTime && s.duration_s === null) ctx.addIssue({ code: "custom", path: ["duration_s"], message: "needs_duration" });
     if (!needTime && s.duration_s !== null) ctx.addIssue({ code: "custom", path: ["duration_s"], message: "no_duration_in_lives" });
-    if (needLives && s.lives === null) ctx.addIssue({ code: "custom", path: ["lives"], message: "needs_lives" });
-    if (!needLives && s.lives !== null) ctx.addIssue({ code: "custom", path: ["lives"], message: "no_lives_in_timed" });
+    if (needLives && s.lives === null && !s.lives_auto) ctx.addIssue({ code: "custom", path: ["lives"], message: "needs_lives" });
+    if (needLives && s.lives !== null && s.lives_auto) ctx.addIssue({ code: "custom", path: ["lives"], message: "lives_or_auto" });
+    if (!needLives && (s.lives !== null || s.lives_auto)) ctx.addIssue({ code: "custom", path: ["lives"], message: "no_lives_in_timed" });
   });
-/** As sent by clients: `monochrome` may be left out (it defaults to false). */
+/** As sent by clients: `monochrome` and `lives_auto` may be left out (they default to false). */
 export type StepInput = z.input<typeof stepInput>;
 
 const planFields = {

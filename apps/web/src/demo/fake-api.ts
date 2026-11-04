@@ -174,7 +174,28 @@ function seed(): Db {
     clinic_id: null,
     steps: [{ ...step({ session_mode: "lives", duration_s: null, lives: 5, difficulty_start: 3, trial_window_ms: 8000 }), id: uid(), ordinal: 1 }],
   };
-  db.templates.push(starter, discrimination);
+  const memory: TemplateDetail = {
+    id: uid(Date.now() - 198 * DAY),
+    name: "Memory and search",
+    description: "Peek Peek: remember where the pictures hide, then find every copy. Hearts are set per board.",
+    weeks: 6,
+    sessions_per_week: 2,
+    setting: "clinic",
+    visibility: "platform",
+    version: 1,
+    owner_name: null,
+    can_edit: false,
+    games: ["peek-peek"],
+    clinic_id: null,
+    steps: [
+      {
+        ...step({ game_id: "peek-peek", duration_s: 360, lives: null, lives_auto: true, difficulty_start: 3, game_params: { pack: "marine", control_trials: true, hidden_count: false, study_time_s: 0 } }),
+        id: uid(),
+        ordinal: 1,
+      },
+    ],
+  };
+  db.templates.push(starter, discrimination, memory);
 
   const byName = (a: Patient, b: Patient) => a.family_name.localeCompare(b.family_name) || a.given_name.localeCompare(b.given_name);
   const active = db.patients.filter((p) => p.clinic_id === CLINIC_A && p.status === "active").sort(byName);
@@ -369,7 +390,7 @@ function params(s: Assignment["steps"][number], p: Patient) {
   return {
     session_mode: s.session_mode,
     ...(s.duration_s !== null ? { duration_s: s.duration_s } : {}),
-    ...(s.lives !== null ? { lives: s.lives } : {}),
+    ...(s.lives_auto ? { lives: "auto" } : s.lives !== null ? { lives: s.lives } : {}),
     difficulty: s.current_difficulty,
     start_level: "from_difficulty",
     hemisphere: s.hemisphere,

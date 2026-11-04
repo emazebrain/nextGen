@@ -60,6 +60,8 @@ class Run {
   private finished = false;
   private practiceCompleted = false;
   private livesStart: number | null;
+  /** lives = "auto": the game's per-board budget, shown with the same hearts (§8.1). */
+  private board: { left: number; total: number } | null = null;
   private rafId = 0;
   private heartbeat = 0;
   private blurTimer = 0;
@@ -158,7 +160,7 @@ class Run {
       lifeLossEvent(_id) {
         const before = self.session.snapshot().livesRemaining;
         const outcome = self.session.lifeLossEvent(self.now());
-        if (outcome === "life_lost") self.onLifeLost(before);
+        if (outcome === "life_lost") self.onLifeLost(before, self.session.snapshot().livesRemaining);
         self.checkEnd();
       },
       levelComplete(row) {
@@ -173,6 +175,13 @@ class Run {
       },
       onLifeLost(cb) {
         self.lifeLostCbs.push(cb);
+      },
+      boardHearts(left, total) {
+        if (self.session.config.lives !== "auto" || self.finished) return;
+        const before = self.board?.left ?? null;
+        self.board = { left: Math.max(0, Math.round(left)), total: Math.max(1, Math.round(total)) };
+        // A drop within the same board is a lost heart: the same crack, glow and freeze as session lives.
+        if (before !== null && self.board.left < before && self.board.total === total) self.onLifeLost(before, self.board.left);
       },
       onTrialWindow() {
         /* games draw their own trial-window bar */
@@ -376,15 +385,26 @@ class Run {
       }
       this.els.timer.classList.toggle("warning", s.timerWarning);
     }
-    if (this.livesStart !== null) {
-      const left = s.livesRemaining ?? 0;
-      if (this.els.hearts.dataset.left !== String(left)) {
-        this.els.hearts.dataset.left = String(left);
-        this.els.hearts.setAttribute("aria-label", this.t("hearts", { n: left }));
-        const compact = this.livesStart > 5 && this.win.innerWidth < 600;
-        this.els.hearts.innerHTML = compact
-          ? `<span class="heart full">${HEART}</span><span class="count">×${left}</span>`
-          : Array.from({ length: this.livesStart }, (_, i) => `<span class="heart ${i < left ? "full" : "empty"}">${HEART}</span>`).join("");
+    const hearts = this.livesStart !== null ? { left: s.livesRemaining ?? 0, total: this.livesStart } : this.board;
+    if (hearts) {
+      const key = `${hearts.left}/${hearts.total}`;
+      this.els.hearts.hidden = false;
+      if (this.els.hearts.dataset.left !== key) {
+        this.els.hearts.dataset.left = key;
+        this.els.hearts.setAttribute("aria-label", this.t("hearts", { n: hearts.left }));
+        const compact = hearts.total > 5 && this.win.innerWidth < 600;
+        const icons = this.els.hearts.querySelectorAll<HTMLElement>(":scope > .heart");
+        if (!compact && icons.length === hearts.total && !this.els.hearts.querySelector(".count")) {
+          // Same row of hearts: just empty the lost ones, so the falling heart's animation isn't wiped out.
+          icons.forEach((h, i) => {
+            h.classList.toggle("full", i < hearts.left);
+            h.classList.toggle("empty", i >= hearts.left);
+          });
+        } else {
+          this.els.hearts.innerHTML = compact
+            ? `<span class="heart full">${HEART}</span><span class="count">×${hearts.left}</span>`
+            : Array.from({ length: hearts.total }, (_, i) => `<span class="heart ${i < hearts.left ? "full" : "empty"}">${HEART}</span>`).join("");
+        }
       }
     } else {
       this.els.hearts.hidden = true;
@@ -392,8 +412,7 @@ class Run {
   }
 
   /** The shared life-lost moment: the heart cracks and drops, the edge glows, input freezes for 400 ms. */
-  private onLifeLost(before: number | null) {
-    const left = this.session.snapshot().livesRemaining;
+  private onLifeLost(before: number | null, left: number | null) {
     if (before !== null && !this.reducedMotion) {
       const hearts = this.els.hearts.querySelectorAll(".heart");
       const lost = hearts[before - 1] as HTMLElement | undefined;

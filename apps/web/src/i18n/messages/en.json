@@ -270,6 +270,8 @@
   "skill.visual_discrimination": "Visual discrimination",
   "skill.selective_attention": "Selective attention",
   "skill.visuospatial_attention": "Visuospatial attention",
+  "skill.visuospatial_wm": "Visuospatial working memory",
+  "skill.search_organisation": "Search organisation",
   "preview.title": "Try it",
   "preview.palette": "Palette",
   "preview.warm": "Warm, left hemisphere",
@@ -493,5 +495,8 @@
   "preview.backgroundValue": "{v, select, solid {Solid} other {Textured}}",
   "preview.motion": "Moving background",
   "preview.temperature": "Background colours",
-  "preview.temperatureValue": "{v, select, warm {Warm} cold {Cold} other {Follow the palette}}"
+  "preview.temperatureValue": "{v, select, warm {Warm} cold {Cold} other {Follow the palette}}",
+  "step.heartsAuto": "hearts per board",
+  "stepEditor.livesAuto": "Automatic, per board",
+  "stepEditor.livesAutoHelp": "Each board gets its own hearts, more for bigger boards. A wrong tile costs a heart; when they run out, a fresh board of the same size starts."
 }

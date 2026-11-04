@@ -154,6 +154,34 @@ describe("game runtime", () => {
     expect((document.querySelector(".hud-hearts") as HTMLElement).hidden).toBe(true);
   });
 
+  it("lives = auto: the game's board hearts show in the shared HUD and refill on a new board; no session lives (ADR 0012)", async () => {
+    const ctx = await launch(params({ lives: "auto" }));
+    const hearts = document.querySelector(".hud-hearts") as HTMLElement;
+    ctx.session.boardHearts!(4, 4);
+    await new Promise((r) => setTimeout(r, 40));
+    expect(hearts.hidden).toBe(false);
+    expect(hearts.querySelectorAll(".heart.full")).toHaveLength(4);
+    ctx.session.qualifyingInteraction();
+    ctx.session.lifeLossEvent("wrong_tile");
+    ctx.session.boardHearts!(3, 4);
+    await new Promise((r) => setTimeout(r, 40));
+    expect(hearts.querySelectorAll(".heart.full")).toHaveLength(3);
+    expect(hearts.querySelectorAll(".heart.empty")).toHaveLength(1);
+    expect(ctx.session.state.livesRemaining).toBeNull(); // Session Rules leaves the budget to the game
+    ctx.session.boardHearts!(5, 5); // a new, bigger board
+    await new Promise((r) => setTimeout(r, 40));
+    expect(hearts.querySelectorAll(".heart.full")).toHaveLength(5);
+    for (let i = 0; i < 12; i++) ctx.session.lifeLossEvent("wrong_tile");
+    expect(messages.some((m) => m.type === "ended")).toBe(false); // wrong tiles never end an auto session
+  });
+
+  it("ignores board hearts when lives are a session count", async () => {
+    const ctx = await launch(params({ lives: 3 }));
+    ctx.session.boardHearts!(7, 7);
+    await new Promise((r) => setTimeout(r, 40));
+    expect(document.querySelectorAll(".hud-hearts .heart")).toHaveLength(3);
+  });
+
   it("a therapist's quit from the host abandons the session with partial results", async () => {
     const ctx = await launch(params());
     ctx.session.qualifyingInteraction();

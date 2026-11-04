@@ -6,6 +6,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import { ADMIN_URL, addMember, seedClinics, setupApi, staffClient, type Api, type TestEnv } from "./support.ts";
+import { buildParams } from "../src/modules/sessions/routes.ts";
 
 const step = (extra: Record<string, unknown> = {}) => ({
   game_id: "catch-me-if-you-can",
@@ -122,5 +123,30 @@ describe.skipIf(!ADMIN_URL)("protocols API", () => {
     expect(stopped.body.assignment).toBeNull();
     const { rows } = await env.db.query(`SELECT status, count(*)::int n FROM app.planned_session WHERE assignment_id = $1 GROUP BY status`, [a.id]);
     expect(rows).toEqual([{ status: "cancelled", n: 12 }]);
+  });
+
+  it("Peek Peek: hearts per board (lives = auto), only for games that support it (ADR 0012)", async () => {
+    const peek = step({ game_id: "peek-peek", lives: null, lives_auto: true, duration_s: 360, game_params: { pack: "animals", control_trials: true, hidden_count: false, study_time_s: 0 } });
+    const res = await yael("/v1/templates", { method: "POST", body: template({ name: "Memory", steps: [peek] }) });
+    expect(res.status).toBe(201);
+    const t = (await yael(`/v1/templates/${res.body.template.id}`)).body.template;
+    expect(t.steps[0]).toMatchObject({ game_id: "peek-peek", lives: null, lives_auto: true, game_params: { pack: "animals" } });
+    const notSupported = await yael("/v1/templates", { method: "POST", body: template({ steps: [step({ lives: null, lives_auto: true })] }) });
+    expect(notSupported.body.issues).toEqual([{ path: "steps.0.lives", code: "lives_auto_not_supported" }]);
+    const both = await yael("/v1/templates", { method: "POST", body: template({ steps: [step({ game_id: "peek-peek", lives: 3, lives_auto: true })] }) });
+    expect(both.body.issues).toEqual([{ path: "steps.0.lives", code: "lives_or_auto" }]);
+    const badPack = await yael("/v1/templates", { method: "POST", body: template({ steps: [{ ...peek, game_params: { pack: "dinosaurs" } }] }) });
+    expect(badPack.body.issues).toEqual([{ path: "steps.0.game_params.pack", code: "invalid_setting" }]);
+    // The database keeps the rule too: a lives mode needs a count or "auto".
+    await expect(
+      env.db.query(`UPDATE app.template_step SET lives_auto = false WHERE template_id = $1`, [res.body.template.id]),
+    ).rejects.toThrow(/step_mode_fields/);
+    // At launch, "auto" travels as lives = "auto".
+    const params = buildParams(
+      { ...t.steps[0], lives_auto: true, current_difficulty: 3, sessions_completed: 0, monochrome: false } as Parameters<typeof buildParams>[0],
+      { preferred_locale: "en", colour_vision_deficiency: false },
+      1,
+    );
+    expect(params).toMatchObject({ session_mode: "timed_lives", lives: "auto", "peek_peek.pack": "animals" });
   });
 });

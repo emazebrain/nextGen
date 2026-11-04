@@ -270,6 +270,8 @@
   "skill.visual_discrimination": "הבחנה חזותית",
   "skill.selective_attention": "קשב סלקטיבי",
   "skill.visuospatial_attention": "קשב חזותי-מרחבי",
+  "skill.visuospatial_wm": "זיכרון עבודה חזותי־מרחבי",
+  "skill.search_organisation": "ארגון החיפוש",
   "preview.title": "תצוגה מקדימה",
   "preview.palette": "פלטה",
   "preview.warm": "חמה, המיספרה שמאלית",
@@ -493,5 +495,8 @@
   "preview.backgroundValue": "{v, select, solid {אחיד} other {עם טקסטורה}}",
   "preview.motion": "רקע בתנועה",
   "preview.temperature": "צבעי הרקע",
-  "preview.temperatureValue": "{v, select, warm {חמים} cold {קרים} other {לפי הפלטה}}"
+  "preview.temperatureValue": "{v, select, warm {חמים} cold {קרים} other {לפי הפלטה}}",
+  "step.heartsAuto": "לבבות לכל לוח",
+  "stepEditor.livesAuto": "אוטומטי, לכל לוח",
+  "stepEditor.livesAutoHelp": "לכל לוח לבבות משלו, יותר ללוחות גדולים. משבצת לא נכונה עולה לב; כשהלבבות נגמרים מתחיל לוח חדש באותו גודל."
 }

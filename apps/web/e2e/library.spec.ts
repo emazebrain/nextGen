@@ -104,3 +104,29 @@ test("cold palette, timed, in Hebrew: the clock waits for the first tap, and the
   await expect(game.getByRole("heading", { name: "כל הכבוד על המאמץ!" })).toBeVisible();
   await context.close();
 });
+
+test("Peek Peek: hearts per board by default, pictures to choose, and an open board first (ADR 0012)", async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await enrol(page, "ofir@synthetic.test");
+  await page.goto("/library/peek-peek");
+  await expect(page.getByRole("heading", { level: 1, name: "Peek Peek" })).toBeVisible();
+  await expect(page.getByLabel("Hearts")).toHaveValue("auto");
+  await page.getByLabel("Pictures").selectOption("household");
+  await page.getByLabel("Start with practice").uncheck();
+  await page.getByRole("button", { name: "Start preview" }).click();
+
+  const game = page.frameLocator("iframe.gameframe");
+  await game.getByRole("button", { name: "Play" }).click();
+  // The control trial: the board stays open and the child finds every copy of one picture.
+  await expect(game.getByText("Find every copy of this picture.")).toBeVisible({ timeout: 20_000 });
+  await expect(game.locator(".pp-pic img")).toBeVisible();
+  const timer = game.locator(".hud-timer");
+  await expect(timer).toHaveClass(/side-right/); // warm: clock top right (ADR 0008)
+  await page.waitForTimeout(1200);
+  await expect(timer.locator(".time")).toHaveText("2:00"); // the clock waits for the first tap after the first study phase
+  await shot(page, "35-peek-peek-control");
+  await stopFromPauseMenu(page);
+  await expect(game.getByRole("heading", { name: "Great effort!" })).toBeVisible();
+  await context.close();
+});

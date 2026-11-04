@@ -3,7 +3,7 @@
   "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "Game Runtime (design doc C4, \u00a78): runs inside the sandboxed frame, owns Session Rules, the shared HUD and the results envelope. Builds one self-contained frame bundle per game.",
+  "description": "Game Runtime (design doc C4, §8): runs inside the sandboxed frame, owns Session Rules, the shared HUD and the results envelope. Builds one self-contained frame bundle per game.",
   "exports": {
     "./protocol": "./src/protocol.ts",
     "./frames/*": "./dist/frames/*"
@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@emb/game-catch-me": "workspace:*",
+    "@emb/game-peek-peek": "workspace:*",
     "@emb/game-sdk": "workspace:*",
     "@emb/session-rules": "workspace:*"
   },

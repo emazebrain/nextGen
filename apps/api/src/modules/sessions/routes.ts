@@ -37,6 +37,7 @@ interface StepRow {
   session_mode: "timed" | "lives" | "timed_lives";
   duration_s: number | null;
   lives: number | null;
+  lives_auto: boolean;
   current_difficulty: number;
   hemisphere: "left" | "right";
   timer_position: "left" | "right" | "hidden";
@@ -55,7 +56,7 @@ export function buildParams(step: StepRow, patient: { preferred_locale: string; 
   return {
     session_mode: step.session_mode,
     ...(step.duration_s !== null ? { duration_s: step.duration_s } : {}),
-    ...(step.lives !== null ? { lives: step.lives } : {}),
+    ...(step.lives_auto ? { lives: "auto" as const } : step.lives !== null ? { lives: step.lives } : {}),
     difficulty: step.current_difficulty,
     start_level: "from_difficulty",
     hemisphere: step.hemisphere,
@@ -108,7 +109,7 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
       if (row.assignment_status !== "active") return { error: "protocol_not_active" as const };
       if (row.status !== "planned" && row.status !== "in_progress") return { error: "session_closed" as const };
       const steps = await db.query<StepRow & { done: boolean }>(
-        `SELECT s.id, s.ordinal, s.game_id, s.session_mode, s.duration_s, s.lives, s.current_difficulty, s.hemisphere, s.timer_position, s.monochrome, s.practice, s.trial_window_ms,
+        `SELECT s.id, s.ordinal, s.game_id, s.session_mode, s.duration_s, s.lives, s.lives_auto, s.current_difficulty, s.hemisphere, s.timer_position, s.monochrome, s.practice, s.trial_window_ms,
                 s.game_params, s.sessions_completed,
                 EXISTS (SELECT 1 FROM app.game_session g WHERE g.planned_session_id = $2 AND g.assignment_step_id = s.id) AS done
            FROM app.assignment_step s WHERE s.assignment_id = $1 ORDER BY s.ordinal`,

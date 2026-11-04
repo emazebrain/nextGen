@@ -17,6 +17,7 @@
     "@emb/contracts": "workspace:*",
     "@emb/db": "workspace:*",
     "@emb/game-catch-me": "workspace:*",
+    "@emb/game-peek-peek": "workspace:*",
     "@emb/game-runtime": "workspace:*",
     "@emb/game-sdk": "workspace:*",
     "@emb/metrics": "workspace:*",

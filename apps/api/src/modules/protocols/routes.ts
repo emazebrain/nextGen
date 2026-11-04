@@ -22,11 +22,11 @@ import { parseBody } from "../../validate.ts";
 import { UUID } from "../patients/routes.ts";
 import { timerPositionFor, timerShown } from "@emb/session-rules";
 
-const STEP_COLUMNS = `game_id, session_mode, duration_s, lives, difficulty_start, hemisphere, timer_position, practice, trial_window_ms, game_params, progression, monochrome`;
+const STEP_COLUMNS = `game_id, session_mode, duration_s, lives, difficulty_start, hemisphere, timer_position, practice, trial_window_ms, game_params, progression, monochrome, lives_auto`;
 
 function stepValues(s: StepInput) {
   // The timer corner is derived from the hemisphere (ADR 0008); only shown or hidden comes from the client.
-  return [s.game_id, s.session_mode, s.duration_s, s.lives, s.difficulty_start, s.hemisphere, timerPositionFor(s.hemisphere, timerShown(s.timer_position)), s.practice, s.trial_window_ms, JSON.stringify(s.game_params), s.progression ? JSON.stringify(s.progression) : null, s.monochrome === true];
+  return [s.game_id, s.session_mode, s.duration_s, s.lives, s.difficulty_start, s.hemisphere, timerPositionFor(s.hemisphere, timerShown(s.timer_position)), s.practice, s.trial_window_ms, JSON.stringify(s.game_params), s.progression ? JSON.stringify(s.progression) : null, s.monochrome === true, s.lives_auto === true];
 }
 
 function gameIssues(steps: StepInput[]) {
@@ -187,7 +187,7 @@ export function protocolRoutes(pool: pg.Pool) {
       for (const [i, s] of input.steps.entries()) {
         await db.query(
           `INSERT INTO app.assignment_step (assignment_id, patient_id, ordinal, ${STEP_COLUMNS}, current_difficulty)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$8)`,
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$8)`,
           [aid, id, i + 1, ...stepValues(s)],
         );
       }
@@ -263,6 +263,6 @@ export function protocolRoutes(pool: pg.Pool) {
 
 async function insertTemplateSteps(db: pg.PoolClient, templateId: string, steps: StepInput[]) {
   for (const [i, s] of steps.entries()) {
-    await db.query(`INSERT INTO app.template_step (template_id, ordinal, ${STEP_COLUMNS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`, [templateId, i + 1, ...stepValues(s)]);
+    await db.query(`INSERT INTO app.template_step (template_id, ordinal, ${STEP_COLUMNS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`, [templateId, i + 1, ...stepValues(s)]);
   }
 }

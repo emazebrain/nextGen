@@ -78,7 +78,7 @@ export function GamePage() {
   const [palette, setPalette] = useState<"warm" | "cold">("warm");
   const [mode, setMode] = useState<SessionMode>(m?.recommendedMode ?? "timed_lives");
   const [minutes, setMinutes] = useState("2");
-  const [lives, setLives] = useState("3");
+  const [lives, setLives] = useState(m?.capabilities.livesAuto ? "auto" : "3");
   const [difficulty, setDifficulty] = useState("3");
   const [practice, setPractice] = useState(true);
   const [lang, setLang] = useState<Locale>(locale);
@@ -86,6 +86,8 @@ export function GamePage() {
   const [background, setBackground] = useState("solid");
   const [motion, setMotion] = useState(false);
   const [temperature, setTemperature] = useState("auto");
+  const packDef = m?.paramsSchema.properties.pack;
+  const [pack, setPack] = useState(String(packDef?.default ?? ""));
   useTitle(m ? localText(m.name, locale) : t("library.title"));
 
   if (!m) {
@@ -103,6 +105,7 @@ export function GamePage() {
     e.preventDefault();
     const q = new URLSearchParams({ palette, mode, minutes, lives, difficulty, practice: practice ? "on" : "off", lang });
     if (mono) q.set("mono", "1");
+    if (packDef && pack) q.set("pack", pack);
     if (hasBackground) {
       q.set("bg", background);
       q.set("temp", temperature);
@@ -195,6 +198,7 @@ export function GamePage() {
               )}
               {mode !== "timed" && (
                 <SelectField label={t("preview.lives")} value={lives} onChange={(e) => setLives(e.target.value)}>
+                  {m.capabilities.livesAuto && <option value="auto">{t("stepEditor.livesAuto")}</option>}
                   {Array.from({ length: 9 }, (_, i) => String(i + 1)).map((n) => (
                     <option key={n} value={n}>
                       {n}
@@ -217,6 +221,15 @@ export function GamePage() {
               onChange={setDifficulty}
               options={["1", "2", "3", "4", "5"].map((d) => ({ value: d, label: d }))}
             />
+            {packDef?.enum && packDef["x-ui"] && (
+              <SelectField label={localText(packDef["x-ui"].label, locale)} value={pack} onChange={(e) => setPack(e.target.value)}>
+                {packDef.enum.map((v) => (
+                  <option key={String(v)} value={String(v)}>
+                    {packDef["x-ui"]?.options?.[String(v)] ? localText(packDef["x-ui"].options[String(v)]!, locale) : String(v)}
+                  </option>
+                ))}
+              </SelectField>
+            )}
             <CheckboxField label={t("preview.practice")} checked={practice} onChange={(e) => setPractice(e.target.checked)} />
             {m.capabilities.monochrome && <CheckboxField label={t("stepEditor.monochrome")} hint={t("stepEditor.monochromeHelp")} checked={mono} onChange={(e) => setMono(e.target.checked)} />}
             {hasBackground && (
@@ -275,13 +288,14 @@ export function GamePreviewPage() {
     return launchParams({
       session_mode: mode,
       duration_s: Number(q.get("minutes") ?? 2) * 60,
-      lives: Number(q.get("lives") ?? 3),
+      lives: q.get("lives") === "auto" ? "auto" : Number(q.get("lives") ?? 3),
       difficulty: Number(q.get("difficulty") ?? 3) as PlatformParams["difficulty"],
       hemisphere,
       timer_position: timerPositionFor(hemisphere, true),
       practice: q.get("practice") === "off" ? "off" : "on",
       lang: (q.get("lang") as PlatformParams["lang"]) || "he",
       monochrome: q.get("mono") === "1",
+      ...(q.get("pack") && game ? { [`${game.manifest.id.replace(/-/g, "_")}.pack`]: q.get("pack") } : {}),
       ...(q.get("bg") && game
         ? {
             [`${game.manifest.id.replace(/-/g, "_")}.background`]: q.get("bg") === "textured" ? "textured" : "solid",

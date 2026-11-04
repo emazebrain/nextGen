@@ -138,6 +138,11 @@ export interface SessionApi {
   contentExhausted(reason?: "content_exhausted" | "max_level" | "trial_cap"): void;
   log(type: string, data?: Record<string, unknown>): void;
   onLifeLost(cb: (remaining: number | null) => void): void;
+  /**
+   * lives = "auto" only (Peek Peek): the game's per-board heart budget, shown in the shared HUD. Call it when a
+   * board starts and after each wrong tile; it refills on each new board. Ignored in every other mode.
+   */
+  boardHearts?(left: number, total: number): void;
   onTrialWindow(cb: (msLeft: number) => void): void;
   onEnd(cb: (status: SessionStatus) => void): void;
   readonly state: { activeMs: number; livesRemaining: number | null; mode: SessionMode; paused: boolean };

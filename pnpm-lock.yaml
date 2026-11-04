@@ -63,6 +63,9 @@ importers:
       '@emb/game-catch-me':
         specifier: workspace:*
         version: link:../../games/catch-me-if-you-can
+      '@emb/game-peek-peek':
+        specifier: workspace:*
+        version: link:../../games/peek-peek
       '@emb/game-runtime':
         specifier: workspace:*
         version: link:../../packages/game-runtime
@@ -180,6 +183,22 @@ importers:
         specifier: ^3.2.0
         version: 3.2.7(@types/node@22.20.5)(jsdom@26.1.0)(yaml@2.9.1)
 
+  games/peek-peek:
+    dependencies:
+      '@emb/game-sdk':
+        specifier: workspace:*
+        version: link:../../packages/game-sdk
+      pixi.js:
+        specifier: ^8.9.0
+        version: 8.22.0
+    devDependencies:
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.0
+        version: 3.2.7(@types/node@22.20.5)(jsdom@26.1.0)(yaml@2.9.1)
+
   games/tunnel-rush-spike:
     dependencies:
       pixi.js:
@@ -230,6 +249,9 @@ importers:
       '@emb/game-catch-me':
         specifier: workspace:*
         version: link:../../games/catch-me-if-you-can
+      '@emb/game-peek-peek':
+        specifier: workspace:*
+        version: link:../../games/peek-peek
       '@emb/game-sdk':
         specifier: workspace:*
         version: link:../game-sdk
