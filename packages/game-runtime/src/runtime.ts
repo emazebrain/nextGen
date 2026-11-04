@@ -322,8 +322,10 @@ class Run {
       ui.style === "digital"
         ? `<svg class="lcd" viewBox="0 0 ${LCD_W} 44" aria-hidden="true">${[0, 1, 2, 3].map((i) => digitSvg(i)).join("")}<circle class="colon" cx="${LCD_COLON}" cy="15" r="2.6"/><circle class="colon" cx="${LCD_COLON}" cy="29" r="2.6"/></svg>`
         : `<span class="bar" aria-hidden="true"><span class="fill"></span></span>`;
+    // The stage stays in the accessibility tree: games hide their canvas and may offer DOM controls (Orbital
+    // Order's planet buttons) and live messages there (ADR 0013).
     root.innerHTML = `
-      <div class="stage" aria-hidden="true"></div>
+      <div class="stage"></div>
       <div class="hud" dir="ltr">
         <div class="hud-timer t-${ui.style} side-${ui.side}" role="timer" aria-live="off">
           ${face}

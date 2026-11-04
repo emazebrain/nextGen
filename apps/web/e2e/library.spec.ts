@@ -157,3 +157,53 @@ test("Orbital Order: letters, night look, plain taps first and the clock waits f
   await expect(game.getByRole("heading", { name: "Great effort!" })).toBeVisible();
   await context.close();
 });
+
+test("Orbital Order: practice hands over to the game, played through the hidden planet buttons", async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await enrol(page, "adi@synthetic.test");
+  await page.goto("/library/orbital-order");
+  await page.getByRole("radio", { name: "Timed + Lives", exact: true }).check();
+  await page.getByRole("button", { name: "Start preview" }).click(); // practice on (the default)
+
+  const game = page.frameLocator("iframe.gameframe");
+  await game.getByRole("button", { name: "Play" }).click();
+  const planets = game.getByRole("group", { name: "Planets" }).getByRole("button");
+  const names = () => planets.allTextContents();
+
+  /** Reads the rule from the sign and taps the chain with the keyboard, like a switch or screen-reader user. */
+  async function playChain() {
+    await expect(planets.first()).toBeAttached({ timeout: 20_000 });
+    const sign = (await game.locator(".oo-banner").textContent()) ?? "";
+    const skip = ((await game.locator(".oo-banner .oo-sr").textContent()) ?? "").trim();
+    const up = sign.includes("Smallest to biggest");
+    const board = await names();
+    const chain = board
+      .filter((n) => n.slice(n.indexOf(", ") + 2) !== skip)
+      .map((n) => Number(n.split(",")[0]))
+      .sort((a, b) => (up ? a - b : b - a));
+    expect(chain.length).toBeGreaterThan(1);
+    for (const g of chain) {
+      await planets.filter({ hasText: new RegExp(`^${g}, `) }).press("Enter");
+      await page.waitForTimeout(140);
+    }
+    await expect.poll(async () => (await names()).join("|"), { timeout: 5000 }).not.toBe(board.join("|"));
+  }
+
+  for (let i = 0; i < 3; i++) await playChain(); // three practice boards
+  // The handover that used to freeze: practice → the five plain taps.
+  await expect(game.getByText("Tap the glowing planet.")).toBeVisible({ timeout: 10_000 });
+  const timer = game.locator(".hud-timer .time");
+  for (let i = 0; i < 5; i++) {
+    await planets.filter({ hasText: /glowing$/ }).press("Enter");
+    await page.waitForTimeout(600);
+  }
+  await expect(game.getByText("Great tapping! Now follow the rule.")).toBeVisible();
+  await expect(timer).toHaveText("2:00"); // still waiting: the clock starts on the first probe tap
+  await playChain();
+  await expect(timer).not.toHaveText("2:00", { timeout: 4000 });
+  await shot(page, "37-orbital-order-probe");
+  await stopFromPauseMenu(page);
+  await expect(game.getByRole("heading", { name: "Great effort!" })).toBeVisible();
+  await context.close();
+});

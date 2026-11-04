@@ -92,6 +92,8 @@ class OrbitalOrder implements GameModule {
   private views = new Map<string, SphereView>();
   private R = 40;
   private banner!: HTMLDivElement;
+  /** Hidden list of the planets as buttons: for screen readers, switch access and automated tests. */
+  private planets!: HTMLDivElement;
   private recheck!: HTMLButtonElement;
   private bar!: HTMLDivElement;
   private msg!: HTMLDivElement;
@@ -135,6 +137,7 @@ class OrbitalOrder implements GameModule {
 
     this.app = new Application();
     await this.app.init({ resizeTo: ctx.mount, backgroundAlpha: 0, antialias: true, autoDensity: true, resolution: Math.min(2, window.devicePixelRatio || 1) });
+    this.app.canvas.setAttribute("aria-hidden", "true"); // the picture; the game's DOM text carries meaning
     ctx.mount.appendChild(this.app.canvas);
     this.app.stage.addChild(this.bg, this.trailG, this.sphereLayer, this.fx);
     this.fx.eventMode = "none";
@@ -272,6 +275,7 @@ class OrbitalOrder implements GameModule {
     const t = this.engine.trial!;
     const v = this.views.get(id)!;
     this.markDone(v, t.committed.length);
+    this.renderPlanetList();
     this.windowLeft = this.engine.windowMs;
     if (this.block && this.engine.scored) this.block.score += r.points;
     if (!r.chainDone) return;
@@ -482,6 +486,7 @@ class OrbitalOrder implements GameModule {
     this.views.clear();
     this.trailG.clear();
     this.selected = null;
+    this.renderPlanetList();
   }
 
   private drawSpheres(t: Trial) {
@@ -506,6 +511,53 @@ class OrbitalOrder implements GameModule {
       for (const v of this.views.values()) v.root.alpha = v.s.id === t.lit ? 1 : 0.35;
       const lit = this.views.get(t.lit!);
       if (lit) this.litRing(lit);
+    }
+    this.renderPlanetList();
+  }
+
+  /** Words for a planet: its glyph, colour and rim, so it can be told apart without seeing it. */
+  private planetLabel(v: SphereView): string {
+    const t = this.engine.trial;
+    const base = this.ctx.t("planet.label", { glyph: v.s.glyph, colour: this.ctx.t(`colour.${this.ctx.palette}.${v.token.id}`), ring: this.ctx.t(`ring.${v.token.ring}`) });
+    if (t?.segment === "motor" && t.lit === v.s.id) return this.ctx.t("planet.glowing", { label: base });
+    const n = t ? t.committed.indexOf(v.s.id) : -1;
+    return n >= 0 ? this.ctx.t("planet.tapped", { label: base, n: n + 1 }) : base;
+  }
+
+  /**
+   * Keeps the hidden planet buttons in step with the board: top to bottom, then across. Focus stays in the list
+   * when a new board replaces the old one, so a screen-reader or switch user is never dropped.
+   */
+  private renderPlanetList() {
+    if (!this.planets) return;
+    const hadFocus = this.planets.contains(document.activeElement);
+    const focusedId = (document.activeElement as HTMLElement | null)?.dataset?.planet ?? null;
+    const t = this.engine?.trial;
+    const list = [...this.views.values()].sort((a, b) => a.by - b.by || a.bx - b.bx);
+    this.planets.replaceChildren(
+      ...list.map((v) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.dataset.planet = v.s.id;
+        b.textContent = this.planetLabel(v);
+        const done = !!t && t.committed.includes(v.s.id);
+        const inert = done || (t?.segment === "motor" && t.lit !== v.s.id);
+        if (inert) b.setAttribute("aria-disabled", "true");
+        b.addEventListener("click", () => {
+          this.keyboard = true;
+          this.onSphereTap(v.s.id);
+        });
+        b.addEventListener("focus", () => {
+          this.keyboard = true;
+          this.selected = v.s.id;
+          this.drawSelection();
+        });
+        return b;
+      }),
+    );
+    if (hadFocus) {
+      const again = focusedId ? this.planets.querySelector<HTMLButtonElement>(`[data-planet="${focusedId}"]`) : null;
+      (again ?? this.planets.querySelector<HTMLButtonElement>("button"))?.focus();
     }
   }
 
@@ -694,6 +746,8 @@ class OrbitalOrder implements GameModule {
 
   private onKey = (e: KeyboardEvent) => {
     if (this.paused || this.ended || this.locked || !this.views.size) return;
+    // The planet buttons and the ? button handle their own keys.
+    if (e.target instanceof HTMLElement && e.target.closest(".oo-planets, .oo-recheck")) return;
     if (e.key === "?" || e.key === "/") {
       e.preventDefault();
       this.startPeek();
@@ -774,6 +828,7 @@ class OrbitalOrder implements GameModule {
       .oo-bar i{position:absolute;inset-block:0;inset-inline-start:0;border-radius:999px;background:${L.barFill}}
       .oo-msg{position:absolute;inset-inline:0;inset-block-start:${BANNER_TOP + 14}px;display:flex;justify-content:center;pointer-events:none;font-family:${font}}
       .oo-say{padding:8px 18px;border-radius:999px;background:${L.glow || this.ctx.palette === "cold" ? "#FFFFFF" : L.ink};color:${L.glow || this.ctx.palette === "cold" ? "#0E1530" : "#FFFFFF"};font-size:22px;font-weight:700}
+      .oo-planets,.oo-sr{position:absolute;inline-size:1px;block-size:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
       @media (prefers-reduced-motion: reduce){.oo-banner{transition:none}}
     `;
     this.ctx.mount.appendChild(style);
@@ -808,6 +863,11 @@ class OrbitalOrder implements GameModule {
     this.msg.className = "oo-msg";
     this.msg.setAttribute("aria-live", "polite");
     this.ctx.mount.appendChild(this.msg);
+    this.planets = document.createElement("div");
+    this.planets.className = "oo-planets";
+    this.planets.setAttribute("role", "group");
+    this.planets.setAttribute("aria-label", this.ctx.t("planets"));
+    this.ctx.mount.appendChild(this.planets);
   }
 
   private showBanner(rule: Rule, big: boolean, changed: Array<"ordering" | "skip">, isNew = false) {
@@ -818,14 +878,16 @@ class OrbitalOrder implements GameModule {
     this.banner.innerHTML = `<div class="oo-card ${big ? "big" : ""} ${rtl ? "rtl" : ""}">${isNew ? `<span class="oo-new">${escapeHtml(this.ctx.t("rule.new"))}</span>` : ""}
       <span class="oo-part ${changed.includes("ordering") ? "changed" : ""}">${orderIcon(rule.ordering, this.look.bannerInk)}<span>${escapeHtml(order)}</span></span>
       <span class="oo-sep"></span>
-      <span class="oo-part ${changed.includes("skip") ? "changed" : ""}"><span>${escapeHtml(this.ctx.t("rule.skip"))}</span>${skipIcon(token, this.look)}</span>
+      <span class="oo-part ${changed.includes("skip") ? "changed" : ""}"><span>${escapeHtml(this.ctx.t("rule.skip"))}</span>${skipIcon(token, this.look)}<span class="oo-sr">${escapeHtml(this.ctx.t("colour." + this.ctx.palette + "." + token.id))}, ${escapeHtml(this.ctx.t("ring." + token.ring))}</span></span>
     </div>`;
     this.banner.hidden = false;
+    this.banner.removeAttribute("aria-hidden");
     this.recheck.classList.remove("on");
   }
 
   private hideBanner() {
     this.banner.hidden = true;
+    this.banner.setAttribute("aria-hidden", "true");
     const t = this.engine.trial;
     const canRecheck = this.ruleVisible === "on_request" && !!t && t.segment !== "motor" && this.engine.phase === "response";
     this.recheck.classList.toggle("on", canRecheck);

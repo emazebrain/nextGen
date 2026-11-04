@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { DIFFICULTY, MOTOR_TRIALS, PRACTICE_TRIALS, PROBE_DIFFICULTY, PROBE_TRIALS, TOKENS, type Difficulty } from "../src/config.ts";
 import { OrbitalEngine, type EngineConfig } from "../src/engine.ts";
 import { OrbitalMetrics, type TrialRecord } from "../src/metrics.ts";
+import { strings } from "../src/strings.ts";
+import { RINGS } from "../src/config.ts";
 import { classifyTap, colourDistance, makeSpheres, nextRule, sessionPool, solveChain, type Rule } from "../src/rules.ts";
 
 function mulberry32(seed: number) {
@@ -379,3 +381,14 @@ describe("metrics", () => {
 });
 
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
+
+describe("strings", () => {
+  it("names every colour and rim in both languages, for the hidden planet buttons", () => {
+    for (const lang of ["en", "he"] as const) {
+      const t = strings[lang] as Record<string, string>;
+      for (const p of ["warm", "cold"] as const) for (const tk of TOKENS[p]) expect(t[`colour.${p}.${tk.id}`]).toBeTruthy();
+      for (const r of RINGS) expect(t[`ring.${r}`]).toBeTruthy();
+    }
+    expect(Object.keys(strings.he).sort()).toEqual(Object.keys(strings.en).sort());
+  });
+});

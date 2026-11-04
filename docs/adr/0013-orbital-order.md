@@ -51,6 +51,13 @@ On a rule switch the sign says "New rule!" and outlines the part that changed. T
 Hebrew so the steps rise in reading order. Feedback is soft: no red and no buzzer; a ✕ on the tapped planet and a
 breathing ring on the one that comes next.
 
+**Planet buttons (accessibility and tests).** Beside the canvas the game keeps a visually hidden group of
+buttons, one per planet, named by glyph, colour and rim ("9, pink, thick rim"; "…, tapped 2"; "…, glowing" in the
+motor baseline), top to bottom. Pressing one is the same as tapping that planet. Screen-reader and switch users can
+play, and end-to-end tests drive the game through them (they play practice through to the scored part). The skip
+colour on the rule sign has the same words in hidden text. To make this reachable the runtime no longer marks the
+whole stage `aria-hidden`; each game hides its own canvas instead, and its DOM messages are now announced.
+
 **Metrics.** As §8.4 lists, plus `order_error_share`, `timeout_share`, `fatigue_slope`, `rule_recheck_rate`,
 `baseline_tap_latency_ms`, `probe_first_tap_latency_ms`, `comprehension_gate` and `best_streak`. **v1 bug fixed:**
 `max_chain` now counts the longest run of correct taps in any trial, including chains that broke; v1 counted only

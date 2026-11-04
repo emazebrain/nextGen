@@ -142,6 +142,7 @@ class PeekPeek implements GameModule {
 
     this.app = new Application();
     await this.app.init({ resizeTo: ctx.mount, backgroundAlpha: 0, antialias: true, autoDensity: true, resolution: Math.min(2, window.devicePixelRatio || 1) });
+    this.app.canvas.setAttribute("aria-hidden", "true"); // the picture; the game's DOM text carries meaning
     ctx.mount.appendChild(this.app.canvas);
     this.app.stage.addChild(this.bg, this.boardLayer, this.fx);
     this.fx.eventMode = "none";
