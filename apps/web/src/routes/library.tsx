@@ -88,6 +88,10 @@ export function GamePage() {
   const [temperature, setTemperature] = useState("auto");
   const packDef = m?.paramsSchema.properties.pack;
   const [pack, setPack] = useState(String(packDef?.default ?? ""));
+  const glyphDef = m?.paramsSchema.properties.glyph_type;
+  const [glyphs, setGlyphs] = useState(String(glyphDef?.default ?? ""));
+  const neonDef = m?.paramsSchema.properties.neon;
+  const [neon, setNeon] = useState(false);
   useTitle(m ? localText(m.name, locale) : t("library.title"));
 
   if (!m) {
@@ -106,6 +110,8 @@ export function GamePage() {
     const q = new URLSearchParams({ palette, mode, minutes, lives, difficulty, practice: practice ? "on" : "off", lang });
     if (mono) q.set("mono", "1");
     if (packDef && pack) q.set("pack", pack);
+    if (glyphDef && glyphs) q.set("glyphs", glyphs);
+    if (neonDef && neon) q.set("neon", "1");
     if (hasBackground) {
       q.set("bg", background);
       q.set("temp", temperature);
@@ -230,6 +236,16 @@ export function GamePage() {
                 ))}
               </SelectField>
             )}
+            {glyphDef?.enum && glyphDef["x-ui"] && (
+              <SelectField label={localText(glyphDef["x-ui"].label, locale)} value={glyphs} onChange={(e) => setGlyphs(e.target.value)}>
+                {glyphDef.enum.map((v) => (
+                  <option key={String(v)} value={String(v)}>
+                    {glyphDef["x-ui"]?.options?.[String(v)] ? localText(glyphDef["x-ui"].options[String(v)]!, locale) : String(v)}
+                  </option>
+                ))}
+              </SelectField>
+            )}
+            {neonDef?.["x-ui"] && <CheckboxField label={localText(neonDef["x-ui"].label, locale)} hint={neonDef["x-ui"].help ? localText(neonDef["x-ui"].help, locale) : undefined} checked={neon} onChange={(e) => setNeon(e.target.checked)} />}
             <CheckboxField label={t("preview.practice")} checked={practice} onChange={(e) => setPractice(e.target.checked)} />
             {m.capabilities.monochrome && <CheckboxField label={t("stepEditor.monochrome")} hint={t("stepEditor.monochromeHelp")} checked={mono} onChange={(e) => setMono(e.target.checked)} />}
             {hasBackground && (
@@ -296,6 +312,8 @@ export function GamePreviewPage() {
       lang: (q.get("lang") as PlatformParams["lang"]) || "he",
       monochrome: q.get("mono") === "1",
       ...(q.get("pack") && game ? { [`${game.manifest.id.replace(/-/g, "_")}.pack`]: q.get("pack") } : {}),
+      ...(q.get("glyphs") && game ? { [`${game.manifest.id.replace(/-/g, "_")}.glyph_type`]: q.get("glyphs") } : {}),
+      ...(q.get("neon") === "1" && game ? { [`${game.manifest.id.replace(/-/g, "_")}.neon`]: true } : {}),
       ...(q.get("bg") && game
         ? {
             [`${game.manifest.id.replace(/-/g, "_")}.background`]: q.get("bg") === "textured" ? "textured" : "solid",

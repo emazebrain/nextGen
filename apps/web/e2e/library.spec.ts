@@ -130,3 +130,30 @@ test("Peek Peek: hearts per board by default, pictures to choose, and an open bo
   await expect(game.getByRole("heading", { name: "Great effort!" })).toBeVisible();
   await context.close();
 });
+
+test("Orbital Order: letters, night look, plain taps first and the clock waits for the probe (ADR 0013)", async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await enrol(page, "lior@synthetic.test");
+  await page.goto("/library/orbital-order");
+  await expect(page.getByRole("heading", { level: 1, name: "Orbital Order" })).toBeVisible();
+  await expect(page.getByLabel("Hearts")).not.toHaveValue("auto");
+  await expect(page.getByRole("radio", { name: "Lives", exact: true })).toBeChecked(); // recommended mode
+  await page.getByRole("radio", { name: "Timed + Lives", exact: true }).check();
+  await page.getByLabel("Planets show").selectOption("letters");
+  await page.getByLabel("Night sky look").check();
+  await page.getByLabel("Start with practice").uncheck();
+  await page.getByRole("button", { name: "Start preview" }).click();
+
+  const game = page.frameLocator("iframe.gameframe");
+  await game.getByRole("button", { name: "Play" }).click();
+  // Motor baseline: one glowing planet to tap, unscored.
+  await expect(game.getByText("Tap the glowing planet.")).toBeVisible({ timeout: 20_000 });
+  const timer = game.locator(".hud-timer");
+  await page.waitForTimeout(1200);
+  await expect(timer.locator(".time")).toHaveText("2:00"); // the session clock starts on the first probe tap
+  await shot(page, "36-orbital-order-motor");
+  await stopFromPauseMenu(page);
+  await expect(game.getByRole("heading", { name: "Great effort!" })).toBeVisible();
+  await context.close();
+});

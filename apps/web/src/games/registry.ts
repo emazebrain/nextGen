@@ -6,6 +6,7 @@
 import type { GameManifest, LocalText, PlatformParams } from "@emb/game-sdk";
 import { timerPositionFor } from "@emb/session-rules";
 import { manifest as catchMe } from "@emb/game-catch-me/manifest";
+import { manifest as orbitalOrder } from "@emb/game-orbital-order/manifest";
 import { manifest as peekPeek } from "@emb/game-peek-peek/manifest";
 
 export interface GameEntry {
@@ -16,11 +17,11 @@ export interface GameEntry {
 export const GAMES: GameEntry[] = [
   { manifest: catchMe, loadFrame: () => import("@emb/game-runtime/frames/catch-me-if-you-can.js?raw").then((m) => m.default) },
   { manifest: peekPeek, loadFrame: () => import("@emb/game-runtime/frames/peek-peek.js?raw").then((m) => m.default) },
+  { manifest: orbitalOrder, loadFrame: () => import("@emb/game-runtime/frames/orbital-order.js?raw").then((m) => m.default) },
 ];
 
 /** The other v1 games, being rebuilt on the SDK (design doc §8.4). */
 export const UPCOMING: Array<{ id: string; name: LocalText }> = [
-  { id: "orbital-order", name: { en: "Orbital Order" } },
   { id: "beep-beep", name: { en: "Beep Beep" } },
   { id: "echo-keys", name: { en: "Echo Keys" } },
   { id: "block-crasher", name: { en: "Block Crasher" } },

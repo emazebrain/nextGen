@@ -195,7 +195,28 @@ function seed(): Db {
       },
     ],
   };
-  db.templates.push(starter, discrimination, memory);
+  const sequencing: TemplateDetail = {
+    id: uid(Date.now() - 197 * DAY),
+    name: "Order and rules",
+    description: "Orbital Order: tap the planets in order, skip one colour, and keep up when the rule changes.",
+    weeks: 6,
+    sessions_per_week: 2,
+    setting: "clinic",
+    visibility: "platform",
+    version: 1,
+    owner_name: null,
+    can_edit: false,
+    games: ["orbital-order"],
+    clinic_id: null,
+    steps: [
+      {
+        ...step({ game_id: "orbital-order", session_mode: "lives", duration_s: null, lives: 5, difficulty_start: 2, game_params: { glyph_type: "digits", rule_visible: "on_request", motor_baseline: true, max_rule_trials: 24, neon: false } }),
+        id: uid(),
+        ordinal: 1,
+      },
+    ],
+  };
+  db.templates.push(starter, discrimination, memory, sequencing);
 
   const byName = (a: Patient, b: Patient) => a.family_name.localeCompare(b.family_name) || a.given_name.localeCompare(b.given_name);
   const active = db.patients.filter((p) => p.clinic_id === CLINIC_A && p.status === "active").sort(byName);

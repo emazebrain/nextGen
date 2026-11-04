@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@emb/game-catch-me": "workspace:*",
+    "@emb/game-orbital-order": "workspace:*",
     "@emb/game-peek-peek": "workspace:*",
     "@emb/game-sdk": "workspace:*",
     "@emb/session-rules": "workspace:*"

@@ -5,10 +5,11 @@
  */
 import type { GameManifest } from "@emb/game-sdk";
 import { manifest as catchMe } from "../../../games/catch-me-if-you-can/src/manifest.ts";
+import { manifest as orbitalOrder } from "../../../games/orbital-order/src/manifest.ts";
 import { manifest as peekPeek } from "../../../games/peek-peek/src/manifest.ts";
 import type { StepInput } from "../../../packages/contracts/src/index.ts";
 
-export const GAME_MANIFESTS: Record<string, GameManifest> = { [catchMe.id]: catchMe, [peekPeek.id]: peekPeek };
+export const GAME_MANIFESTS: Record<string, GameManifest> = { [catchMe.id]: catchMe, [peekPeek.id]: peekPeek, [orbitalOrder.id]: orbitalOrder };
 
 /** Checks a step against its game: the game exists, supports the mode, and its own settings match the schema. */
 export function checkStepAgainstGame(step: StepInput, index: number): Array<{ path: string; code: string }> {

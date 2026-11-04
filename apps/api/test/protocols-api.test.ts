@@ -149,4 +149,21 @@ describe.skipIf(!ADMIN_URL)("protocols API", () => {
     );
     expect(params).toMatchObject({ session_mode: "timed_lives", lives: "auto", "peek_peek.pack": "animals" });
   });
+
+  it("Orbital Order: its settings are checked, and a trial window is allowed (ADR 0013)", async () => {
+    const oo = step({ game_id: "orbital-order", session_mode: "lives", duration_s: null, lives: 5, trial_window_ms: 6000, game_params: { glyph_type: "letters", rule_visible: "always", motor_baseline: false, max_rule_trials: 30, neon: true } });
+    const res = await yael("/v1/templates", { method: "POST", body: template({ name: "Order", steps: [oo] }) });
+    expect(res.status).toBe(201);
+    const auto = await yael("/v1/templates", { method: "POST", body: template({ steps: [{ ...oo, lives: null, lives_auto: true }] }) });
+    expect(auto.body.issues).toEqual([{ path: "steps.0.lives", code: "lives_auto_not_supported" }]);
+    const tooMany = await yael("/v1/templates", { method: "POST", body: template({ steps: [{ ...oo, game_params: { max_rule_trials: 200 } }] }) });
+    expect(tooMany.body.issues).toEqual([{ path: "steps.0.game_params.max_rule_trials", code: "invalid_setting" }]);
+    const t = (await yael(`/v1/templates/${res.body.template.id}`)).body.template;
+    const params = buildParams(
+      { ...t.steps[0], current_difficulty: 2, sessions_completed: 0, monochrome: false } as Parameters<typeof buildParams>[0],
+      { preferred_locale: "he", colour_vision_deficiency: false },
+      1,
+    );
+    expect(params).toMatchObject({ session_mode: "lives", lives: 5, trial_window_ms: 6000, "orbital_order.glyph_type": "letters", "orbital_order.neon": true });
+  });
 });
