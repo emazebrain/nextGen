@@ -75,6 +75,9 @@ importers:
       '@emb/game-sdk':
         specifier: workspace:*
         version: link:../../packages/game-sdk
+      '@emb/game-tunnel-rush':
+        specifier: workspace:*
+        version: link:../../games/tunnel-rush
       '@emb/metrics':
         specifier: workspace:*
         version: link:../../packages/metrics
@@ -218,6 +221,22 @@ importers:
         specifier: ^3.2.0
         version: 3.2.7(@types/node@22.20.5)(jsdom@26.1.0)(yaml@2.9.1)
 
+  games/tunnel-rush:
+    dependencies:
+      '@emb/game-sdk':
+        specifier: workspace:*
+        version: link:../../packages/game-sdk
+      pixi.js:
+        specifier: ^8.9.0
+        version: 8.22.0
+    devDependencies:
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.0
+        version: 3.2.7(@types/node@22.20.5)(jsdom@26.1.0)(yaml@2.9.1)
+
   games/tunnel-rush-spike:
     dependencies:
       pixi.js:
@@ -277,6 +296,9 @@ importers:
       '@emb/game-sdk':
         specifier: workspace:*
         version: link:../game-sdk
+      '@emb/game-tunnel-rush':
+        specifier: workspace:*
+        version: link:../../games/tunnel-rush
       '@emb/session-rules':
         specifier: workspace:*
         version: link:../session-rules

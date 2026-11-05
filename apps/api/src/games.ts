@@ -6,10 +6,11 @@
 import type { GameManifest } from "@emb/game-sdk";
 import { manifest as catchMe } from "../../../games/catch-me-if-you-can/src/manifest.ts";
 import { manifest as orbitalOrder } from "../../../games/orbital-order/src/manifest.ts";
+import { manifest as tunnelRush } from "../../../games/tunnel-rush/src/manifest.ts";
 import { manifest as peekPeek } from "../../../games/peek-peek/src/manifest.ts";
 import type { StepInput } from "../../../packages/contracts/src/index.ts";
 
-export const GAME_MANIFESTS: Record<string, GameManifest> = { [catchMe.id]: catchMe, [peekPeek.id]: peekPeek, [orbitalOrder.id]: orbitalOrder };
+export const GAME_MANIFESTS: Record<string, GameManifest> = { [catchMe.id]: catchMe, [peekPeek.id]: peekPeek, [orbitalOrder.id]: orbitalOrder, [tunnelRush.id]: tunnelRush };
 
 /** Checks a step against its game: the game exists, supports the mode, and its own settings match the schema. */
 export function checkStepAgainstGame(step: StepInput, index: number): Array<{ path: string; code: string }> {
@@ -36,7 +37,8 @@ export function checkStepAgainstGame(step: StepInput, index: number): Array<{ pa
         typeof value === "number" &&
         (def.type === "number" || Number.isInteger(value)) &&
         (def.minimum === undefined || value >= def.minimum) &&
-        (def.maximum === undefined || value <= def.maximum)) ||
+        (def.maximum === undefined || value <= def.maximum) &&
+        (!def.enum || def.enum.includes(value))) || // e.g. Tunnel Rush lanes: 6, 8, 10 or 12 only
       (def.type === "string" && typeof value === "string" && (!def.enum || def.enum.includes(value)));
     if (!ok) issues.push({ path: at(`game_params.${key}`), code: "invalid_setting" });
   }

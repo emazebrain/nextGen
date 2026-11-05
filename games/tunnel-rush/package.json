@@ -1,0 +1,24 @@
+{
+  "name": "@emb/game-tunnel-rush",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Tunnel Rush (design doc §8.4): steer a rolling tunnel so the objects miss the ship. Imports only @emb/game-sdk and its renderer.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./manifest": "./src/manifest.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "harness": "vite harness --port 4800"
+  },
+  "dependencies": {
+    "@emb/game-sdk": "workspace:*",
+    "pixi.js": "^8.9.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0"
+  }
+}

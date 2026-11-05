@@ -90,6 +90,8 @@ export function GamePage() {
   const [pack, setPack] = useState(String(packDef?.default ?? ""));
   const glyphDef = m?.paramsSchema.properties.glyph_type;
   const [glyphs, setGlyphs] = useState(String(glyphDef?.default ?? ""));
+  const objectDef = m?.paramsSchema.properties.object_type;
+  const [objects, setObjects] = useState(String(objectDef?.default ?? ""));
   const neonDef = m?.paramsSchema.properties.neon;
   const [neon, setNeon] = useState(false);
   useTitle(m ? localText(m.name, locale) : t("library.title"));
@@ -112,6 +114,7 @@ export function GamePage() {
     if (packDef && pack) q.set("pack", pack);
     if (glyphDef && glyphs) q.set("glyphs", glyphs);
     if (neonDef && neon) q.set("neon", "1");
+    if (objectDef && objects) q.set("objects", objects);
     if (hasBackground) {
       q.set("bg", background);
       q.set("temp", temperature);
@@ -245,6 +248,15 @@ export function GamePage() {
                 ))}
               </SelectField>
             )}
+            {objectDef?.enum && objectDef["x-ui"] && (
+              <SelectField label={localText(objectDef["x-ui"].label, locale)} value={objects} onChange={(e) => setObjects(e.target.value)}>
+                {objectDef.enum.map((v) => (
+                  <option key={String(v)} value={String(v)}>
+                    {objectDef["x-ui"]?.options?.[String(v)] ? localText(objectDef["x-ui"].options[String(v)]!, locale) : String(v)}
+                  </option>
+                ))}
+              </SelectField>
+            )}
             {neonDef?.["x-ui"] && <CheckboxField label={localText(neonDef["x-ui"].label, locale)} hint={neonDef["x-ui"].help ? localText(neonDef["x-ui"].help, locale) : undefined} checked={neon} onChange={(e) => setNeon(e.target.checked)} />}
             <CheckboxField label={t("preview.practice")} checked={practice} onChange={(e) => setPractice(e.target.checked)} />
             {m.capabilities.monochrome && <CheckboxField label={t("stepEditor.monochrome")} hint={t("stepEditor.monochromeHelp")} checked={mono} onChange={(e) => setMono(e.target.checked)} />}
@@ -313,6 +325,7 @@ export function GamePreviewPage() {
       monochrome: q.get("mono") === "1",
       ...(q.get("pack") && game ? { [`${game.manifest.id.replace(/-/g, "_")}.pack`]: q.get("pack") } : {}),
       ...(q.get("glyphs") && game ? { [`${game.manifest.id.replace(/-/g, "_")}.glyph_type`]: q.get("glyphs") } : {}),
+      ...(q.get("objects") && game ? { [`${game.manifest.id.replace(/-/g, "_")}.object_type`]: q.get("objects") } : {}),
       ...(q.get("neon") === "1" && game ? { [`${game.manifest.id.replace(/-/g, "_")}.neon`]: true } : {}),
       ...(q.get("bg") && game
         ? {

@@ -328,7 +328,8 @@ function StepEditor({ step: s, manifest: m, onChange }: { step: StepInput; manif
                 />
               );
             }
-            const options = def.enum ?? (def.minimum !== undefined && def.maximum !== undefined ? Array.from({ length: def.maximum - def.minimum + 1 }, (_, i) => def.minimum! + i) : []);
+            const step = def["x-ui"]?.step ?? 1;
+            const options = def.enum ?? (def.minimum !== undefined && def.maximum !== undefined ? Array.from({ length: Math.floor((def.maximum - def.minimum) / step) + 1 }, (_, i) => def.minimum! + i * step) : []);
             const optionLabel = (o: string | number) => {
               const l = def["x-ui"]?.options?.[String(o)];
               return l ? localText(l, locale) : String(o);

@@ -83,6 +83,8 @@ class Run {
     const cfg: SessionRulesConfig = { mode };
     if (mode !== "lives") cfg.durationS = params.duration_s ?? 300;
     if (mode !== "timed") cfg.lives = params.lives ?? 3;
+    const grace = def.manifest.capabilities.lifeLossGraceMs;
+    if (grace) cfg.lifeLossGraceMs = grace; // continuous games: no second loss right after a loss (§8.1)
     this.session = new Session(cfg);
     this.livesStart = typeof cfg.lives === "number" ? cfg.lives : null;
     this.game = def.create();

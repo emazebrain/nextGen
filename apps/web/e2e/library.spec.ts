@@ -96,7 +96,7 @@ test("cold palette, timed, in Hebrew: the clock waits for the first tap, and the
   await page.mouse.click(box.x + box.width / 2 - 60, box.y + box.height / 2 - 40);
   await expect(timer.locator(".time")).not.toHaveText("2:00", { timeout: 4000 });
   // The bar empties as time passes.
-  await expect.poll(async () => timer.locator(".fill").evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).a), { timeout: 4000 }).toBeLessThan(1);
+  await expect.poll(async () => timer.locator(".fill").evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).a), { timeout: 12_000 }).toBeLessThan(1); // generous: other game tests share the CPU
   const tb = (await timer.boundingBox())!;
   expect(tb.x + tb.width).toBeLessThan(box.width / 2); // physical left, not mirrored in Hebrew
   await shot(page, "34-game-cold-he");
@@ -205,5 +205,38 @@ test("Orbital Order: practice hands over to the game, played through the hidden 
   await shot(page, "37-orbital-order-probe");
   await stopFromPauseMenu(page);
   await expect(game.getByRole("heading", { name: "Great effort!" })).toBeVisible();
+  await context.close();
+});
+
+test("Tunnel Rush: practice run, then the clock waits for the first steer; steering buttons stay physical in Hebrew (ADR 0014)", async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await enrol(page, "omer@synthetic.test");
+  await page.goto("/library/tunnel-rush");
+  await expect(page.getByRole("heading", { level: 1, name: "Tunnel Rush" })).toBeVisible();
+  await expect(page.getByRole("radio", { name: "Timed", exact: true })).toBeChecked(); // recommended mode
+  await page.getByLabel("Objects").selectOption("cartoon_faces");
+  await page.getByLabel("Language").selectOption("he");
+  await page.getByRole("button", { name: "Start preview" }).click(); // practice on (the default)
+
+  const game = page.frameLocator("iframe.gameframe");
+  await game.getByRole("button", { name: "משחקים!" }).click();
+  // Practice: 20 s at difficulty 1, then the runtime's "practice done" and the real run.
+  const left = game.getByRole("button", { name: "היגוי שמאלה" });
+  const right = game.getByRole("button", { name: "היגוי ימינה" });
+  await expect(left).toBeVisible({ timeout: 20_000 });
+  const lb = (await left.boundingBox())!;
+  const rb = (await right.boundingBox())!;
+  expect(lb.x).toBeLessThan(rb.x); // physical left and right, not mirrored in Hebrew
+  await right.click();
+  await expect(game.getByText("החליקו או הקישו על חץ כדי להתחיל!")).toBeVisible({ timeout: 30_000 });
+  const timer = game.locator(".hud-timer .time");
+  await page.waitForTimeout(1200);
+  await expect(timer).toHaveText("2:00"); // the clock waits for the first steer
+  await shot(page, "38-tunnel-rush-ready");
+  await right.press("Enter");
+  await expect(timer).not.toHaveText("2:00", { timeout: 4000 });
+  await stopFromPauseMenu(page);
+  await expect(game.getByRole("heading", { name: "כל הכבוד על המאמץ!" })).toBeVisible();
   await context.close();
 });

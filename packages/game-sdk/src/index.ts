@@ -56,6 +56,11 @@ export interface GameManifest {
     rng: "seeded";
     /** The game can run in black and white (platform parameter `monochrome`, ADR 0009). */
     monochrome?: boolean;
+    /**
+     * Continuous games: after a life is lost, further losses inside this window are ignored by Session Rules
+     * (0–3000 ms; design doc §8.1, ADR 0014). Default 0.
+     */
+    lifeLossGraceMs?: number;
   };
   /**
    * What the hemisphere choice changes in this game, shown under it in the protocol builder (ADR 0011),

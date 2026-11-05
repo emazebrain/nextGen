@@ -216,7 +216,28 @@ function seed(): Db {
       },
     ],
   };
-  db.templates.push(starter, discrimination, memory, sequencing);
+  const steering: TemplateDetail = {
+    id: uid(Date.now() - 196 * DAY),
+    name: "Steady steering",
+    description: "Tunnel Rush: steer a rolling tunnel so the objects miss the ship. Two minutes, timed.",
+    weeks: 6,
+    sessions_per_week: 2,
+    setting: "clinic",
+    visibility: "platform",
+    version: 1,
+    owner_name: null,
+    can_edit: false,
+    games: ["tunnel-rush"],
+    clinic_id: null,
+    steps: [
+      {
+        ...step({ game_id: "tunnel-rush", session_mode: "timed", duration_s: 120, lives: null, difficulty_start: 2, game_params: { lanes: 8, ship_mode: "fixed", object_type: "shapes", object_orientation: "upright", rotation: "none", spin_speed: 14, progressive: true } }),
+        id: uid(),
+        ordinal: 1,
+      },
+    ],
+  };
+  db.templates.push(starter, discrimination, memory, sequencing, steering);
 
   const byName = (a: Patient, b: Patient) => a.family_name.localeCompare(b.family_name) || a.given_name.localeCompare(b.given_name);
   const active = db.patients.filter((p) => p.clinic_id === CLINIC_A && p.status === "active").sort(byName);

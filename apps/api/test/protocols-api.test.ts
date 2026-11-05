@@ -166,4 +166,19 @@ describe.skipIf(!ADMIN_URL)("protocols API", () => {
     );
     expect(params).toMatchObject({ session_mode: "lives", lives: 5, trial_window_ms: 6000, "orbital_order.glyph_type": "letters", "orbital_order.neon": true });
   });
+
+  it("Tunnel Rush: its settings are checked; a lane count outside 6/8/10/12 is refused (ADR 0014)", async () => {
+    const tr = step({ game_id: "tunnel-rush", session_mode: "timed", duration_s: 120, lives: null, game_params: { lanes: 10, ship_mode: "move", object_type: "real_faces", object_orientation: "wall", rotation: "alternate", spin_speed: 20, progressive: false } });
+    const res = await yael("/v1/templates", { method: "POST", body: template({ name: "Steering", steps: [tr] }) });
+    expect(res.status).toBe(201);
+    const bad = await yael("/v1/templates", { method: "POST", body: template({ steps: [{ ...tr, game_params: { lanes: 7 } }] }) });
+    expect(bad.body.issues).toEqual([{ path: "steps.0.game_params.lanes", code: "invalid_setting" }]);
+    const t = (await yael(`/v1/templates/${res.body.template.id}`)).body.template;
+    const params = buildParams(
+      { ...t.steps[0], current_difficulty: 2, sessions_completed: 0, monochrome: false } as Parameters<typeof buildParams>[0],
+      { preferred_locale: "en", colour_vision_deficiency: false },
+      1,
+    );
+    expect(params).toMatchObject({ session_mode: "timed", "tunnel_rush.lanes": 10, "tunnel_rush.ship_mode": "move" });
+  });
 });

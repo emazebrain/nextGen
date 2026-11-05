@@ -19,6 +19,7 @@
     "@emb/game-catch-me": "workspace:*",
     "@emb/game-orbital-order": "workspace:*",
     "@emb/game-peek-peek": "workspace:*",
+    "@emb/game-tunnel-rush": "workspace:*",
     "@emb/game-runtime": "workspace:*",
     "@emb/game-sdk": "workspace:*",
     "@emb/metrics": "workspace:*",
