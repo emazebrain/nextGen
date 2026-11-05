@@ -14,6 +14,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@emb/game-beep-beep": "workspace:*",
     "@emb/game-catch-me": "workspace:*",
     "@emb/game-orbital-order": "workspace:*",
     "@emb/game-peek-peek": "workspace:*",

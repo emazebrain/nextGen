@@ -240,3 +240,51 @@ test("Tunnel Rush: practice run, then the clock waits for the first steer; steer
   await expect(game.getByRole("heading", { name: "כל הכבוד על המאמץ!" })).toBeVisible();
   await context.close();
 });
+
+test("Beep Beep: practice with guide arrows, then a board played with the keyboard; the exit follows the hemisphere (ADR 0015)", async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await enrol(page, "rina@synthetic.test");
+  await page.goto("/library/beep-beep");
+  await expect(page.getByRole("heading", { level: 1, name: "Beep Beep" })).toBeVisible();
+  await page.getByRole("radio", { name: "Cold, right hemisphere" }).check();
+  await page.getByRole("button", { name: "Start preview" }).click(); // practice on (the default)
+
+  const game = page.frameLocator("iframe.gameframe");
+  await game.getByRole("button", { name: "Play" }).click();
+  await expect(game.getByText("Follow the arrows to free the hero.")).toBeVisible({ timeout: 20_000 });
+  const vehicles = game.getByRole("group", { name: "Vehicles" }).getByRole("button");
+  await expect(vehicles.first()).toHaveText(/^Blue tugboat, goes left and right/); // cold look
+  await expect(game.getByRole("button", { name: "Undo" })).toBeDisabled();
+  await shot(page, "39-beep-beep-practice");
+  // The practice board can be finished by asking for the next move each time: H is the hint key, and the fourth
+  // hint step makes the move. (Keys, not clicks: clicks wait for animation frames, which are slow in CI.)
+  await vehicles.first().focus();
+  for (let i = 0; i < 40; i++) {
+    if (await game.getByText(/^Level \d+$/).count()) break;
+    await page.keyboard.press("h");
+    await page.waitForTimeout(150);
+  }
+  await expect(game.getByText(/^Level \d+$/)).toBeVisible({ timeout: 15_000 });
+  const timer = game.locator(".hud-timer .time");
+  const before = await timer.textContent();
+  await page.waitForTimeout(1200);
+  await expect(timer).toHaveText(before!); // the clock waits for the first move
+  // A first move with the keyboard: focus a vehicle and slide it.
+  let moved = false;
+  for (let i = 0; i < 12 && !moved; i++) {
+    await vehicles.nth(i % (await vehicles.count())).focus();
+    for (const k of ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]) {
+      await page.keyboard.press(k);
+      if (/^[1-9]/.test((await game.locator("[data-moves]").textContent()) ?? "")) {
+        moved = true;
+        break;
+      }
+    }
+  }
+  expect(moved).toBe(true);
+  await expect(timer).not.toHaveText(before!, { timeout: 4000 });
+  await stopFromPauseMenu(page);
+  await expect(game.getByRole("heading", { name: "Great effort!" })).toBeVisible();
+  await context.close();
+});

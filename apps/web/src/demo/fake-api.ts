@@ -237,7 +237,28 @@ function seed(): Db {
       },
     ],
   };
-  db.templates.push(starter, discrimination, memory, sequencing, steering);
+  const parking: TemplateDetail = {
+    id: uid(Date.now() - 195 * DAY),
+    name: "Plan the way out",
+    description: "Beep Beep: slide the vehicles to free the hero. Eight minutes, with a move budget per board.",
+    weeks: 6,
+    sessions_per_week: 2,
+    setting: "clinic",
+    visibility: "platform",
+    version: 1,
+    owner_name: null,
+    can_edit: false,
+    games: ["beep-beep"],
+    clinic_id: null,
+    steps: [
+      {
+        ...step({ game_id: "beep-beep", session_mode: "timed_lives", duration_s: 480, lives: 3, difficulty_start: 2, game_params: { hint_button: true, show_answer_on_miss: true, undo: true } }),
+        id: uid(),
+        ordinal: 1,
+      },
+    ],
+  };
+  db.templates.push(starter, discrimination, memory, sequencing, steering, parking);
 
   const byName = (a: Patient, b: Patient) => a.family_name.localeCompare(b.family_name) || a.given_name.localeCompare(b.given_name);
   const active = db.patients.filter((p) => p.clinic_id === CLINIC_A && p.status === "active").sort(byName);

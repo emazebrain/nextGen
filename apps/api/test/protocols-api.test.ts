@@ -181,4 +181,14 @@ describe.skipIf(!ADMIN_URL)("protocols API", () => {
     );
     expect(params).toMatchObject({ session_mode: "timed", "tunnel_rush.lanes": 10, "tunnel_rush.ship_mode": "move" });
   });
+
+  it("Beep Beep: a per-board time limit of 30-300 s is allowed, and its switches are checked (ADR 0015)", async () => {
+    const bb = step({ game_id: "beep-beep", session_mode: "timed_lives", duration_s: 480, lives: 3, trial_window_ms: 90_000, game_params: { hint_button: false, show_answer_on_miss: true, undo: true } });
+    const res = await yael("/v1/templates", { method: "POST", body: template({ name: "Parking", steps: [bb] }) });
+    expect(res.status).toBe(201);
+    const short = await yael("/v1/templates", { method: "POST", body: template({ steps: [{ ...bb, trial_window_ms: 10_000 }] }) });
+    expect(short.body.issues).toEqual([{ path: "steps.0.trial_window_ms", code: "trial_window_not_supported" }]);
+    const bad = await yael("/v1/templates", { method: "POST", body: template({ steps: [{ ...bb, game_params: { orientation: "left" } }] }) });
+    expect(bad.body.issues).toEqual([{ path: "steps.0.game_params.orientation", code: "unknown_setting" }]); // the exit side follows the hemisphere
+  });
 });
