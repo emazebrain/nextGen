@@ -258,7 +258,28 @@ function seed(): Db {
       },
     ],
   };
-  db.templates.push(starter, discrimination, memory, sequencing, steering, parking);
+  const rhythm: TemplateDetail = {
+    id: uid(Date.now() - 194 * DAY),
+    name: "Listen and play",
+    description: "Echo Keys: tap each piano key as its note arrives; spiky balls must be left alone. Five minutes, timed.",
+    weeks: 6,
+    sessions_per_week: 2,
+    setting: "clinic",
+    visibility: "platform",
+    version: 1,
+    owner_name: null,
+    can_edit: false,
+    games: ["echo-keys"],
+    clinic_id: null,
+    steps: [
+      {
+        ...step({ game_id: "echo-keys", session_mode: "timed", duration_s: 300, lives: null, difficulty_start: 2, game_params: { go_no_go: true, key_count: 0 } }),
+        id: uid(),
+        ordinal: 1,
+      },
+    ],
+  };
+  db.templates.push(starter, discrimination, memory, sequencing, steering, parking, rhythm);
 
   const byName = (a: Patient, b: Patient) => a.family_name.localeCompare(b.family_name) || a.given_name.localeCompare(b.given_name);
   const active = db.patients.filter((p) => p.clinic_id === CLINIC_A && p.status === "active").sort(byName);

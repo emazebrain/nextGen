@@ -191,4 +191,12 @@ describe.skipIf(!ADMIN_URL)("protocols API", () => {
     const bad = await yael("/v1/templates", { method: "POST", body: template({ steps: [{ ...bb, game_params: { orientation: "left" } }] }) });
     expect(bad.body.issues).toEqual([{ path: "steps.0.game_params.orientation", code: "unknown_setting" }]); // the exit side follows the hemisphere
   });
+
+  it("Echo Keys: go/no-go and a fixed keyboard size are checked (ADR 0016)", async () => {
+    const ek = step({ game_id: "echo-keys", session_mode: "timed", duration_s: 300, lives: null, game_params: { go_no_go: true, key_count: 13 } });
+    const res = await yael("/v1/templates", { method: "POST", body: template({ name: "Piano", steps: [ek] }) });
+    expect(res.status).toBe(201);
+    const bad = await yael("/v1/templates", { method: "POST", body: template({ steps: [{ ...ek, game_params: { key_count: 7 } }] }) });
+    expect(bad.body.issues).toEqual([{ path: "steps.0.game_params.key_count", code: "invalid_setting" }]);
+  });
 });

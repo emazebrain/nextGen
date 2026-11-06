@@ -288,3 +288,34 @@ test("Beep Beep: practice with guide arrows, then a board played with the keyboa
   await expect(game.getByRole("heading", { name: "Great effort!" })).toBeVisible();
   await context.close();
 });
+
+test("Echo Keys: the keyboard is real buttons, stays physical in Hebrew, and the clock waits for the first key (ADR 0016)", async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await enrol(page, "eli@synthetic.test");
+  await page.goto("/library/echo-keys");
+  await expect(page.getByRole("heading", { level: 1, name: "Echo Keys" })).toBeVisible();
+  await expect(page.getByRole("radio", { name: "Timed", exact: true })).toBeChecked(); // recommended mode
+  await page.getByLabel("Game language").selectOption("he");
+  await page.getByLabel("Start with practice").uncheck();
+  await page.getByRole("button", { name: "Start preview" }).click();
+
+  const game = page.frameLocator("iframe.gameframe");
+  await game.getByRole("button", { name: "משחקים!" }).click();
+  await expect(game.getByText("הקישו על קליד כלשהו כדי להתחיל.")).toBeVisible({ timeout: 20_000 });
+  const keys = game.getByRole("group", { name: "קלידי פסנתר" }).getByRole("button");
+  await expect(keys).toHaveCount(8); // difficulty 3: the C major octave
+  const doBox = (await keys.first().boundingBox())!;
+  const reBox = (await keys.nth(1).boundingBox())!;
+  await expect(keys.first()).toHaveAccessibleName("דו");
+  expect(doBox.x).toBeLessThan(reBox.x); // low notes on the left, even in Hebrew
+  const timer = game.locator(".hud-timer .time");
+  await page.waitForTimeout(1200);
+  await expect(timer).toHaveText("2:00");
+  await shot(page, "40-echo-keys-ready");
+  await keys.first().press("Enter");
+  await expect(timer).not.toHaveText("2:00", { timeout: 4000 });
+  await stopFromPauseMenu(page);
+  await expect(game.getByRole("heading", { name: "כל הכבוד על המאמץ!" })).toBeVisible();
+  await context.close();
+});

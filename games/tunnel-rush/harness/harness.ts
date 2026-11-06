@@ -7,7 +7,7 @@ const mount = document.getElementById("stage")!;
 const g = game.create();
 const strings = (game.strings as Record<string, Record<string, string>>)[q.get("lang") ?? "en"]!;
 const params: Record<string, unknown> = { session_mode: "timed", duration_s: 120, difficulty: Number(q.get("d") ?? 3), hemisphere: q.get("h") ?? "left", lang: "en", show_score: false };
-for (const [k, v] of q) if (k.startsWith("tunnel_rush.")) params[k] = isNaN(Number(v)) ? v : Number(v);
+for (const [k, v] of q) if (k.startsWith("tunnel_rush.")) params[k] = v === "true" ? true : v === "false" ? false : isNaN(Number(v)) ? v : Number(v);
 const log: string[] = [];
 (window as unknown as { __log: string[] }).__log = log;
 await g.init({
