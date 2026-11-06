@@ -279,7 +279,28 @@ function seed(): Db {
       },
     ],
   };
-  db.templates.push(starter, discrimination, memory, sequencing, steering, parking, rhythm);
+  const bounce: TemplateDetail = {
+    id: uid(Date.now() - 192 * DAY),
+    name: "Bounce and clear",
+    description: "Block Crasher: move the paddle to bounce the ball and clear the brick boards. Five minutes, timed.",
+    weeks: 6,
+    sessions_per_week: 2,
+    setting: "clinic",
+    visibility: "platform",
+    version: 1,
+    owner_name: null,
+    can_edit: false,
+    games: ["block-crasher"],
+    clinic_id: null,
+    steps: [
+      {
+        ...step({ game_id: "block-crasher", session_mode: "timed", duration_s: 300, lives: null, difficulty_start: 2, game_params: { specials: true, special_rate: -1, paddle_assist: 0 } }),
+        id: uid(),
+        ordinal: 1,
+      },
+    ],
+  };
+  db.templates.push(starter, discrimination, memory, sequencing, steering, parking, rhythm, bounce);
 
   const byName = (a: Patient, b: Patient) => a.family_name.localeCompare(b.family_name) || a.given_name.localeCompare(b.given_name);
   const active = db.patients.filter((p) => p.clinic_id === CLINIC_A && p.status === "active").sort(byName);

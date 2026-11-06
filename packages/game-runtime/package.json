@@ -16,6 +16,7 @@
   "dependencies": {
     "@emb/game-beep-beep": "workspace:*",
     "@emb/game-catch-me": "workspace:*",
+    "@emb/game-block-crasher": "workspace:*",
     "@emb/game-echo-keys": "workspace:*",
     "@emb/game-orbital-order": "workspace:*",
     "@emb/game-peek-peek": "workspace:*",

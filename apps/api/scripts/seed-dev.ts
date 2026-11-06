@@ -56,6 +56,7 @@ if (existing.rowCount) {
     await signUp(`omer@${SYNTHETIC_EMAIL_DOMAIN}`, "Omer Katz"),
     await signUp(`rina@${SYNTHETIC_EMAIL_DOMAIN}`, "Rina Haddad"),
     await signUp(`eli@${SYNTHETIC_EMAIL_DOMAIN}`, "Eli Ben Ami"),
+    await signUp(`yarden@${SYNTHETIC_EMAIL_DOMAIN}`, "Yarden Cohen"),
   ];
 
   const org = uuidv7();

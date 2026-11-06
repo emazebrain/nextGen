@@ -1,0 +1,24 @@
+{
+  "name": "@emb/game-block-crasher",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Block Crasher (design doc §8.4): bounce the ball with the paddle to clear the bricks. Imports only @emb/game-sdk and its renderer.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./manifest": "./src/manifest.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "harness": "vite harness --port 4803"
+  },
+  "dependencies": {
+    "@emb/game-sdk": "workspace:*",
+    "pixi.js": "^8.9.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0"
+  }
+}

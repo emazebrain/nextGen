@@ -63,6 +63,9 @@ importers:
       '@emb/game-beep-beep':
         specifier: workspace:*
         version: link:../../games/beep-beep
+      '@emb/game-block-crasher':
+        specifier: workspace:*
+        version: link:../../games/block-crasher
       '@emb/game-catch-me':
         specifier: workspace:*
         version: link:../../games/catch-me-if-you-can
@@ -180,6 +183,22 @@ importers:
         version: 3.2.7(@types/node@22.20.5)(jsdom@26.1.0)(yaml@2.9.1)
 
   games/beep-beep:
+    dependencies:
+      '@emb/game-sdk':
+        specifier: workspace:*
+        version: link:../../packages/game-sdk
+      pixi.js:
+        specifier: ^8.9.0
+        version: 8.22.0
+    devDependencies:
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.0
+        version: 3.2.7(@types/node@22.20.5)(jsdom@26.1.0)(yaml@2.9.1)
+
+  games/block-crasher:
     dependencies:
       '@emb/game-sdk':
         specifier: workspace:*
@@ -325,6 +344,9 @@ importers:
       '@emb/game-beep-beep':
         specifier: workspace:*
         version: link:../../games/beep-beep
+      '@emb/game-block-crasher':
+        specifier: workspace:*
+        version: link:../../games/block-crasher
       '@emb/game-catch-me':
         specifier: workspace:*
         version: link:../../games/catch-me-if-you-can

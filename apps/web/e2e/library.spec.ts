@@ -319,3 +319,30 @@ test("Echo Keys: the keyboard is real buttons, stays physical in Hebrew, and the
   await expect(game.getByRole("heading", { name: "כל הכבוד על המאמץ!" })).toBeVisible();
   await context.close();
 });
+
+test("Block Crasher: the clock waits for the first serve, then a key serves the ball (ADR 0017)", async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await enrol(page, "yarden@synthetic.test");
+  await page.goto("/library/block-crasher");
+  await expect(page.getByRole("heading", { level: 1, name: "Block Crasher" })).toBeVisible();
+  await expect(page.getByRole("radio", { name: "Timed", exact: true })).toBeChecked(); // recommended mode
+  await page.getByLabel("Start with practice").uncheck();
+  await page.getByRole("button", { name: "Start preview" }).click();
+
+  const game = page.frameLocator("iframe.gameframe");
+  await game.getByRole("button", { name: "Play", exact: true }).click();
+  await expect(game.getByText("Tap or press space to serve.")).toBeVisible({ timeout: 20_000 });
+  // Difficulty 3 starts on level 6, Checkerboard: 20 bricks. Screen readers hear the level and bricks left.
+  await expect(game.locator(".bc-status")).toHaveText("Level 6. 20 bricks left.");
+  const timer = game.locator(".hud-timer .time");
+  await page.waitForTimeout(1200);
+  await expect(timer).toHaveText("2:00");
+  await shot(page, "41-block-crasher-ready");
+  await game.locator("body").press("Space");
+  await expect(game.getByText("Tap or press space to serve.")).toBeHidden();
+  await expect(timer).not.toHaveText("2:00", { timeout: 4000 });
+  await stopFromPauseMenu(page);
+  await expect(game.getByRole("heading", { name: "Great effort!" })).toBeVisible();
+  await context.close();
+});

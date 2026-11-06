@@ -6,6 +6,7 @@
 import type { GameManifest, LocalText, PlatformParams } from "@emb/game-sdk";
 import { timerPositionFor } from "@emb/session-rules";
 import { manifest as beepBeep } from "@emb/game-beep-beep/manifest";
+import { manifest as blockCrasher } from "@emb/game-block-crasher/manifest";
 import { manifest as catchMe } from "@emb/game-catch-me/manifest";
 import { manifest as echoKeys } from "@emb/game-echo-keys/manifest";
 import { manifest as orbitalOrder } from "@emb/game-orbital-order/manifest";
@@ -24,12 +25,11 @@ export const GAMES: GameEntry[] = [
   { manifest: tunnelRush, loadFrame: () => import("@emb/game-runtime/frames/tunnel-rush.js?raw").then((m) => m.default) },
   { manifest: beepBeep, loadFrame: () => import("@emb/game-runtime/frames/beep-beep.js?raw").then((m) => m.default) },
   { manifest: echoKeys, loadFrame: () => import("@emb/game-runtime/frames/echo-keys.js?raw").then((m) => m.default) },
+  { manifest: blockCrasher, loadFrame: () => import("@emb/game-runtime/frames/block-crasher.js?raw").then((m) => m.default) },
 ];
 
-/** The other v1 games, being rebuilt on the SDK (design doc §8.4). */
-export const UPCOMING: Array<{ id: string; name: LocalText }> = [
-  { id: "block-crasher", name: { en: "Block Crasher" } },
-];
+/** v1 games still being rebuilt on the SDK (design doc §8.4). All seven are native now. */
+export const UPCOMING: Array<{ id: string; name: LocalText }> = [];
 
 export const findGame = (id: string) => GAMES.find((g) => g.manifest.id === id);
 

@@ -199,4 +199,14 @@ describe.skipIf(!ADMIN_URL)("protocols API", () => {
     const bad = await yael("/v1/templates", { method: "POST", body: template({ steps: [{ ...ek, game_params: { key_count: 7 } }] }) });
     expect(bad.body.issues).toEqual([{ path: "steps.0.game_params.key_count", code: "invalid_setting" }]);
   });
+
+  it("Block Crasher: special bricks, their share and the magnet paddle are checked (ADR 0017)", async () => {
+    const bc = step({ game_id: "block-crasher", session_mode: "lives", duration_s: null, lives: 3, game_params: { specials: true, special_rate: 0.15, paddle_assist: 2 } });
+    const res = await yael("/v1/templates", { method: "POST", body: template({ name: "Bricks", steps: [bc] }) });
+    expect(res.status).toBe(201);
+    const rate = await yael("/v1/templates", { method: "POST", body: template({ steps: [{ ...bc, game_params: { special_rate: 0.3 } }] }) });
+    expect(rate.body.issues).toEqual([{ path: "steps.0.game_params.special_rate", code: "invalid_setting" }]);
+    const assist = await yael("/v1/templates", { method: "POST", body: template({ steps: [{ ...bc, game_params: { paddle_assist: 1.5 } }] }) });
+    expect(assist.body.issues).toEqual([{ path: "steps.0.game_params.paddle_assist", code: "invalid_setting" }]);
+  });
 });

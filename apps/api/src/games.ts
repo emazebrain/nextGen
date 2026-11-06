@@ -8,11 +8,12 @@ import { manifest as catchMe } from "../../../games/catch-me-if-you-can/src/mani
 import { manifest as orbitalOrder } from "../../../games/orbital-order/src/manifest.ts";
 import { manifest as beepBeep } from "../../../games/beep-beep/src/manifest.ts";
 import { manifest as echoKeys } from "../../../games/echo-keys/src/manifest.ts";
+import { manifest as blockCrasher } from "../../../games/block-crasher/src/manifest.ts";
 import { manifest as tunnelRush } from "../../../games/tunnel-rush/src/manifest.ts";
 import { manifest as peekPeek } from "../../../games/peek-peek/src/manifest.ts";
 import type { StepInput } from "../../../packages/contracts/src/index.ts";
 
-export const GAME_MANIFESTS: Record<string, GameManifest> = { [catchMe.id]: catchMe, [peekPeek.id]: peekPeek, [orbitalOrder.id]: orbitalOrder, [tunnelRush.id]: tunnelRush, [beepBeep.id]: beepBeep, [echoKeys.id]: echoKeys };
+export const GAME_MANIFESTS: Record<string, GameManifest> = { [catchMe.id]: catchMe, [peekPeek.id]: peekPeek, [orbitalOrder.id]: orbitalOrder, [tunnelRush.id]: tunnelRush, [beepBeep.id]: beepBeep, [echoKeys.id]: echoKeys, [blockCrasher.id]: blockCrasher };
 
 /** Checks a step against its game: the game exists, supports the mode, and its own settings match the schema. */
 export function checkStepAgainstGame(step: StepInput, index: number): Array<{ path: string; code: string }> {
