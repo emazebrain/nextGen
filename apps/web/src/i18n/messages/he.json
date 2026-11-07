@@ -614,5 +614,11 @@
   "setupOffline.later": "לא עכשיו",
   "setupOffline.failed": "לא הצלחנו להגדיר עבודה ללא חיבור. כדאי לבדוק את החיבור ולנסות שוב.",
   "offline.saved": "מוצגים נתונים שמורים מ־{time}",
-  "offline.needsConnection": "צריך חיבור — אפשר יהיה לשמור שינויים כשהחיבור יחזור."
+  "offline.needsConnection": "צריך חיבור — אפשר יהיה לשמור שינויים כשהחיבור יחזור.",
+  "run.preflight.missing": "{count, plural, one {שלב אחד לא נמצא במכשיר:} other {# שלבים לא נמצאים במכשיר:}}",
+  "run.preflight.startWithout": "להתחיל בלעדיו",
+  "run.preflight.wait": "לחכות לחיבור",
+  "sync.waiting": "{count, plural, one {תוצאה אחת תישלח} other {# תוצאות יישלחו}}",
+  "sync.signIn": "צריך להיכנס כדי לשלוח תוצאות שממתינות",
+  "sync.needsHelp": "{count, plural, one {תוצאה אחת צריכה בדיקה} other {# תוצאות צריכות בדיקה}}"
 }

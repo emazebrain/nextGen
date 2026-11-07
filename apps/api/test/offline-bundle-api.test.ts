@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import { ADMIN_URL, addMember, platformAdmin, seedClinics, setupApi, staffClient, type Api, type TestEnv } from "./support.ts";
 import { OFFLINE_TICKET_TTL_S } from "../src/modules/sessions/routes.ts";
+import { envelope } from "./offline-fixture.ts";
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -109,6 +110,26 @@ describe.skipIf(!ADMIN_URL)("offline bundle", () => {
     const claims = env.tickets.verify(b.packages[0].steps[0].ticket)!;
     expect(claims).toMatchObject({ v: 2, sub: yael.userId, dev: device, pid: mine, psid: b.packages[0].planned_session_id });
     expect(claims.exp - claims.iat).toBe(OFFLINE_TICKET_TTL_S);
+  });
+
+  it("video steps carry a v2 ticket too, so anyone on the device can send their views", async () => {
+    const b = (await bundle(yael.api)).body;
+    const v = b.packages[0].steps[1];
+    const claims = env.tickets.verify(v.ticket)!;
+    expect(claims).toMatchObject({ v: 2, sub: yael.userId, dev: device, asid: v.assignment_step_id, psid: b.packages[0].planned_session_id });
+  });
+
+  it("game steps carry their recent results, so the device can choose difficulty like the server", async () => {
+    const before = (await bundle(yael.api)).body;
+    expect(before.packages[0].steps[0].history).toEqual([]);
+    // One session played online...
+    const launch = (await yael.api(`/v1/planned-sessions/${before.packages[0].planned_session_id}/launch`, { method: "POST", body: {} })).body.launch;
+    const g = launch.steps[0];
+    const e = { ...envelope(g.params, 0.85), game_id: "catch-me-if-you-can", mode: "timed", lives_start: null, lives_lost: 0, lives_remaining: null, life_loss_events: 0 };
+    expect((await yael.api("/v1/results", { method: "POST", body: { ticket: g.ticket, envelope: e } })).status).toBe(201);
+    // ...shows up in every later package of that step.
+    const after = (await bundle(yael.api)).body;
+    for (const p of after.packages) expect(p.steps[0].history).toEqual([{ accuracy: 0.85, difficulty: 2, valid: true }]);
   });
 
   it("videos list the versions the packages use", async () => {

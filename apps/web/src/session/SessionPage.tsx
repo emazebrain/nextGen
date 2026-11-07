@@ -8,12 +8,12 @@
  * is sent from there, so nothing is lost if the connection drops. When the
  * child is done, the PIN opens the therapist's summary.
  */
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useParams } from "react-router";
 import { useIntl } from "react-intl";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, CircleCheck, CloudOff, Hand, Lock, Minus, Play, RotateCw, SkipForward, Square } from "lucide-react";
-import type { LaunchGameStep, LaunchPackage, LaunchStep, LaunchVideoStep, VideoViewInput } from "@emb/contracts";
+import type { LaunchGameStep, LaunchPackage, LaunchStep, LaunchVideoStep, OfflineBundle, SessionPackage, VideoViewInput } from "@emb/contracts";
 import type { HostToFrame, LaunchParams, ResultEnvelope } from "@emb/game-runtime/protocol";
 import { Alert, Button, Card, Chip, Logo, MazeLoader, TextField } from "@emb/ui";
 import { ApiError } from "../api/http.ts";
@@ -29,6 +29,13 @@ import { ResultSummary } from "../routes/library.tsx";
 import { checkPin, hasPin, PIN_PATTERN, setPin } from "./kidmode.ts";
 import { enqueue, enqueueView, send, sendView, type SendResult, type ViewSendResult } from "./outbox.ts";
 import { VideoStep, viewSummary } from "./VideoStep.tsx";
+import { launchFromPackage, type SessionPoint } from "./package.ts";
+import { preflight, type Preflight } from "./preflight.ts";
+import { useOptionalDevice } from "../device/session.tsx";
+import { hasVideo } from "../device/content.ts";
+import { markSessionDone } from "../device/bundle.ts";
+import { setSessionRunning } from "../device/update.ts";
+import type { OpenSpace } from "../device/spaces.ts";
 
 const BETWEEN_GAMES_S = 5;
 const LONG_PRESS_MS = 1500;
@@ -44,19 +51,62 @@ type Played =
   | { kind: "game"; id: string; step: LaunchGameStep; envelope: ResultEnvelope; send: SendResult | { state: "sending" } }
   | { kind: "video"; id: string; step: LaunchVideoStep; view: VideoViewInput; send: ViewSendResult | { state: "sending" } };
 
+/** A session started from the device's package (no connection): the package, what to launch, and the pre-flight. */
+interface OfflineStart {
+  source: SessionPackage;
+  space: OpenSpace;
+  check: Preflight;
+  history: Record<string, SessionPoint[]>;
+}
+
 export function SessionPage() {
   const t = useT();
   const { plannedSessionId = "" } = useParams();
   const launch = useLaunch();
+  const device = useOptionalDevice();
   const started = useRef(false);
+  const [offline, setOffline] = useState<OfflineStart | null>(null);
+  const [withoutMissing, setWithoutMissing] = useState(false);
   useTitle(t("run.title"));
 
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    launch.mutate(plannedSessionId);
-  }, [plannedSessionId, launch]);
+    launch.mutate(plannedSessionId, {
+      // No connection: start from the package this device keeps for the session (offline devices spec §7.4).
+      onError: (e) => {
+        const space = device?.space;
+        if (!(e instanceof ApiError && e.status === 0) || !space) return;
+        void (async () => {
+          const b = await space.read<OfflineBundle>("bundle");
+          const source = b?.packages.find((p) => p.planned_session_id === plannedSessionId);
+          if (!source) return;
+          const history: Record<string, SessionPoint[]> = {};
+          for (const st of source.steps) if (st.kind === "game") history[st.assignment_step_id] = (await space.read<SessionPoint[]>(`local_history:${st.assignment_step_id}`)) ?? [];
+          const check = await preflight(source, { online: navigator.onLine, hasVideo });
+          setOffline({ source, space, check, history });
+        })();
+      },
+    });
+  }, [plannedSessionId, launch, device]);
 
+  // Decided once per start: a fresh seed and the device's difficulty choice must not change on a re-render.
+  const offlinePkg = useMemo(() => {
+    if (!offline || (!offline.check.ok && !withoutMissing)) return null;
+    const missing = new Set(offline.check.ok ? [] : offline.check.missing.map((m) => m.ordinal));
+    const source = { ...offline.source, steps: offline.source.steps.filter((st) => !missing.has(st.ordinal)) };
+    return launchFromPackage(source, (asid) => offline.history[asid] ?? [], () => Math.floor(Math.random() * 2 ** 31));
+  }, [offline, withoutMissing]);
+
+  if (offline) {
+    if (!offline.check.ok && !withoutMissing) {
+      return <PreflightMissing missing={offline.check.missing} onStartWithout={() => setWithoutMissing(true)} />;
+    }
+    if (offlinePkg) return <Runner pkg={offlinePkg} space={offline.space} />;
+  }
+  if (launch.isError && launch.error instanceof ApiError && launch.error.status === 0 && device?.space) {
+    return <MazeLoader label={t("common.loading")} />;
+  }
   if (launch.isError) {
     const code = launch.error instanceof ApiError ? launch.error.code : "unknown";
     const known = ["consent_required", "session_closed", "protocol_not_active", "not_found", "forbidden"];
@@ -92,7 +142,31 @@ function Shell({ children }: { children: ReactNode }) {
   );
 }
 
-function Runner({ pkg }: { pkg: LaunchPackage }) {
+function PreflightMissing({ missing, onStartWithout }: { missing: Array<{ ordinal: number; title: string }>; onStartWithout: () => void }) {
+  const t = useT();
+  return (
+    <Shell>
+      <Card>
+        <div className="handoff__form">
+          <Alert tone="warning">{t("run.preflight.missing", { count: missing.length })}</Alert>
+          <ul className="run-games">
+            {missing.map((m) => (
+              <li key={m.ordinal}>▶ {m.title}</li>
+            ))}
+          </ul>
+          <div className="pform__actions">
+            <Link to="/today" className="emb-btn emb-btn--secondary">
+              {t("run.preflight.wait")}
+            </Link>
+            <Button onClick={onStartWithout}>{t("run.preflight.startWithout")}</Button>
+          </div>
+        </div>
+      </Card>
+    </Shell>
+  );
+}
+
+function Runner({ pkg, space = null }: { pkg: LaunchPackage; space?: OpenSpace | null }) {
   const t = useT();
   const qc = useQueryClient();
   const { locale } = usePrefs();
@@ -110,31 +184,53 @@ function Runner({ pkg }: { pkg: LaunchPackage }) {
   }, [qc, pkg.patient.id]);
   const settle = (id: string, r: Played["send"]) => setPlayed((p) => p.map((x) => (x.id === id ? ({ ...x, send: r } as Played) : x)));
 
+  // While a session runs, a new app version waits (offline devices spec §7.1).
+  useEffect(() => {
+    setSessionRunning(true);
+    return () => setSessionRunning(false);
+  }, []);
+
   const upload = useCallback(
     (step: LaunchGameStep, envelope: ResultEnvelope) => {
-      enqueue(step.ticket, envelope); // first to the device, then to the server
       const id = envelope.session_id;
       setPlayed((p) => [...p, { kind: "game", id, step, envelope, send: { state: "sending" } }]);
-      void send({ ticket: step.ticket, envelope }).then((r) => {
-        settle(id, r);
-        refresh();
-      });
+      // First to the device, then to the server.
+      void enqueue(step.ticket, envelope)
+        .then(() => send({ ticket: step.ticket, envelope }))
+        .then((r) => {
+          settle(id, r);
+          refresh();
+        });
+      // Played from a package: this result also feeds the device's next difficulty choice for the step.
+      if (space && envelope.status !== "abandoned") {
+        const key = `local_history:${step.assignment_step_id}`;
+        const point: SessionPoint = { accuracy: envelope.std.accuracy, difficulty: Number((envelope.params as { difficulty?: number }).difficulty ?? 0), valid: true };
+        void space.read<SessionPoint[]>(key).then((h) => space.write(key, [...(h ?? []), point]));
+      }
+    },
+    [refresh, space],
+  );
+
+  const recordView = useCallback(
+    (step: LaunchVideoStep, raw: VideoViewInput) => {
+      // From a package the step carries its v2 ticket: whoever sends the view later, it's credited correctly.
+      const view = step.ticket ? { ...raw, ticket: step.ticket } : raw;
+      const id = view.client_view_id;
+      setPlayed((p) => [...p, { kind: "video", id, step, view, send: { state: "sending" } }]);
+      void enqueueView(view) // same rule as results: the device first
+        .then(() => sendView(view))
+        .then((r) => {
+          settle(id, r);
+          refresh();
+        });
     },
     [refresh],
   );
 
-  const recordView = useCallback(
-    (step: LaunchVideoStep, view: VideoViewInput) => {
-      enqueueView(view); // same rule as results: the device first
-      const id = view.client_view_id;
-      setPlayed((p) => [...p, { kind: "video", id, step, view, send: { state: "sending" } }]);
-      void sendView(view).then((r) => {
-        settle(id, r);
-        refresh();
-      });
-    },
-    [refresh],
-  );
+  // Played from a package: Today moves on to the next session on this device right away.
+  useEffect(() => {
+    if (space && (phase.k === "finished" || phase.k === "summary") && played.length) void markSessionDone(space, pkg.planned_session_id);
+  }, [space, phase.k, played.length, pkg.planned_session_id]);
 
   const retry = () => {
     for (const x of played.filter((p) => p.send.state === "waiting")) {

@@ -47,7 +47,7 @@ describe("results outbox", () => {
     expect(pending()).toHaveLength(0);
   });
 
-  it("drops an item only once the server has recorded a rejection; keeps it on 403 or 5xx", async () => {
+  it("never drops an item the server refused: it is kept as needing help; 403 or 5xx wait for a retry", async () => {
     enqueue("t", env("a"));
     enqueue("t", env("b"));
     enqueue("t", env("c"));
@@ -60,7 +60,9 @@ describe("results outbox", () => {
       }),
     );
     await flush();
+    // Offline devices spec §7.3: an entry leaves only when the server stored it (accepted, duplicate, kept for review).
     expect(pending().map((i) => [i.envelope.session_id, i.last_error])).toEqual([
+      ["a", "needs_help"],
       ["b", "forbidden"],
       ["c", "unavailable"],
     ]);

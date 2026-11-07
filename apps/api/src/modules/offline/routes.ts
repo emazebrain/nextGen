@@ -96,10 +96,27 @@ export function offlineRoutes(pool: pg.Pool, tickets: TicketSigner) {
       ).rows;
       const packages: SessionPackage[] = [];
       const videos = new Map<string, OfflineVideoRef>();
+      // Each game step's recent counted results (shared by all its packages): the device's progression input.
+      const histories = new Map<string, PackageGameStep["history"]>();
+      const historyOf = async (stepId: string) => {
+        if (!histories.has(stepId)) {
+          const h = await db.query<PackageGameStep["history"][number]>(
+            `SELECT accuracy, difficulty, valid FROM (
+               SELECT g.accuracy::float8 AS accuracy, g.difficulty, (g.is_valid AND g.status <> 'abandoned') AS valid, g.ended_at, g.id
+                 FROM app.game_session g JOIN app.game_session_review r ON r.id = g.id
+                WHERE g.assignment_step_id = $1 AND r.counts ORDER BY g.ended_at DESC, g.id DESC LIMIT 20) x
+             ORDER BY ended_at, id`,
+            [stepId],
+          );
+          histories.set(stepId, h.rows);
+        }
+        return histories.get(stepId)!;
+      };
       for (const { id } of upcoming) {
         const loaded = await loadLaunchRows(db, id);
         if ("error" in loaded) continue; // e.g. consent or care changed between the two queries
         const { row, steps, videos: vids } = loaded;
+        for (const s of steps) if (s.step_type !== "video") await historyOf(s.id);
         packages.push({
           planned_session_id: id,
           planned_date: row.planned_date,
@@ -113,10 +130,13 @@ export function offlineRoutes(pool: pg.Pool, tickets: TicketSigner) {
               const v = vids.get(s.video_id!)!;
               const url = v.source === "upload" && v.has_file ? fileUrl(v.id, v.version) : null;
               if (url && v.sha256) videos.set(v.id, { id: v.id, version: v.version, sha256: v.sha256.toString("hex"), bytes: v.bytes ?? 0, file_url: url });
+              // A ticket on the view too: whoever later sends it from this device, it is credited to the caller.
+              const vticket = tickets.signV2({ jti: randomUUID(), psid: id, asid: s.id, pid: row.patient_id, gid: "video", sub: user.id, dev: device, allowed: { exact: {}, difficulty: { min: 1, max: 5 } } }, OFFLINE_TICKET_TTL_S);
               return {
                 kind: "video",
                 assignment_step_id: s.id,
                 ordinal: s.ordinal,
+                ticket: vticket,
                 video: { id: v.id, version: v.version, source: v.source, youtube_id: v.youtube_id, duration_s: v.duration_s, title: pick(v.titles, row.preferred_locale) ?? "", file_url: url, sha256: v.sha256 ? v.sha256.toString("hex") : null },
                 done: s.done,
               };
@@ -136,6 +156,7 @@ export function offlineRoutes(pool: pg.Pool, tickets: TicketSigner) {
               sessions_completed: s.sessions_completed,
               progression: s.progression ?? null,
               difficulty: s.current_difficulty,
+              history: histories.get(s.id) ?? [],
               done: s.done,
             };
           }),

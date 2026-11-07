@@ -59,6 +59,8 @@ export interface PackageGameStep {
   sessions_completed: number;
   progression: ProgressionRule | null;
   difficulty: number;
+  /** The step's recent counted results, oldest first: with them the device decides difficulty as the server would. */
+  history: Array<{ accuracy: number | null; difficulty: number; valid: boolean }>;
   done: boolean;
 }
 

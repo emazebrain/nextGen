@@ -14,6 +14,7 @@ import { encoding, generateOutboxKeyPair, unwrapOutboxKey, wrapOutboxPrivate, ty
 import { getMeta, setMeta } from "./db.ts";
 import { getPrf } from "./passkey.ts";
 import { setPinStorage } from "../session/kidmode.ts";
+import { configureOutbox, flush } from "../session/outbox.ts";
 import {
   createSpace, listSpaces, removeSpace, unlockWithPassword, unlockWithPrf, unlockWithSecret,
   type OpenSpace, type SpaceInfo, type UnlockResult,
@@ -237,6 +238,12 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
     await attachPin(null);
     await refreshSpaces();
   }, [space, refreshSpaces]);
+
+  // The outbox follows the device keys: sealed writes once set up, sending once someone is signed in online.
+  useEffect(() => {
+    configureOutbox(outbox.publicKey ? { publicKey: outbox.publicKey, privateKey: outbox.key } : null);
+    if (outbox.key) void flush();
+  }, [outbox]);
 
   const value = useMemo<DeviceState>(
     () => ({

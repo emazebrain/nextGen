@@ -89,6 +89,8 @@ export interface LaunchVideoStep {
   };
   /** Already watched in this session. */
   done: boolean;
+  /** Offline packages only: the step's v2 ticket, sent with the view (spec 2026-11-07 offline devices). */
+  ticket?: string;
 }
 
 export type LaunchStep = LaunchGameStep | LaunchVideoStep;

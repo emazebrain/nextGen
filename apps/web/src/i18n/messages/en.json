@@ -614,5 +614,11 @@
   "setupOffline.later": "Not now",
   "setupOffline.failed": "Offline use couldn't be set up. Check the connection and try again.",
   "offline.saved": "Showing saved data from {time}",
-  "offline.needsConnection": "Needs a connection — you can save changes again when you're back online."
+  "offline.needsConnection": "Needs a connection — you can save changes again when you're back online.",
+  "run.preflight.missing": "{count, plural, one {One step isn't on this device:} other {# steps aren't on this device:}}",
+  "run.preflight.startWithout": "Start without it",
+  "run.preflight.wait": "Wait for a connection",
+  "sync.waiting": "{count, plural, one {Will send # result} other {Will send # results}}",
+  "sync.signIn": "Sign in to send waiting results",
+  "sync.needsHelp": "{count, plural, one {# result needs help} other {# results need help}}"
 }

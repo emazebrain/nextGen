@@ -30,7 +30,7 @@ const bundle = (over: Partial<OfflineBundle> = {}): OfflineBundle => ({
       patient: { id: "p1", given_name: "Noa", family_name: "Levi", preferred_locale: "en", alert: null },
       assignment: { id: "as1", name: "Attention", weeks: 4 } as never,
       steps: [
-        { kind: "game", assignment_step_id: "st1", ordinal: 1, game_id: "tunnel-rush", ticket: "t", allowed: { exact: {}, difficulty: { min: 1, max: 5 } }, base_params: {}, practice_setting: "off", sessions_completed: 1, progression: null, difficulty: 2, done: false },
+        { kind: "game", assignment_step_id: "st1", ordinal: 1, game_id: "tunnel-rush", ticket: "t", allowed: { exact: {}, difficulty: { min: 1, max: 5 } }, base_params: {}, practice_setting: "off", sessions_completed: 1, progression: null, difficulty: 2, history: [], done: false },
         { kind: "video", assignment_step_id: "st2", ordinal: 2, video: { id: "v1", version: 2, source: "upload", youtube_id: null, title: "Colour shapes", duration_s: 10, file_url: "/v1/videos/v1/file?v=2", sha256: "ab" }, done: false },
       ],
     },
