@@ -27,6 +27,7 @@ import type { Me } from "../api/queries.ts";
 import { useT, type MessageId } from "../i18n/index.tsx";
 import { useClinic } from "../lib/clinic.tsx";
 import { useIdleTimeout } from "../lib/idle.ts";
+import { useOptionalDevice } from "../device/session.tsx";
 
 const NAV: Array<{ id: string; path: string; label: MessageId; icon: ShellNavItem["icon"] }> = [
   { id: "today", path: "/today", label: "nav.today", icon: House },
@@ -42,7 +43,18 @@ const PHONE_TABS = ["today", "patients", "calendar", "messages"];
 export function useSignOut() {
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const device = useOptionalDevice();
   return async (reason: "signed_out" | "idle") => {
+    // Offline, an idle lock goes back to "who's using the tablet?" (offline devices spec §7.5).
+    if (reason === "idle" && device && !navigator.onLine && device.spaces.length) {
+      device.lock();
+      qc.clear();
+      navigate("/offline?reason=idle", { replace: true });
+      return;
+    }
+    // Signing out removes this therapist's own space from the device; an idle lock only locks it.
+    if (reason === "signed_out") await device?.signOut();
+    else device?.lock();
     await authClient.signOut().catch(() => {});
     qc.clear();
     navigate(`/sign-in?reason=${reason}`, { replace: true });

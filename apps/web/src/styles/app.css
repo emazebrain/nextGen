@@ -1576,3 +1576,21 @@ a.gamecard:hover {
 .videostep__video, .videostep__frame { inline-size: 100%; aspect-ratio: 16 / 9; max-block-size: 75dvh; border: 0; border-radius: 16px; background: #000; }
 .videostep__actions { min-block-size: 56px; display: grid; place-items: center; }
 .videostep__actions .app-muted { color: #d5d8e2; }
+
+/* Offline sign-in on a shared tablet (offline devices spec §7.5) */
+.offline__people {
+  display: grid;
+  gap: var(--space-2, 8px);
+  margin-block-end: var(--space-3, 12px);
+}
+.offline__people .choice__option > span {
+  display: grid;
+  gap: 2px;
+}
+.offline__meta {
+  font-size: 0.875rem;
+}
+.offline__icon {
+  vertical-align: -3px;
+  margin-inline-end: 4px;
+}

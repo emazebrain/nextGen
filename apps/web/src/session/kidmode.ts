@@ -24,7 +24,17 @@ async function digest(salt: string, pin: string): Promise<string> {
   return Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+/**
+ * Where the PIN lives. With an open therapist space (offline devices spec §7.3) it is that space's own, encrypted
+ * record, so each therapist on a shared tablet has their own PIN; without one, this browser's localStorage.
+ */
+let space: { values: Record<string, unknown>; save: (v: Record<string, unknown>) => void } | null = null;
+export function setPinStorage(s: { initial: Record<string, unknown>; save: (v: Record<string, unknown>) => void } | null): void {
+  space = s ? { values: { ...s.initial }, save: s.save } : null;
+}
+
 function get<T>(key: string): T | null {
+  if (space) return (space.values[key] as T | undefined) ?? null;
   try {
     const raw = localStorage.getItem(key);
     return raw ? (JSON.parse(raw) as T) : null;
@@ -33,6 +43,11 @@ function get<T>(key: string): T | null {
   }
 }
 function put(key: string, value: unknown) {
+  if (space) {
+    space.values[key] = value;
+    space.save({ ...space.values });
+    return;
+  }
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch {

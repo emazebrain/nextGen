@@ -109,14 +109,24 @@ export async function open<T>(key: CryptoKey, s: Sealed): Promise<T> {
 
 const ECDH = { name: "ECDH", namedCurve: "P-256" } as const;
 
-/** A new outbox key pair; the private key comes back wrapped by the device's outbox secret (from the server). */
-export async function newOutboxKeyPair(secret: Uint8Array): Promise<{ publicKey: string; wrappedPrivate: Wrapped }> {
+/** A fresh outbox key pair. The device registers the public key first; the server's outbox secret comes after. */
+export async function generateOutboxKeyPair(): Promise<{ publicKey: string; privateKey: CryptoKey }> {
   const pair = await subtle().generateKey(ECDH, true, ["deriveBits"]);
-  const pub = await subtle().exportKey("raw", pair.publicKey);
+  return { publicKey: b64(await subtle().exportKey("raw", pair.publicKey)), privateKey: pair.privateKey };
+}
+
+/** Wraps the outbox private key with the device's outbox secret (from the server) for storage. */
+export async function wrapOutboxPrivate(privateKey: CryptoKey, secret: Uint8Array): Promise<Wrapped> {
   const kek = await hkdfKey(secret, "emb outbox v1", ["wrapKey", "unwrapKey"]);
   const i = iv();
-  const data = await subtle().wrapKey("pkcs8", pair.privateKey, kek, { name: "AES-GCM", iv: i });
-  return { publicKey: b64(pub), wrappedPrivate: { iv: b64(i), data: b64(data) } };
+  const data = await subtle().wrapKey("pkcs8", privateKey, kek, { name: "AES-GCM", iv: i });
+  return { iv: b64(i), data: b64(data) };
+}
+
+/** A new outbox key pair with its private key already wrapped by the outbox secret. */
+export async function newOutboxKeyPair(secret: Uint8Array): Promise<{ publicKey: string; wrappedPrivate: Wrapped }> {
+  const { publicKey, privateKey } = await generateOutboxKeyPair();
+  return { publicKey, wrappedPrivate: await wrapOutboxPrivate(privateKey, secret) };
 }
 
 export async function unwrapOutboxKey(w: Wrapped, secret: Uint8Array): Promise<CryptoKey> {

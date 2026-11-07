@@ -1,11 +1,14 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Navigate, Outlet, RouterProvider, createBrowserRouter, createHashRouter, useLocation, type RouteObject } from "react-router";
+import { Navigate, Outlet, RouterProvider, createBrowserRouter, createHashRouter, useLocation, useNavigate, type RouteObject } from "react-router";
 import { MazeLoader } from "@emb/ui";
 import { ApiError } from "./api/http.ts";
-import { useMe } from "./api/queries.ts";
+import { useMe, type Me } from "./api/queries.ts";
 import { PrefsProvider, useT } from "./i18n/index.tsx";
-import { ClinicProvider } from "./lib/clinic.tsx";
+import { ClinicProvider, useClinic } from "./lib/clinic.tsx";
+import { DeviceProvider, isInstalled, useOptionalDevice } from "./device/session.tsx";
+import { OfflineSignInPage } from "./routes/offline-sign-in.tsx";
+import { SetupOfflinePage } from "./routes/setup-offline.tsx";
 import { SetupMfaPage, SignInPage, VerifyPage } from "./routes/auth.tsx";
 import { ComingSoonPage, MorePage, NotFoundPage, SettingsPage, TodayPage } from "./routes/pages.tsx";
 import { LoadError } from "./routes/shared.tsx";
@@ -32,6 +35,21 @@ export function RequireStaff({ bare = false }: { bare?: boolean }) {
   const me = useMe();
   const location = useLocation();
   const t = useT();
+  const device = useOptionalDevice();
+  const here = encodeURIComponent(location.pathname + location.search);
+  // No connection (offline devices spec §7.5): an unlocked space runs the app; otherwise pick yourself and unlock.
+  const offline = me.isError && me.error instanceof ApiError && me.error.status === 0;
+  if (offline && device) {
+    if (!device.ready) {
+      return (
+        <div className="app-fullpage">
+          <MazeLoader label={t("common.loading")} />
+        </div>
+      );
+    }
+    if (device.space && device.offlineMe) return <StaffArea me={device.offlineMe} bare={bare} />;
+    if (device.spaces.length) return <Navigate to={`/offline?next=${here}`} replace />;
+  }
   if (me.isPending) {
     return (
       <div className="app-fullpage">
@@ -42,7 +60,7 @@ export function RequireStaff({ bare = false }: { bare?: boolean }) {
   if (me.isError) {
     const e = me.error;
     if (e instanceof ApiError && e.status === 401) {
-      return <Navigate to={`/sign-in?next=${encodeURIComponent(location.pathname + location.search)}`} replace />;
+      return <Navigate to={`/sign-in?next=${here}`} replace />;
     }
     if (e instanceof ApiError && e.status === 403 && e.code === "mfa_required") return <Navigate to="/setup-mfa" replace />;
     return (
@@ -51,12 +69,41 @@ export function RequireStaff({ bare = false }: { bare?: boolean }) {
       </div>
     );
   }
+  return <StaffArea me={me.data} bare={bare} online />;
+}
+
+function StaffArea({ me, bare, online = false }: { me: Me; bare: boolean; online?: boolean }) {
   return (
-    <ClinicProvider memberships={me.data.memberships}>
+    <ClinicProvider memberships={me.memberships}>
       <OutboxFlusher />
-      {bare ? <BareScreen /> : <ClinicShell me={me.data} />}
+      {online && <OpenSpaceOnline me={me} />}
+      {bare ? <BareScreen /> : <ClinicShell me={me} />}
     </ClinicProvider>
   );
+}
+
+/**
+ * Signed in online: open this therapist's space on the device with the server's secret, or, the first time on this
+ * device, ask them to set up offline use (offline devices spec §7.5). Runs once per user and clinic.
+ */
+function OpenSpaceOnline({ me }: { me: Me }) {
+  const device = useOptionalDevice();
+  const { clinicId } = useClinic();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const key = `${me.user.id}:${clinicId ?? ""}`;
+  const [done, setDone] = useState<string | null>(null);
+  useEffect(() => {
+    if (!device?.ready || !clinicId || done === key) return;
+    setDone(key);
+    void device.openOnline(me, clinicId).then((r) => {
+      // Only an installed app asks right away (spec §7.5); in a browser tab it's offered on the Device page.
+      if (r === "needs_setup" && isInstalled() && location.pathname !== "/setup-offline") {
+        navigate(`/setup-offline?next=${encodeURIComponent(location.pathname + location.search)}`, { replace: true });
+      }
+    });
+  }, [device, clinicId, key, done, me, navigate, location]);
+  return null;
 }
 
 /** Results waiting on this device are sent once someone is signed in, and again whenever the connection returns. */
@@ -86,12 +133,14 @@ export const routes: RouteObject[] = [
   { path: "/sign-in", element: <SignInPage /> },
   { path: "/sign-in/verify", element: <VerifyPage /> },
   { path: "/setup-mfa", element: <SetupMfaPage /> },
+  { path: "/offline", element: <OfflineSignInPage /> },
   {
     element: <RequireStaff bare />,
     children: [
       { path: "/patients/:id/consent", element: <ConsentPage /> },
       { path: "/library/:gameId/preview", element: <GamePreviewPage /> },
       { path: "/session/:plannedSessionId", element: <SessionPage /> },
+      { path: "/setup-offline", element: <SetupOfflinePage /> },
     ],
   },
   {
@@ -137,9 +186,11 @@ export function App({ queryClient = makeQueryClient(), hashRouting = false }: { 
   const [router] = useState(() => (hashRouting ? createHashRouter : createBrowserRouter)(routes));
   return (
     <PrefsProvider>
-      <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>
+      <DeviceProvider>
+        <QueryClientProvider client={queryClient}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>
+      </DeviceProvider>
     </PrefsProvider>
   );
 }
