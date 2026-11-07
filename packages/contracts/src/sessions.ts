@@ -59,7 +59,8 @@ export const resultUpload = z.object({
 });
 export type ResultUpload = z.infer<typeof resultUpload>;
 
-export interface LaunchStep {
+export interface LaunchGameStep {
+  kind: "game";
   assignment_step_id: string;
   ordinal: number;
   game_id: string;
@@ -68,6 +69,48 @@ export interface LaunchStep {
   ticket: string;
   /** Already has a result in this session (picking up after an interruption). */
   done: boolean;
+}
+
+/** A video between games: played by the app itself, no ticket (ADR 0018). */
+export interface LaunchVideoStep {
+  kind: "video";
+  assignment_step_id: string;
+  ordinal: number;
+  video: {
+    id: string;
+    version: number;
+    source: "upload" | "youtube";
+    youtube_id: string | null;
+    title: string;
+    duration_s: number | null;
+    /** Same-origin URL of the file for uploads (includes ?v=<version>); null for YouTube. */
+    file_url: string | null;
+    sha256: string | null;
+  };
+  /** Already watched in this session. */
+  done: boolean;
+}
+
+export type LaunchStep = LaunchGameStep | LaunchVideoStep;
+
+export const videoViewInput = z
+  .object({
+    client_view_id: z.string().regex(UUID_V7, "invalid_view_id"),
+    planned_session_id: z.string().uuid(),
+    assignment_step_id: z.string().uuid(),
+    video_id: z.string().uuid(),
+    video_version: z.number().int().min(1),
+    started_at: z.string().datetime(),
+    ended_at: z.string().datetime(),
+    watched_s: z.number().int().min(0).max(7200),
+    completed: z.boolean(),
+  })
+  .refine((v) => v.ended_at >= v.started_at, { path: ["ended_at"], message: "ends_before_start" });
+export type VideoViewInput = z.infer<typeof videoViewInput>;
+
+export interface VideoViewReceipt {
+  outcome: "accepted" | "duplicate";
+  planned_session_status: string | null;
 }
 
 export interface LaunchPackage {

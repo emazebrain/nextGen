@@ -25,8 +25,9 @@ export type ProgressionRule = z.infer<typeof progressionRule>;
 
 export const DEFAULT_PROGRESSION: ProgressionRule = { metric: "accuracy", up_at: 0.8, up_after: 2, down_below: 0.5, down_after: 1 };
 
-export const stepInput = z
+export const gameStepInput = z
   .object({
+    step_type: z.literal("game").default("game"),
     game_id: z.string().min(1).max(60),
     session_mode: z.enum(SESSION_MODES),
     duration_s: z.number().int().min(30).max(1800).nullable(),
@@ -53,8 +54,19 @@ export const stepInput = z
     if (needLives && s.lives !== null && s.lives_auto) ctx.addIssue({ code: "custom", path: ["lives"], message: "lives_or_auto" });
     if (!needLives && (s.lives !== null || s.lives_auto)) ctx.addIssue({ code: "custom", path: ["lives"], message: "no_lives_in_timed" });
   });
-/** As sent by clients: `monochrome` and `lives_auto` may be left out (they default to false). */
-export type StepInput = z.input<typeof stepInput>;
+/** A video between games (design doc §7: exactly one of game_id / video_id). It carries no game settings. */
+export const videoStepInput = z.object({ step_type: z.literal("video"), video_id: z.string().uuid() }).strict();
+
+/** A protocol step: a game or a video. Steps without step_type (older apps) are games. */
+export const stepInput = z.preprocess(
+  (v) => (v && typeof v === "object" && !("step_type" in v) ? { ...v, step_type: "game" } : v),
+  z.discriminatedUnion("step_type", [gameStepInput, videoStepInput]),
+);
+/** As sent by clients: `step_type`, `monochrome` and `lives_auto` may be left out on game steps. */
+export type GameStepInput = z.input<typeof gameStepInput>;
+export type VideoStepInput = z.input<typeof videoStepInput>;
+export type StepInput = GameStepInput | VideoStepInput;
+export const isVideoStep = (s: { step_type?: string }): s is VideoStepInput => s.step_type === "video";
 
 const planFields = {
   name: z.string().trim().min(1).max(120),
@@ -91,20 +103,25 @@ export interface TemplateSummary {
   version: number;
   owner_name: string | null;
   can_edit: boolean;
+  /** Game ids in step order (video steps left out). */
   games: string[];
+  /** Every step in order, games and videos. */
+  items: StepItem[];
 }
+
+export type StepItem = { kind: "game"; game_id: string } | { kind: "video"; video_id: string; title: string };
 
 export interface TemplateDetail extends TemplateSummary {
   clinic_id: string | null;
   steps: Array<StepInput & { id: string; ordinal: number }>;
 }
 
-export interface AssignmentStepView extends StepInput {
+export type AssignmentStepView = StepInput & {
   id: string;
   ordinal: number;
   current_difficulty: number;
   sessions_completed: number;
-}
+};
 
 export interface PlannedSessionView {
   id: string;

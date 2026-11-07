@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_PROGRESSION, progressionRule, scheduleDates, stepInput, type StepInput } from "../src/protocols.ts";
+import { DEFAULT_PROGRESSION, progressionRule, scheduleDates, stepInput, type GameStepInput } from "../src/protocols.ts";
 
-const step = (extra: Partial<StepInput> = {}): StepInput => ({
+const step = (extra: Partial<GameStepInput> = {}): GameStepInput => ({
   game_id: "catch-me-if-you-can",
   session_mode: "timed_lives",
   duration_s: 300,
