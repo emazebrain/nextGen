@@ -5,6 +5,7 @@ import "@fontsource-variable/rubik";
 import "@emb/ui/styles.css";
 import "./styles/app.css";
 import { App } from "./App.tsx";
+import { registerServiceWorker } from "./device/update.ts";
 
 async function start() {
   const demo = import.meta.env.MODE === "demo";
@@ -14,6 +15,7 @@ async function start() {
     const { installDemoApi } = await import("./demo/fake-api.ts");
     installDemoApi();
   }
+  void registerServiceWorker();
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
       <App hashRouting={demo} />

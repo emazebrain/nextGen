@@ -30,6 +30,8 @@ export interface OutboxRecord {
 }
 
 export interface VideoIndexRow {
+  /** `${id}:${version}`: an upcoming package may still play an older version while the library has a newer one */
+  key: string;
   id: string;
   version: number;
   sha256: string;
@@ -58,7 +60,7 @@ export function deviceDb(): Promise<IDBPDatabase<DeviceSchema>> {
       db.createObjectStore("meta");
       db.createObjectStore("spaces", { keyPath: "id" });
       db.createObjectStore("outbox", { keyPath: "id" }).createIndex("created_at", "created_at");
-      db.createObjectStore("videos", { keyPath: "id" });
+      db.createObjectStore("videos", { keyPath: "key" });
     },
   });
   return device;
