@@ -10,6 +10,7 @@ import { DeviceProvider, isInstalled, useOptionalDevice } from "./device/session
 import { OfflineSignInPage } from "./routes/offline-sign-in.tsx";
 import { SetupOfflinePage } from "./routes/setup-offline.tsx";
 import { useBundleRefresh } from "./device/refresh.tsx";
+import { DevicePage } from "./routes/device.tsx";
 import { SetupMfaPage, SignInPage, VerifyPage } from "./routes/auth.tsx";
 import { ComingSoonPage, MorePage, NotFoundPage, SettingsPage, TodayPage } from "./routes/pages.tsx";
 import { LoadError } from "./routes/shared.tsx";
@@ -176,6 +177,7 @@ export const routes: RouteObject[] = [
       { path: "/admin/videos", element: <VideosAdminPage /> },
       { path: "/admin/videos/:id", element: <VideoEditorPage /> },
       { path: "/settings", element: <SettingsPage /> },
+      { path: "/settings/device", element: <DevicePage /> },
       { path: "/more", element: <MorePage /> },
       { path: "*", element: <NotFoundPage /> },
     ],

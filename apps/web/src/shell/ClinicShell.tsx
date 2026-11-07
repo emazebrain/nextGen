@@ -29,6 +29,7 @@ import { useClinic } from "../lib/clinic.tsx";
 import { useIdleTimeout } from "../lib/idle.ts";
 import { useOptionalDevice } from "../device/session.tsx";
 import { OfflineBanner } from "../device/OfflineBanner.tsx";
+import { SyncStatus } from "../device/SyncStatus.tsx";
 
 const NAV: Array<{ id: string; path: string; label: MessageId; icon: ShellNavItem["icon"] }> = [
   { id: "today", path: "/today", label: "nav.today", icon: House },
@@ -145,6 +146,7 @@ export function ClinicShell({ me }: { me: Me }) {
             ) : null}
           </div>
           <div className="app-topbar__end">
+            <SyncStatus />
             <Disclosure label={t("shell.help")} trigger={<CircleHelp size={22} aria-hidden="true" className="app-topbar__icon" />}>
               {() => (
                 <div className="app-help">

@@ -226,12 +226,30 @@ export function useUpdateAssignment(patientId: string) {
   });
 }
 
+const reviewCountKey = (clinicId: string | null) => ["reviewCount", clinicId] as const;
+
+/** Flagged results the caller may review, as last reported by Today (offline devices spec §7.4). */
+export function useReviewCount(clinicId: string | null): number {
+  return useQuery({ queryKey: reviewCountKey(clinicId), queryFn: () => 0, enabled: false, initialData: 0 }).data;
+}
+
 export function useToday(clinicId: string | null) {
+  const qc = useQueryClient();
   const { locale } = usePrefs();
   const space = useOptionalDevice()?.space ?? null;
   return useQuery({
     queryKey: ["today", clinicId, locale],
-    queryFn: ({ signal }) => offlineOr(space, `today:${clinicId}`, () => apiGet<{ items: TodayItem[] }>(`/v1/today?lang=${locale}${clinicId ? `&clinic=${clinicId}` : ""}`, { signal }).then((r) => r.items), (b, done) => todayFromBundle(b, done)),
+    queryFn: ({ signal }) =>
+      offlineOr(
+        space,
+        `today:${clinicId}`,
+        () =>
+          apiGet<{ items: TodayItem[]; review_count?: number }>(`/v1/today?lang=${locale}${clinicId ? `&clinic=${clinicId}` : ""}`, { signal }).then((r) => {
+            qc.setQueryData(reviewCountKey(clinicId), r.review_count ?? 0);
+            return r.items;
+          }),
+        (b, done) => todayFromBundle(b, done),
+      ),
     retry,
   });
 }
@@ -252,6 +270,18 @@ export function usePatientSessions(patientId: string) {
     queryKey: sessionsKey(patientId),
     queryFn: ({ signal }) => offlineOr(space, `sessions:${patientId}`, () => apiGet<{ sessions: GameSessionView[] }>(`/v1/patients/${patientId}/sessions`, { signal }).then((r) => r.sessions)),
     retry,
+  });
+}
+
+/** Count or don't count a flagged result (offline devices spec §7.4). */
+export function useReview(patientId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, decision }: { id: string; decision: "accept" | "exclude" }) => apiSend<{ decision: string }>("POST", `/v1/results/${id}/review`, { decision }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: sessionsKey(patientId) });
+      void qc.invalidateQueries({ queryKey: ["today"] });
+    },
   });
 }
 

@@ -666,7 +666,7 @@ async function handle(path: string, method: string, q: URLSearchParams, body: Re
       });
     }
     items.sort((x, y) => x.planned_date.localeCompare(y.planned_date) || x.patient.family_name.localeCompare(y.patient.family_name));
-    return json({ items });
+    return json({ items, review_count: 0 });
   }
 
   // ---- patients

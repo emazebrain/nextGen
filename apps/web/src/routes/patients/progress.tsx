@@ -12,7 +12,7 @@ import { ArrowDown, ArrowUp, BarChart3, LineChart, Table2 } from "lucide-react";
 import { activity, skillsPlayed, trend, type GameInfo, type TrendPoint, type View } from "@emb/metrics";
 import type { GameSessionView, ProgressionDecisionView } from "@emb/contracts";
 import { Button, Card, Chip, DataList, EmptyState, MazeLoader, SelectField, type Column } from "@emb/ui";
-import { usePatientSessions, useProgression } from "../../api/queries.ts";
+import { usePatientSessions, useProgression, useReview } from "../../api/queries.ts";
 import { GAMES, findGame, localText } from "../../games/registry.ts";
 import { usePrefs, useT, type MessageId } from "../../i18n/index.tsx";
 import { iso } from "../../lib/format.ts";
@@ -37,7 +37,10 @@ export function PatientProgress() {
   const [asTable, setAsTable] = useState(false);
   const [shown, setShown] = useState(HISTORY_PAGE);
 
-  const list = sessions.data ?? [];
+  const all = sessions.data ?? [];
+  // Results kept for review but not counted (excluded, or consent withdrawn and not yet reviewed) stay out of the
+  // charts and totals; the history below still lists them with why (offline devices spec §7.4).
+  const list = useMemo(() => all.filter((s) => s.counts !== false), [all]);
   const skills = useMemo(() => skillsPlayed(list, GAME_INFO), [list]);
   const view = toView(viewKey);
   const tr = useMemo(() => trend(list, GAME_INFO, view), [list, viewKey]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -46,7 +49,7 @@ export function PatientProgress() {
 
   if (sessions.isPending) return <MazeLoader label={t("common.loading")} />;
   if (sessions.isError) return <LoadError error={sessions.error} retry={() => void sessions.refetch()} />;
-  if (list.length === 0) {
+  if (all.length === 0) {
     return (
       <Card>
         <EmptyState icon={<BarChart3 size={28} aria-hidden="true" />} title={t("progress.empty.title")}>
@@ -181,10 +184,10 @@ export function PatientProgress() {
         <h2 id="history-title" className="app-cardtitle">
           {t("progress.history.title")}
         </h2>
-        <History sessions={list.slice(0, shown)} gameName={gameName} date={date} />
-        {list.length > shown && (
+        <History sessions={all.slice(0, shown)} gameName={gameName} date={date} patientId={p.id} />
+        {all.length > shown && (
           <Button variant="secondary" onClick={() => setShown((n) => n + HISTORY_PAGE)}>
-            {t("progress.history.more", { count: Math.min(HISTORY_PAGE, list.length - shown) })}
+            {t("progress.history.more", { count: Math.min(HISTORY_PAGE, all.length - shown) })}
           </Button>
         )}
       </section>
@@ -227,7 +230,35 @@ function Decisions({
   );
 }
 
-function History({ sessions, gameName, date }: { sessions: GameSessionView[]; gameName: (id: string) => string; date: (s: string) => string }) {
+/**
+ * A result that arrived after something changed (offline devices spec §7.4): why it was flagged, and Count it /
+ * Don't count it while nobody has decided. The decision is append-only on the server; the latest one counts.
+ */
+export function ReviewCell({ session, patientId }: { session: GameSessionView; patientId: string }) {
+  const t = useT();
+  const review = useReview(patientId);
+  if (!session.review) return null;
+  const { reason, decision } = session.review;
+  return (
+    <span className="review-cell">
+      <Chip tone={decision === "accept" ? "success" : decision === "exclude" ? "neutral" : "warning"}>{t("review.reason", { reason })}</Chip>
+      {decision === null ? (
+        <>
+          <Button variant="secondary" loading={review.isPending && review.variables?.decision === "accept"} onClick={() => review.mutate({ id: session.id, decision: "accept" })}>
+            {t("review.accept")}
+          </Button>
+          <Button variant="ghost" loading={review.isPending && review.variables?.decision === "exclude"} onClick={() => review.mutate({ id: session.id, decision: "exclude" })}>
+            {t("review.exclude")}
+          </Button>
+        </>
+      ) : (
+        <span className="app-muted">{t(decision === "accept" ? "review.counted" : "review.notCounted")}</span>
+      )}
+    </span>
+  );
+}
+
+function History({ sessions, gameName, date, patientId }: { sessions: GameSessionView[]; gameName: (id: string) => string; date: (s: string) => string; patientId: string }) {
   const t = useT();
   const intl = useIntl();
   const time = (ms: number) => {
@@ -243,6 +274,7 @@ function History({ sessions, gameName, date }: { sessions: GameSessionView[]; ga
     { id: "result", header: t("progress.col.result"), cell: (s) => t("result.status", { status: s.status }) },
     { id: "accuracy", header: t("result.accuracy"), numeric: true, cell: (s) => (s.accuracy !== null ? intl.formatNumber(s.accuracy, { style: "percent" }) : "—") },
     { id: "rt", header: t("result.rt"), numeric: true, hideOnCard: true, cell: (s) => (s.rt_median_ms !== null ? t("result.ms", { n: s.rt_median_ms }) : "—") },
+    { id: "review", header: t("review.column"), hideOnCard: false, cell: (s) => (s.review ? <ReviewCell session={s} patientId={patientId} /> : null) },
     {
       id: "time",
       header: t("result.time"),

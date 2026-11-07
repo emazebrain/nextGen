@@ -24,7 +24,7 @@ import {
   Play,
 } from "lucide-react";
 import { Alert, Avatar, Button, Card, Chip, DataList, EmptyState, MazeLoader, PageHeader, Segmented, type ChipTone, type Column } from "@emb/ui";
-import { useMe, usePatients, useToday } from "../api/queries.ts";
+import { useMe, usePatients, useToday, useReviewCount } from "../api/queries.ts";
 import { findGame, localText } from "../games/registry.ts";
 import { fullName, LoadError, StatusChip, useAge } from "./shared.tsx";
 import { useT, usePrefs, locales, type Locale, type MessageId, type Motion, type Theme } from "../i18n/index.tsx";
@@ -45,6 +45,7 @@ export function TodayPage() {
   const me = useMe();
   const { clinicId } = useClinic();
   const patients = usePatients(clinicId);
+  const reviewCount = useReviewCount(clinicId);
   const age = useAge();
   useTitle(t("nav.today"));
   const name = firstName(me.data?.user.name ?? "");
@@ -56,6 +57,11 @@ export function TodayPage() {
         eyebrow={intl.formatDate(new Date(), { weekday: "long", day: "numeric", month: "long" })}
         title={t("today.greeting", { part: dayPart(), name })}
       />
+      {reviewCount > 0 && (
+        <p className="today-review">
+          <Chip tone="warning">{t("today.review", { count: reviewCount })}</Chip>
+        </p>
+      )}
       <div className="today-grid">
         <Card as="section" className="today-next" labelledBy="next-up">
           <h2 id="next-up" className="app-cardtitle">
@@ -278,6 +284,14 @@ export function SettingsPage() {
           </div>
         </Card>
         <KidPinCard />
+        <Card as="section" labelledBy="device-link">
+          <h2 id="device-link" className="app-cardtitle">
+            {t("device.title")}
+          </h2>
+          <Link to="/settings/device" className="emb-btn emb-btn--secondary">
+            {t("device.settingsLink")}
+          </Link>
+        </Card>
         <Card as="section" labelledBy="account">
           <h2 id="account" className="app-cardtitle">
             {t("settings.account")}
