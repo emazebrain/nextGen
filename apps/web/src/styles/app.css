@@ -1594,3 +1594,16 @@ a.gamecard:hover {
   vertical-align: -3px;
   margin-inline-end: 4px;
 }
+
+.offline-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 var(--space-3, 12px);
+  padding-block: 8px;
+  padding-inline: 12px;
+  border-radius: 10px;
+  background: var(--emb-surface-muted, #f4f3fb);
+  color: var(--emb-text-muted, #4b4867);
+  font-size: 0.875rem;
+}

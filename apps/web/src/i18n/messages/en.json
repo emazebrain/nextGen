@@ -612,5 +612,7 @@
   "setupOffline.passkey": "Also unlock with Face ID or fingerprint",
   "setupOffline.submit": "Set up offline use",
   "setupOffline.later": "Not now",
-  "setupOffline.failed": "Offline use couldn't be set up. Check the connection and try again."
+  "setupOffline.failed": "Offline use couldn't be set up. Check the connection and try again.",
+  "offline.saved": "Showing saved data from {time}",
+  "offline.needsConnection": "Needs a connection — you can save changes again when you're back online."
 }

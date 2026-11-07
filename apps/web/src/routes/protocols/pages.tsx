@@ -18,6 +18,7 @@ import { joinSteps } from "../../lib/steps.ts";
 import { useTitle } from "../../lib/title.ts";
 import { fullName, LoadError } from "../shared.tsx";
 import { StepList, stepProblems } from "./steps.tsx";
+import { NeedsConnection, useNeedsConnection } from "../../device/OfflineBanner.tsx";
 
 type Plan = { name: string; description: string; weeks: number; sessions_per_week: number; setting: "clinic" | "home" | "mixed" };
 
@@ -211,6 +212,7 @@ export function TemplateBuilderPage() {
 }
 
 function Builder({ existing, copyOf, onSaved }: { existing?: TemplateDetail | undefined; copyOf?: TemplateDetail | undefined; onSaved: () => void }) {
+  const offline = useNeedsConnection();
   const t = useT();
   const { clinicId } = useClinic();
   const base = existing ?? copyOf;
@@ -263,11 +265,12 @@ function Builder({ existing, copyOf, onSaved }: { existing?: TemplateDetail | un
           <p className="app-muted steps__hint">{t("builder.stepsHint")}</p>
           <StepList steps={steps} onChange={setSteps} />
         </Card>
+        {offline && <NeedsConnection />}
         <div className="pform__actions">
           <Link to="/protocols" className="emb-btn emb-btn--secondary">
             {t("common.cancel")}
           </Link>
-          <Button type="submit" size="lg" loading={save.isPending}>
+          <Button type="submit" size="lg" loading={save.isPending} disabled={offline}>
             {t("builder.save")}
           </Button>
         </div>
@@ -335,6 +338,7 @@ function AssignReview({ patientId, patientName, templateId, onBack }: { patientI
 }
 
 function AssignForm({ patientId, patientName, template, onBack }: { patientId: string; patientName: string; template: TemplateDetail | null; onBack: () => void }) {
+  const offline = useNeedsConnection();
   const t = useT();
   const intl = useIntl();
   const navigate = useNavigate();
@@ -388,7 +392,8 @@ function AssignForm({ patientId, patientName, template, onBack }: { patientId: s
         <StepList steps={steps} onChange={setSteps} />
       </Card>
       <div className="pform__actions">
-        <Button type="submit" size="lg" loading={assign.isPending} icon={<RouteIcon size={20} aria-hidden="true" />}>
+        {offline && <NeedsConnection />}
+        <Button type="submit" size="lg" loading={assign.isPending} disabled={offline} icon={<RouteIcon size={20} aria-hidden="true" />}>
           {t("assign.submit", { name: patientName })}
         </Button>
       </div>

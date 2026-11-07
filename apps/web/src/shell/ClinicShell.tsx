@@ -28,6 +28,7 @@ import { useT, type MessageId } from "../i18n/index.tsx";
 import { useClinic } from "../lib/clinic.tsx";
 import { useIdleTimeout } from "../lib/idle.ts";
 import { useOptionalDevice } from "../device/session.tsx";
+import { OfflineBanner } from "../device/OfflineBanner.tsx";
 
 const NAV: Array<{ id: string; path: string; label: MessageId; icon: ShellNavItem["icon"] }> = [
   { id: "today", path: "/today", label: "nav.today", icon: House },
@@ -185,6 +186,7 @@ export function ClinicShell({ me }: { me: Me }) {
         </>
       }
     >
+      <OfflineBanner />
       <Outlet />
     </AppShell>
   );

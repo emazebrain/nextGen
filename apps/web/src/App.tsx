@@ -9,6 +9,7 @@ import { ClinicProvider, useClinic } from "./lib/clinic.tsx";
 import { DeviceProvider, isInstalled, useOptionalDevice } from "./device/session.tsx";
 import { OfflineSignInPage } from "./routes/offline-sign-in.tsx";
 import { SetupOfflinePage } from "./routes/setup-offline.tsx";
+import { useBundleRefresh } from "./device/refresh.tsx";
 import { SetupMfaPage, SignInPage, VerifyPage } from "./routes/auth.tsx";
 import { ComingSoonPage, MorePage, NotFoundPage, SettingsPage, TodayPage } from "./routes/pages.tsx";
 import { LoadError } from "./routes/shared.tsx";
@@ -38,7 +39,9 @@ export function RequireStaff({ bare = false }: { bare?: boolean }) {
   const device = useOptionalDevice();
   const here = encodeURIComponent(location.pathname + location.search);
   // No connection (offline devices spec §7.5): an unlocked space runs the app; otherwise pick yourself and unlock.
-  const offline = me.isError && me.error instanceof ApiError && me.error.status === 0;
+  // A refetch after a failure is "pending" again; its last failure still says whether the network is down.
+  const failure = me.error ?? me.failureReason;
+  const offline = !me.data && failure instanceof ApiError && failure.status === 0;
   if (offline && device) {
     if (!device.ready) {
       return (
@@ -87,6 +90,7 @@ function StaffArea({ me, bare, online = false }: { me: Me; bare: boolean; online
  * device, ask them to set up offline use (offline devices spec §7.5). Runs once per user and clinic.
  */
 function OpenSpaceOnline({ me }: { me: Me }) {
+  useBundleRefresh();
   const device = useOptionalDevice();
   const { clinicId } = useClinic();
   const navigate = useNavigate();

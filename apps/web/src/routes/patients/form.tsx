@@ -14,6 +14,7 @@ import { useT, usePrefs, type MessageId } from "../../i18n/index.tsx";
 import { useClinic } from "../../lib/clinic.tsx";
 import { useTitle } from "../../lib/title.ts";
 import { fullName, LoadError } from "../shared.tsx";
+import { NeedsConnection, useNeedsConnection } from "../../device/OfflineBanner.tsx";
 
 type Draft = {
   given_name: string;
@@ -54,6 +55,7 @@ export function EditPatientPage() {
 }
 
 function PatientFormPage({ existing }: { existing?: PatientDetail }) {
+  const offline = useNeedsConnection();
   const t = useT();
   const navigate = useNavigate();
   const { locale } = usePrefs();
@@ -216,7 +218,8 @@ function PatientFormPage({ existing }: { existing?: PatientDetail }) {
             <Link to={backTo} className="emb-btn emb-btn--secondary">
               {t("common.cancel")}
             </Link>
-            <Button type="submit" loading={busy}>
+            {offline && <NeedsConnection />}
+            <Button type="submit" loading={busy} disabled={offline}>
               {existing ? t("patientForm.submitEdit") : t("patientForm.submitNew")}
             </Button>
           </div>

@@ -13,6 +13,8 @@ import { ApiError, apiGet, apiSend } from "./http.ts";
 import { usePrefs } from "../i18n/index.tsx";
 import type { BrainRegion, VideoInput, VideoSummary } from "@emb/contracts";
 import type { AssignInput, AssignmentView, GameSessionView, LaunchPackage, ProgressionDecisionView, TemplateDetail, TemplateInput, TemplateSummary, TodayItem } from "@emb/contracts";
+import { useOptionalDevice } from "../device/session.tsx";
+import { offlineOr, todayFromBundle } from "../device/bundle.ts";
 
 export type { PatientDetail, PatientListItem, PatientStatus, StaffMember };
 export type Role = "platform_admin" | "org_admin" | "clinic_manager" | "therapist" | "assistant";
@@ -32,7 +34,12 @@ export interface Me {
 export type PatientRow = PatientListItem;
 
 /** Don't retry answers that won't change: signed out, MFA missing, not found. */
-const retry = (count: number, err: unknown) => !(err instanceof ApiError && err.status >= 400 && err.status < 500) && count < 2;
+const retry = (count: number, err: unknown) => {
+  if (err instanceof ApiError && err.status >= 400 && err.status < 500) return false;
+  // The browser knows it's offline: retrying only delays the offline screens (offline devices spec §7.5).
+  if (err instanceof ApiError && err.status === 0 && typeof navigator !== "undefined" && navigator.onLine === false) return false;
+  return count < 2;
+};
 
 export const meKey = ["me"] as const;
 export const patientKey = (id: string) => ["patient", id] as const;
@@ -42,6 +49,7 @@ export function useMe() {
 }
 
 export function usePatients(clinicId: string | null, archived = false) {
+  const space = useOptionalDevice()?.space ?? null;
   return useQuery({
     queryKey: ["patients", clinicId, archived],
     queryFn: ({ signal }) => {
@@ -49,16 +57,17 @@ export function usePatients(clinicId: string | null, archived = false) {
       if (clinicId) q.set("clinic", clinicId);
       if (archived) q.set("archived", "1");
       const qs = q.toString();
-      return apiGet<{ patients: PatientListItem[] }>(`/v1/patients${qs ? `?${qs}` : ""}`, { signal }).then((r) => r.patients);
+      return offlineOr(space, `patients:${clinicId}:${archived}`, () => apiGet<{ patients: PatientListItem[] }>(`/v1/patients${qs ? `?${qs}` : ""}`, { signal }).then((r) => r.patients), (b) => (archived ? [] : b.caseload));
     },
     retry,
   });
 }
 
 export function usePatient(id: string) {
+  const space = useOptionalDevice()?.space ?? null;
   return useQuery({
     queryKey: patientKey(id),
-    queryFn: ({ signal }) => apiGet<{ patient: PatientDetail }>(`/v1/patients/${encodeURIComponent(id)}`, { signal }).then((r) => r.patient),
+    queryFn: ({ signal }) => offlineOr(space, `patient:${id}`, () => apiGet<{ patient: PatientDetail }>(`/v1/patients/${encodeURIComponent(id)}`, { signal }).then((r) => r.patient), (b) => b.patients[id]),
     retry,
   });
 }
@@ -139,17 +148,20 @@ export type { AssignmentView, TemplateDetail, TemplateSummary, TodayItem };
 
 export function useTemplates(clinicId: string | null) {
   const { locale } = usePrefs(); // video titles in the steps come back in this language
+  const space = useOptionalDevice()?.space ?? null;
   return useQuery({
     queryKey: ["templates", clinicId, locale],
-    queryFn: ({ signal }) => apiGet<{ templates: TemplateSummary[] }>(`/v1/templates?lang=${locale}${clinicId ? `&clinic=${clinicId}` : ""}`, { signal }).then((r) => r.templates),
+    queryFn: ({ signal }) =>
+      offlineOr(space, `templates:${clinicId}`, () => apiGet<{ templates: TemplateSummary[] }>(`/v1/templates?lang=${locale}${clinicId ? `&clinic=${clinicId}` : ""}`, { signal }).then((r) => r.templates), (b) => b.templates),
     retry,
   });
 }
 
 export function useTemplate(id: string | null) {
+  const space = useOptionalDevice()?.space ?? null;
   return useQuery({
     queryKey: ["template", id],
-    queryFn: ({ signal }) => apiGet<{ template: TemplateDetail }>(`/v1/templates/${id}`, { signal }).then((r) => r.template),
+    queryFn: ({ signal }) => offlineOr(space, `template:${id}`, () => apiGet<{ template: TemplateDetail }>(`/v1/templates/${id}`, { signal }).then((r) => r.template)),
     enabled: !!id,
     retry,
   });
@@ -178,9 +190,15 @@ export function useDeleteTemplate() {
 export const assignmentKey = (patientId: string) => ["assignment", patientId] as const;
 
 export function useAssignment(patientId: string) {
+  const space = useOptionalDevice()?.space ?? null;
   return useQuery({
     queryKey: assignmentKey(patientId),
-    queryFn: ({ signal }) => apiGet<{ assignment: AssignmentView | null }>(`/v1/patients/${patientId}/assignment`, { signal }).then((r) => r.assignment),
+    queryFn: ({ signal }) =>
+      offlineOr(space, `assignment:${patientId}`, () => apiGet<{ assignment: AssignmentView | null }>(`/v1/patients/${patientId}/assignment`, { signal }).then((r) => r.assignment), (b) => {
+        if (!b.caseload.some((p) => p.id === patientId)) return undefined;
+        const aid = b.packages.find((p) => p.patient.id === patientId)?.assignment.id;
+        return (aid && b.assignments.find((a) => a.id === aid)) || null;
+      }),
     retry,
   });
 }
@@ -210,9 +228,10 @@ export function useUpdateAssignment(patientId: string) {
 
 export function useToday(clinicId: string | null) {
   const { locale } = usePrefs();
+  const space = useOptionalDevice()?.space ?? null;
   return useQuery({
     queryKey: ["today", clinicId, locale],
-    queryFn: ({ signal }) => apiGet<{ items: TodayItem[] }>(`/v1/today?lang=${locale}${clinicId ? `&clinic=${clinicId}` : ""}`, { signal }).then((r) => r.items),
+    queryFn: ({ signal }) => offlineOr(space, `today:${clinicId}`, () => apiGet<{ items: TodayItem[] }>(`/v1/today?lang=${locale}${clinicId ? `&clinic=${clinicId}` : ""}`, { signal }).then((r) => r.items), (b, done) => todayFromBundle(b, done)),
     retry,
   });
 }
@@ -228,17 +247,19 @@ export function useLaunch() {
 export const sessionsKey = (patientId: string) => ["sessions", patientId] as const;
 
 export function usePatientSessions(patientId: string) {
+  const space = useOptionalDevice()?.space ?? null;
   return useQuery({
     queryKey: sessionsKey(patientId),
-    queryFn: ({ signal }) => apiGet<{ sessions: GameSessionView[] }>(`/v1/patients/${patientId}/sessions`, { signal }).then((r) => r.sessions),
+    queryFn: ({ signal }) => offlineOr(space, `sessions:${patientId}`, () => apiGet<{ sessions: GameSessionView[] }>(`/v1/patients/${patientId}/sessions`, { signal }).then((r) => r.sessions)),
     retry,
   });
 }
 
 export function useProgression(patientId: string) {
+  const space = useOptionalDevice()?.space ?? null;
   return useQuery({
     queryKey: ["progression", patientId],
-    queryFn: ({ signal }) => apiGet<{ decisions: ProgressionDecisionView[] }>(`/v1/patients/${patientId}/progression`, { signal }).then((r) => r.decisions),
+    queryFn: ({ signal }) => offlineOr(space, `progression:${patientId}`, () => apiGet<{ decisions: ProgressionDecisionView[] }>(`/v1/patients/${patientId}/progression`, { signal }).then((r) => r.decisions)),
     retry,
   });
 }
