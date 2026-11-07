@@ -14,9 +14,10 @@ export function meRoutes(pool: pg.Pool) {
           WHERE m.user_id = app.current_user_id() AND m.status = 'active'
           ORDER BY c.name NULLS FIRST`,
       );
-      return rows;
+      const admin = await db.query<{ a: boolean }>(`SELECT app.is_platform_admin() AS a`);
+      return { rows, isPlatformAdmin: admin.rows[0]!.a };
     });
-    return c.json({ user: { id: user.id, email: user.email, name: user.name }, memberships });
+    return c.json({ user: { id: user.id, email: user.email, name: user.name }, memberships: memberships.rows, is_platform_admin: memberships.isPlatformAdmin });
   });
   return r;
 }

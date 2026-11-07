@@ -7,6 +7,8 @@ import { patientRoutes } from "./modules/patients/routes.ts";
 import { clinicRoutes } from "./modules/clinics/routes.ts";
 import { protocolRoutes } from "./modules/protocols/routes.ts";
 import { sessionRoutes } from "./modules/sessions/routes.ts";
+import { videoRoutes } from "./modules/videos/routes.ts";
+import { localFileStore, type FileStore } from "./files.ts";
 import { ticketSigner, type TicketSigner } from "./tickets.ts";
 
 export interface AppInfo {
@@ -20,6 +22,8 @@ export interface AppDeps {
   auth: Auth;
   /** Signs launch tickets. Defaults to a throwaway key (fine for dev and tests, not production). */
   tickets?: TicketSigner;
+  /** Uploaded files (videos). Defaults to a folder on disk (FILE_STORE_DIR or .data/files). */
+  files?: FileStore;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -52,6 +56,7 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
     v1.route("/clinics", clinicRoutes(deps.pool));
     v1.route("/", protocolRoutes(deps.pool));
     v1.route("/", sessionRoutes(deps.pool, deps.tickets ?? ticketSigner()));
+    v1.route("/", videoRoutes(deps.pool, deps.files ?? localFileStore(process.env.FILE_STORE_DIR ?? ".data/files")));
     app.route("/v1", v1);
   }
 

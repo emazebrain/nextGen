@@ -8,6 +8,10 @@ import { vi } from "vitest";
 import { migrate } from "../../../packages/db/src/migrate.ts";
 import { createApp } from "../src/app.ts";
 import { authPool, createAuth } from "../src/auth.ts";
+import { localFileStore } from "../src/files.ts";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 export const ADMIN_URL = process.env.DATABASE_URL;
 export const BASE = "http://localhost:8787";
@@ -25,12 +29,15 @@ export function totp(secretB32: string, at = Date.now()): string {
 }
 
 export type App = ReturnType<typeof createApp>;
-export type Api = (path: string, init?: { method?: string; body?: unknown }) => Promise<{ status: number; body: any }>;
+export type Api = ((path: string, init?: { method?: string; body?: unknown }) => Promise<{ status: number; body: any }>) & {
+  /** A raw request with the same cookies (uploads, byte ranges). */
+  raw: (path: string, init?: RequestInit) => Promise<Response>;
+};
 
 /** A tiny cookie-keeping client around app.request(). */
 export function client(app: App): Api {
   const jar = new Map<string, string>();
-  return async (path, init = {}) => {
+  const api = (async (path: string, init: { method?: string; body?: unknown } = {}) => {
     const headers = new Headers({ origin: BASE });
     if (init.body !== undefined) headers.set("content-type", "application/json");
     if (jar.size) headers.set("cookie", [...jar].map(([k, v]) => `${k}=${v}`).join("; "));
@@ -48,7 +55,14 @@ export function client(app: App): Api {
     }
     const text = await res.text();
     return { status: res.status, body: text ? JSON.parse(text) : null };
+  }) as Api;
+  api.raw = (path, init = {}) => {
+    const headers = new Headers(init.headers);
+    headers.set("origin", BASE);
+    if (jar.size) headers.set("cookie", [...jar].map(([k, v]) => `${k}=${v}`).join("; "));
+    return Promise.resolve(app.request(`${BASE}${path}`, { ...init, headers }));
   };
+  return api;
 }
 
 export interface TestEnv {
@@ -75,7 +89,8 @@ export async function setupApi(): Promise<TestEnv> {
   const pool = new pg.Pool({ connectionString: url.toString(), max: 4 });
   const authDb = authPool(url.toString());
   const auth = createAuth({ databaseUrl: url.toString(), secret: randomUUID() + randomUUID(), baseURL: BASE, pool: authDb, rateLimit: false }, pool);
-  const app = createApp({ cell: "test", version: "test" }, { pool, auth });
+  const fileDir = mkdtempSync(join(tmpdir(), "emb-files-"));
+  const app = createApp({ cell: "test", version: "test" }, { pool, auth, files: localFileStore(fileDir) });
   return {
     app,
     db,
@@ -86,6 +101,7 @@ export async function setupApi(): Promise<TestEnv> {
       await pool.end();
       await authDb.end();
       await db.end();
+      rmSync(fileDir, { recursive: true, force: true });
       const a = new pg.Client({ connectionString: ADMIN_URL });
       await a.connect();
       await a.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);
@@ -123,4 +139,13 @@ export async function seedClinics(db: pg.Client) {
 
 export async function addMember(db: pg.Client, userId: string, org: string, clinic: string, role: string) {
   await db.query(`INSERT INTO app.membership (user_id, organization_id, clinic_id, role) VALUES ($1,$2,$3,$4)`, [userId, org, clinic, role]);
+}
+
+/** A platform admin in the eMazeBrain organization (manages the content library). */
+export async function platformAdmin(env: TestEnv, email = "admin@synthetic.test"): Promise<{ api: Api; userId: string }> {
+  const a = await staffClient(env, email, "Content Admin");
+  const org = randomUUID();
+  await env.db.query(`INSERT INTO app.organization (id, name, region) VALUES ($1,'eMazeBrain','il')`, [org]);
+  await env.db.query(`INSERT INTO app.membership (user_id, organization_id, clinic_id, role) VALUES ($1,$2,NULL,'platform_admin')`, [a.userId, org]);
+  return a;
 }

@@ -3,6 +3,7 @@ import pg from "pg";
 import { createApp } from "./app.ts";
 import { createAuth } from "./auth.ts";
 import { ticketSigner } from "./tickets.ts";
+import { localFileStore } from "./files.ts";
 
 function required(name: string): string {
   const v = process.env[name];
@@ -30,7 +31,9 @@ const auth = createAuth(
 // LAUNCH_SIGNING_KEY: PKCS#8 PEM Ed25519 key. Required in production so tickets survive restarts.
 if (!process.env.LAUNCH_SIGNING_KEY && process.env.NODE_ENV === "production") throw new Error("LAUNCH_SIGNING_KEY is not set");
 const tickets = ticketSigner(process.env.LAUNCH_SIGNING_KEY?.replace(/\\n/g, "\n"));
-const app = createApp(info, { pool, auth, tickets });
+// FILE_STORE_DIR: where uploaded videos are kept on this machine (the cloud cells switch to S3 with deployment).
+const files = localFileStore(process.env.FILE_STORE_DIR ?? ".data/files");
+const app = createApp(info, { pool, auth, tickets, files });
 
 serve({ fetch: app.fetch, port }, (s) => {
   console.log(`api listening on :${s.port} (cell ${info.cell})`);
