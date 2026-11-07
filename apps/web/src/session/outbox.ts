@@ -8,7 +8,7 @@
  * scores — no names). Nothing is ever removed without a server answer.
  */
 import type { ResultEnvelope } from "@emb/game-runtime/protocol";
-import type { ResultReceipt } from "@emb/contracts";
+import type { ResultReceipt, VideoViewInput, VideoViewReceipt } from "@emb/contracts";
 import { apiSend, ApiError } from "../api/http.ts";
 
 const KEY = "emb.outbox.v1";
@@ -81,6 +81,57 @@ export async function send(item: Pick<OutboxItem, "ticket" | "envelope">): Promi
   }
 }
 
+// ---------------------------------------------------------------- watched videos (ADR 0018)
+// Same rules as results: kept on the device until the server has answered; the UUIDv7 view id makes resending safe.
+
+const VIEWS_KEY = "emb.outbox.views.v1";
+export type ViewSendResult = { state: "saved"; receipt: VideoViewReceipt } | { state: "rejected"; code: string } | { state: "waiting"; code: string };
+
+function readViews(): VideoViewInput[] {
+  try {
+    const items = JSON.parse(localStorage.getItem(VIEWS_KEY) ?? "[]") as VideoViewInput[];
+    return Array.isArray(items) ? items : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeViews(items: VideoViewInput[]) {
+  try {
+    localStorage.setItem(VIEWS_KEY, JSON.stringify(items));
+  } catch {
+    // Storage full or blocked: the session screen still retries from memory.
+  }
+  window.dispatchEvent(new Event("emb:outbox"));
+}
+
+export function pendingViews(): VideoViewInput[] {
+  return readViews();
+}
+
+export function enqueueView(view: VideoViewInput) {
+  const items = readViews();
+  if (!items.some((v) => v.client_view_id === view.client_view_id)) items.push(view);
+  writeViews(items);
+}
+
+export async function sendView(view: VideoViewInput): Promise<ViewSendResult> {
+  const drop = () => writeViews(readViews().filter((v) => v.client_view_id !== view.client_view_id));
+  try {
+    const receipt = await apiSend<VideoViewReceipt>("POST", "/v1/video-views", view);
+    drop();
+    return { state: "saved", receipt };
+  } catch (e) {
+    const err = e instanceof ApiError ? e : new ApiError(0, "network");
+    // 400/409/422: the answer won't change (bad view, session already closed, wrong step).
+    if (err.status === 400 || err.status === 409 || err.status === 422) {
+      drop();
+      return { state: "rejected", code: err.code };
+    }
+    return { state: "waiting", code: err.status === 0 ? "network" : err.code };
+  }
+}
+
 let flushing: Promise<void> | null = null;
 
 /** Sends everything waiting, one at a time. Safe to call often. */
@@ -89,7 +140,11 @@ export function flush(): Promise<void> {
     try {
       for (const item of read()) {
         const r = await send(item);
-        if (r.state === "waiting" && r.code === "network") break; // still offline: stop for now
+        if (r.state === "waiting" && r.code === "network") return; // still offline: stop for now
+      }
+      for (const view of readViews()) {
+        const r = await sendView(view);
+        if (r.state === "waiting" && r.code === "network") return;
       }
     } finally {
       flushing = null;

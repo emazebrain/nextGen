@@ -13,7 +13,7 @@ import { Link, useParams } from "react-router";
 import { useIntl } from "react-intl";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, CircleCheck, CloudOff, Hand, Lock, Minus, Play, RotateCw, SkipForward, Square } from "lucide-react";
-import type { LaunchPackage, LaunchStep } from "@emb/contracts";
+import type { LaunchGameStep, LaunchPackage, LaunchStep, LaunchVideoStep, VideoViewInput } from "@emb/contracts";
 import type { HostToFrame, LaunchParams, ResultEnvelope } from "@emb/game-runtime/protocol";
 import { Alert, Button, Card, Chip, Logo, MazeLoader, TextField } from "@emb/ui";
 import { ApiError } from "../api/http.ts";
@@ -27,7 +27,8 @@ import { firstName, iso } from "../lib/format.ts";
 import { useTitle } from "../lib/title.ts";
 import { ResultSummary } from "../routes/library.tsx";
 import { checkPin, hasPin, PIN_PATTERN, setPin } from "./kidmode.ts";
-import { enqueue, send, type SendResult } from "./outbox.ts";
+import { enqueue, enqueueView, send, sendView, type SendResult, type ViewSendResult } from "./outbox.ts";
+import { VideoStep } from "./VideoStep.tsx";
 
 const BETWEEN_GAMES_S = 5;
 const LONG_PRESS_MS = 1500;
@@ -39,11 +40,9 @@ type Phase =
   | { k: "finished" }
   | { k: "summary" };
 
-interface Played {
-  step: LaunchStep;
-  envelope: ResultEnvelope;
-  send: SendResult | { state: "sending" };
-}
+type Played =
+  | { kind: "game"; id: string; step: LaunchGameStep; envelope: ResultEnvelope; send: SendResult | { state: "sending" } }
+  | { kind: "video"; id: string; step: LaunchVideoStep; view: VideoViewInput; send: ViewSendResult | { state: "sending" } };
 
 export function SessionPage() {
   const t = useT();
@@ -101,38 +100,68 @@ function Runner({ pkg }: { pkg: LaunchPackage }) {
   const [phase, setPhase] = useState<Phase>(queue.length ? { k: "handoff" } : { k: "summary" });
   const [played, setPlayed] = useState<Played[]>([]);
   const gameName = (id: string) => (findGame(id) ? localText(findGame(id)!.manifest.name, locale) : id);
+  const stepName = (s: LaunchStep) => (s.kind === "video" ? s.video.title : gameName(s.game_id));
+
+  const refresh = useCallback(() => {
+    void qc.invalidateQueries({ queryKey: assignmentKey(pkg.patient.id) });
+    void qc.invalidateQueries({ queryKey: sessionsKey(pkg.patient.id) });
+    void qc.invalidateQueries({ queryKey: ["progression", pkg.patient.id] });
+    void qc.invalidateQueries({ queryKey: ["today"] });
+  }, [qc, pkg.patient.id]);
+  const settle = (id: string, r: Played["send"]) => setPlayed((p) => p.map((x) => (x.id === id ? ({ ...x, send: r } as Played) : x)));
 
   const upload = useCallback(
-    (step: LaunchStep, envelope: ResultEnvelope) => {
+    (step: LaunchGameStep, envelope: ResultEnvelope) => {
       enqueue(step.ticket, envelope); // first to the device, then to the server
-      setPlayed((p) => [...p, { step, envelope, send: { state: "sending" } }]);
+      const id = envelope.session_id;
+      setPlayed((p) => [...p, { kind: "game", id, step, envelope, send: { state: "sending" } }]);
       void send({ ticket: step.ticket, envelope }).then((r) => {
-        setPlayed((p) => p.map((x) => (x.envelope.session_id === envelope.session_id ? { ...x, send: r } : x)));
-        void qc.invalidateQueries({ queryKey: assignmentKey(pkg.patient.id) });
-        void qc.invalidateQueries({ queryKey: sessionsKey(pkg.patient.id) });
-        void qc.invalidateQueries({ queryKey: ["progression", pkg.patient.id] });
-        void qc.invalidateQueries({ queryKey: ["today"] });
+        settle(id, r);
+        refresh();
       });
     },
-    [qc, pkg.patient.id],
+    [refresh],
+  );
+
+  const recordView = useCallback(
+    (step: LaunchVideoStep, view: VideoViewInput) => {
+      enqueueView(view); // same rule as results: the device first
+      const id = view.client_view_id;
+      setPlayed((p) => [...p, { kind: "video", id, step, view, send: { state: "sending" } }]);
+      void sendView(view).then((r) => {
+        settle(id, r);
+        refresh();
+      });
+    },
+    [refresh],
   );
 
   const retry = () => {
     for (const x of played.filter((p) => p.send.state === "waiting")) {
-      setPlayed((p) => p.map((y) => (y === x ? { ...y, send: { state: "sending" } } : y)));
-      void send({ ticket: x.step.ticket, envelope: x.envelope }).then((r) =>
-        setPlayed((p) => p.map((y) => (y.envelope.session_id === x.envelope.session_id ? { ...y, send: r } : y))),
-      );
+      settle(x.id, { state: "sending" });
+      if (x.kind === "game") void send({ ticket: x.step.ticket, envelope: x.envelope }).then((r) => settle(x.id, r));
+      else void sendView(x.view).then((r) => settle(x.id, r));
     }
   };
 
   const next = (i: number) => setPhase(i < queue.length ? { k: "between", i } : { k: "finished" });
 
   if (phase.k === "handoff") {
-    return <Handoff pkg={pkg} games={queue.map((s) => gameName(s.game_id))} onStart={() => setPhase({ k: "play", i: 0 })} />;
+    return <Handoff pkg={pkg} games={queue.map((s) => (s.kind === "video" ? `▶ ${stepName(s)}` : stepName(s)))} onStart={() => setPhase({ k: "play", i: 0 })} />;
   }
   if (phase.k === "play") {
     const step = queue[phase.i]!;
+    if (step.kind === "video") {
+      return (
+        <VideoPlay
+          key={step.assignment_step_id}
+          step={step}
+          plannedSessionId={pkg.planned_session_id}
+          onView={(view) => recordView(step, view)}
+          onDone={(how) => (how === "end" ? setPhase({ k: "finished" }) : next(phase.i + 1))}
+        />
+      );
+    }
     return (
       <PlayStep
         key={step.assignment_step_id}
@@ -144,12 +173,12 @@ function Runner({ pkg }: { pkg: LaunchPackage }) {
     );
   }
   if (phase.k === "between") {
-    return <Between name={gameName(queue[phase.i]!.game_id)} n={phase.i + 1} total={queue.length} onGo={() => setPhase({ k: "play", i: phase.i })} />;
+    return <Between name={stepName(queue[phase.i]!)} n={phase.i + 1} total={queue.length} onGo={() => setPhase({ k: "play", i: phase.i })} />;
   }
   if (phase.k === "finished") {
     return <Finished child={pkg.patient.given_name} onUnlock={() => setPhase({ k: "summary" })} />;
   }
-  return <Summary pkg={pkg} played={played} gameName={gameName} retry={retry} />;
+  return <Summary pkg={pkg} played={played} stepName={stepName} retry={retry} />;
 }
 
 // ------------------------------------------------------------------ hand-off
@@ -197,7 +226,7 @@ function Handoff({ pkg, games, onStart }: { pkg: LaunchPackage; games: string[];
 
 // ------------------------------------------------------------------ playing
 
-function PlayStep({ step, name, onResult, onDone }: { step: LaunchStep; name: string; onResult: (e: ResultEnvelope) => void; onDone: (how: "next" | "end") => void }) {
+function PlayStep({ step, name, onResult, onDone }: { step: LaunchGameStep; name: string; onResult: (e: ResultEnvelope) => void; onDone: (how: "next" | "end") => void }) {
   const t = useT();
   const [sessionId] = useState(uuidv7);
   const [failed, setFailed] = useState(false);
@@ -290,6 +319,59 @@ function PlayStep({ step, name, onResult, onDone }: { step: LaunchStep; name: st
                     {t("run.resume")}
                   </Button>
                   <Button variant="secondary" icon={<SkipForward size={18} aria-hidden="true" className="emb-flip-rtl" />} onClick={() => stop("skip")}>
+                    {t("run.skip")}
+                  </Button>
+                  <Button variant="ghost" icon={<Square size={18} aria-hidden="true" />} onClick={() => stop("end")}>
+                    {t("run.end")}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** A video between games, with the same corner controls as a game (skip records the view as not completed). */
+function VideoPlay({ step, plannedSessionId, onView, onDone }: { step: LaunchVideoStep; plannedSessionId: string; onView: (v: VideoViewInput) => void; onDone: (how: "next" | "end") => void }) {
+  const t = useT();
+  const [controls, setControls] = useState<"closed" | "pin" | "menu">("closed");
+  const finishRef = useRef<(() => void) | null>(null);
+  const how = useRef<"next" | "end">("next");
+  const stop = (h: "next" | "end") => {
+    setControls("closed");
+    how.current = h;
+    finishRef.current?.();
+  };
+  return (
+    <div className="playscreen playscreen--video">
+      <VideoStep
+        step={step}
+        plannedSessionId={plannedSessionId}
+        finishRef={finishRef}
+        onDone={(view) => {
+          onView(view);
+          onDone(how.current);
+        }}
+      />
+      <LongPress label={t("run.controls")} onTrigger={() => setControls("pin")} />
+      {controls !== "closed" && (
+        <div className="run-overlay" role="dialog" aria-modal="true" aria-labelledby="run-controls-title">
+          <Card>
+            <div className="handoff__form">
+              <h2 id="run-controls-title" className="app-cardtitle">
+                {t("run.controls")}
+              </h2>
+              {controls === "pin" ? (
+                <CheckPinForm onOk={() => setControls("menu")} onCancel={() => setControls("closed")} />
+              ) : (
+                <div className="run-menu">
+                  <Button icon={<Play size={18} aria-hidden="true" />} onClick={() => setControls("closed")}>
+                    {t("run.resume")}
+                  </Button>
+                  <Button variant="secondary" icon={<SkipForward size={18} aria-hidden="true" className="emb-flip-rtl" />} onClick={() => stop("next")}>
                     {t("run.skip")}
                   </Button>
                   <Button variant="ghost" icon={<Square size={18} aria-hidden="true" />} onClick={() => stop("end")}>
@@ -402,7 +484,7 @@ function Finished({ child, onUnlock }: { child: string; onUnlock: () => void }) 
 
 // ------------------------------------------------------------------ therapist summary
 
-function Summary({ pkg, played, gameName, retry }: { pkg: LaunchPackage; played: Played[]; gameName: (id: string) => string; retry: () => void }) {
+function Summary({ pkg, played, stepName, retry }: { pkg: LaunchPackage; played: Played[]; stepName: (s: LaunchStep) => string; retry: () => void }) {
   const t = useT();
   const intl = useIntl();
   const waiting = played.some((p) => p.send.state === "waiting");
@@ -417,11 +499,22 @@ function Summary({ pkg, played, gameName, retry }: { pkg: LaunchPackage; played:
           </h1>
         </div>
         {played.length === 0 && <Alert tone="info">{t("run.summary.none")}</Alert>}
-        {played.map((p) => (
-          <Card key={p.envelope.session_id} as="section" labelledBy={`r-${p.envelope.session_id}`}>
+        {played.map((p) =>
+          p.kind === "video" ? (
+            <Card key={p.id} as="section" labelledBy={`r-${p.id}`}>
+              <div className="app-cardrow">
+                <h2 id={`r-${p.id}`} className="app-cardtitle">
+                  {stepName(p.step)}
+                </h2>
+                <SendChip s={p.send} />
+              </div>
+              <p>{p.view.completed ? t("run.video.watched", { time: clock(p.view.watched_s) }) : p.view.watched_s > 0 ? t("run.video.partly", { time: clock(p.view.watched_s) }) : t("run.video.notPlayed")}</p>
+            </Card>
+          ) : (
+          <Card key={p.id} as="section" labelledBy={`r-${p.id}`}>
             <div className="app-cardrow">
-              <h2 id={`r-${p.envelope.session_id}`} className="app-cardtitle">
-                {gameName(p.step.game_id)}
+              <h2 id={`r-${p.id}`} className="app-cardtitle">
+                {stepName(p.step)}
               </h2>
               <SendChip s={p.send} />
             </div>
@@ -431,8 +524,9 @@ function Summary({ pkg, played, gameName, retry }: { pkg: LaunchPackage; played:
               <p className="app-muted">{t("run.summary.abandoned")}</p>
             )}
           </Card>
-        ))}
-        {notPlayed.length > 0 && <Alert tone="info">{t("run.summary.notPlayed", { games: notPlayed.map((s) => gameName(s.game_id)).join(", ") })}</Alert>}
+          ),
+        )}
+        {notPlayed.length > 0 && <Alert tone="info">{t("run.summary.notPlayed", { games: notPlayed.map(stepName).join(", ") })}</Alert>}
         {waiting && <Alert tone="warning">{t("run.summary.waiting")}</Alert>}
         <div className="pform__actions">
           {waiting && (
@@ -448,6 +542,8 @@ function Summary({ pkg, played, gameName, retry }: { pkg: LaunchPackage; played:
     </Shell>
   );
 }
+
+const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s) % 60).padStart(2, "0")}`;
 
 function SendChip({ s }: { s: Played["send"] }) {
   const t = useT();

@@ -576,5 +576,11 @@
   "videoPicker.title": "בחירת סרטון",
   "videoPicker.search": "חיפוש סרטונים",
   "videoPicker.none": "אין סרטונים שמתאימים לסינון.",
-  "videoPicker.ages": "גילאי {from}–{to}"
+  "videoPicker.ages": "גילאי {from}–{to}",
+  "run.video.watch": "צפו בסרטון. כפתור ההמשך יופיע בסופו.",
+  "run.video.failed": "אי אפשר להפעיל את הסרטון הזה במכשיר הזה.",
+  "run.video.offline": "הסרטון הזה דורש אינטרנט. אפשר להמשיך בלעדיו.",
+  "run.video.watched": "נצפה עד הסוף ({time})",
+  "run.video.partly": "נצפה חלקית ({time})",
+  "run.video.notPlayed": "לא הופעל"
 }

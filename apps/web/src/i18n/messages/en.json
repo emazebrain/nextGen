@@ -576,5 +576,11 @@
   "videoPicker.title": "Choose a video",
   "videoPicker.search": "Search videos",
   "videoPicker.none": "No videos match these filters.",
-  "videoPicker.ages": "Ages {from}–{to}"
+  "videoPicker.ages": "Ages {from}–{to}",
+  "run.video.watch": "Watch the video. Continue appears at the end.",
+  "run.video.failed": "This video can't play on this device.",
+  "run.video.offline": "This video needs the Internet. You can continue without it.",
+  "run.video.watched": "Watched to the end ({time})",
+  "run.video.partly": "Watched part of it ({time})",
+  "run.video.notPlayed": "Couldn't play"
 }

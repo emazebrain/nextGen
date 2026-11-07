@@ -166,7 +166,8 @@ if (existing.rowCount) {
     }
   }
   await seedHistory(admin, { clinic: telAviv, therapist: yael, shared: extra.slice(1), template: templates[1]! });
-  await seedVideos(admin, contentAdmin);
+  const videoIds = await seedVideos(admin, contentAdmin);
+  await seedVideoPatient(admin, { clinic: telAviv, therapist: extra.find((_, i) => i === extra.length - 2)!, video: videoIds["colour-shapes.mp4"]! });
   await admin.query("COMMIT");
   await pool.end();
   await authDb.end();
@@ -282,4 +283,42 @@ async function seedVideos(db: pg.Client, createdBy: string) {
     ids[c.file] = id;
   }
   return ids;
+}
+
+/** A child on Ran's caseload whose protocol plays a video after a game (ADR 0018), consent in place, sessions from today. */
+async function seedVideoPatient(db: pg.Client, o: { clinic: string; therapist: string; video: string }) {
+  const DAY = 86_400_000;
+  const patient = uuidv7();
+  await db.query(
+    `INSERT INTO app.patient (id, clinic_id, given_name, family_name, date_of_birth, preferred_locale, status, created_by) VALUES ($1,$2,'Yoav','Sela',$3,'en','active',$4)`,
+    [patient, o.clinic, new Date(Date.now() - 8.2 * 365.25 * DAY).toISOString().slice(0, 10), o.therapist],
+  );
+  await db.query(`INSERT INTO app.patient_care_team (patient_id, user_id) VALUES ($1,$2)`, [patient, o.therapist]);
+  const guardian = uuidv7();
+  await db.query(`INSERT INTO app.guardian (id, clinic_id, full_name, phone, preferred_locale, created_by) VALUES ($1,$2,'Hila Sela','+972500000998','en',$3)`, [guardian, o.clinic, o.therapist]);
+  await db.query(`INSERT INTO app.guardian_patient (guardian_id, patient_id, relationship) VALUES ($1,$2,'mother')`, [guardian, patient]);
+  await db.query(
+    `INSERT INTO app.consent (patient_id, guardian_id, purpose, decision, policy_version, method, locale, signer_name, captured_by, record_hash)
+     VALUES ($1,$2,'treatment','granted','draft-2026-10','in_clinic_esign','en','Hila Sela',$3,'\\x')`,
+    [patient, guardian, o.therapist],
+  );
+  const aid = uuidv7();
+  const start = new Date().toISOString().slice(0, 10);
+  await db.query(
+    `INSERT INTO app.protocol_assignment (id, patient_id, clinic_id, assigned_by, name, start_date, weeks, sessions_per_week, setting) VALUES ($1,$2,$3,$4,'Steering and a short video',$5,2,2,'clinic')`,
+    [aid, patient, o.clinic, o.therapist, start],
+  );
+  await db.query(
+    `INSERT INTO app.assignment_step (assignment_id, patient_id, ordinal, game_id, session_mode, duration_s, difficulty_start, current_difficulty, hemisphere, timer_position, practice)
+     VALUES ($1,$2,1,'tunnel-rush','timed',60,2,2,'left','right','off')`,
+    [aid, patient],
+  );
+  await db.query(
+    `INSERT INTO app.assignment_step (assignment_id, patient_id, ordinal, step_type, video_id, difficulty_start, current_difficulty, hemisphere, timer_position, practice)
+     VALUES ($1,$2,2,'video',$3,3,3,'left','hidden','off')`,
+    [aid, patient, o.video],
+  );
+  for (const s of scheduleDates(start, 2, 2)) {
+    await db.query(`INSERT INTO app.planned_session (assignment_id, patient_id, clinic_id, seq, week, planned_date) VALUES ($1,$2,$3,$4,$5,$6)`, [aid, patient, o.clinic, s.seq, s.week, s.date]);
+  }
 }

@@ -81,3 +81,54 @@ test("Videos in protocols: a therapist filters videos by Brodmann area and adds 
   await expect(page.getByRole("region", { name: "My templates" }).getByText("Tunnel Rush → ▶ Colour shapes → Block Crasher")).toBeVisible();
   await context.close();
 });
+
+test("Videos in sessions: the session plays the video step after the game and records it", async ({ browser }) => {
+  test.setTimeout(120_000);
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await enrol(page, "ran@synthetic.test");
+  const first = page.getByRole("region", { name: "Next up" }).getByRole("listitem").filter({ hasText: "Yoav Sela" });
+  await expect(first.getByText("Tunnel Rush → ▶ Colour shapes")).toBeVisible();
+  const child = (await first.locator(".nextup__name").textContent())!.trim();
+  const given = child.split(" ")[0]!;
+  await first.getByRole("link", { name: `Start session with ${child}` }).click();
+
+  await expect(page.getByRole("listitem").filter({ hasText: "▶ Colour shapes" })).toBeVisible();
+  await page.getByLabel("New PIN").fill("2468");
+  await page.getByLabel("Repeat the PIN").fill("2468");
+  await page.getByRole("button", { name: "Save PIN" }).click();
+  await page.getByRole("button", { name: "Start", exact: true }).click();
+
+  // The game first: skipped from the therapist controls.
+  const game = page.frameLocator("iframe.gameframe");
+  await expect(game.getByRole("button", { name: /Play|Let's go/ }).first()).toBeVisible({ timeout: 20_000 });
+  await page.getByRole("button", { name: "Therapist controls" }).focus();
+  await page.keyboard.press("Enter");
+  const controls = page.getByRole("dialog", { name: "Therapist controls" });
+  await controls.getByLabel("PIN").fill("2468");
+  await controls.getByRole("button", { name: "Unlock" }).click();
+  await controls.getByRole("button", { name: "Skip to the next game" }).click();
+
+  await expect(page.getByRole("heading", { name: "Next: Colour shapes" })).toBeVisible();
+  await page.getByRole("button", { name: "Start now" }).click();
+
+  // The video: plays from the clinic's own server; Continue appears when it ends.
+  await expect(page.getByRole("heading", { level: 1, name: "Colour shapes" })).toBeVisible();
+  const video = page.locator("video.videostep__video");
+  await expect(video).toHaveAttribute("src", /\/v1\/videos\/[0-9a-f-]+\/file\?v=2$/);
+  await shot(page, "52-session-video");
+  await axe(page, "video step");
+  await expect(page.getByRole("button", { name: "Continue" })).toBeVisible({ timeout: 20_000 });
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  await expect(page.getByRole("heading", { level: 1, name: `Well done, ⁨${given}⁩!` })).toBeVisible();
+  await page.getByRole("button", { name: "I'm the therapist" }).click();
+  await page.getByLabel("PIN").fill("2468");
+  await page.getByRole("button", { name: "Unlock" }).click();
+  const watched = page.getByRole("region", { name: "Colour shapes" });
+  await expect(watched.getByText("Watched to the end (0:10)")).toBeVisible();
+  await expect(page.getByText("Saved", { exact: true })).toHaveCount(2);
+  await page.getByRole("link", { name: `Back to ⁨${given}⁩` }).click();
+  await expect(page.getByText(/1 of 4 sessions done/)).toBeVisible();
+  await context.close();
+});
