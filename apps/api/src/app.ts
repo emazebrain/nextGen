@@ -8,6 +8,8 @@ import { clinicRoutes } from "./modules/clinics/routes.ts";
 import { protocolRoutes } from "./modules/protocols/routes.ts";
 import { sessionRoutes } from "./modules/sessions/routes.ts";
 import { videoRoutes } from "./modules/videos/routes.ts";
+import { deviceRoutes } from "./modules/devices/routes.ts";
+import { deviceKey, type DeviceKey } from "./device-crypto.ts";
 import { localFileStore, type FileStore } from "./files.ts";
 import { ticketSigner, type TicketSigner } from "./tickets.ts";
 
@@ -24,6 +26,8 @@ export interface AppDeps {
   tickets?: TicketSigner;
   /** Uploaded files (videos). Defaults to a folder on disk (FILE_STORE_DIR or .data/files). */
   files?: FileStore;
+  /** Seals device and space secrets. Defaults to a random key per process (dev and tests only). */
+  deviceKey?: DeviceKey;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -57,6 +61,7 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
     v1.route("/", protocolRoutes(deps.pool));
     v1.route("/", sessionRoutes(deps.pool, deps.tickets ?? ticketSigner()));
     v1.route("/", videoRoutes(deps.pool, deps.files ?? localFileStore(process.env.FILE_STORE_DIR ?? ".data/files")));
+    v1.route("/", deviceRoutes(deps.pool, deps.deviceKey ?? deviceKey(undefined)));
     app.route("/v1", v1);
   }
 

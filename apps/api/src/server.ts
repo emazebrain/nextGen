@@ -1,3 +1,4 @@
+import { deviceKey } from "./device-crypto.ts";
 import { serve } from "@hono/node-server";
 import pg from "pg";
 import { createApp } from "./app.ts";
@@ -30,10 +31,11 @@ const auth = createAuth(
 );
 // LAUNCH_SIGNING_KEY: PKCS#8 PEM Ed25519 key. Required in production so tickets survive restarts.
 if (!process.env.LAUNCH_SIGNING_KEY && process.env.NODE_ENV === "production") throw new Error("LAUNCH_SIGNING_KEY is not set");
+if (!process.env.DEVICE_SECRET_KEY && process.env.NODE_ENV === "production") throw new Error("DEVICE_SECRET_KEY is not set");
 const tickets = ticketSigner(process.env.LAUNCH_SIGNING_KEY?.replace(/\\n/g, "\n"));
 // FILE_STORE_DIR: where uploaded videos are kept on this machine (the cloud cells switch to S3 with deployment).
 const files = localFileStore(process.env.FILE_STORE_DIR ?? ".data/files");
-const app = createApp(info, { pool, auth, tickets, files });
+const app = createApp(info, { pool, auth, tickets, files, deviceKey: deviceKey(process.env.DEVICE_SECRET_KEY) });
 
 serve({ fetch: app.fetch, port }, (s) => {
   console.log(`api listening on :${s.port} (cell ${info.cell})`);
