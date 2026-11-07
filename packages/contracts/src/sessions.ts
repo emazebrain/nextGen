@@ -110,8 +110,10 @@ export const videoViewInput = z
 export type VideoViewInput = z.infer<typeof videoViewInput>;
 
 export interface VideoViewReceipt {
-  outcome: "accepted" | "duplicate";
+  /** kept_for_review: stored, but it arrived after something changed (spec 2026-11-07 offline devices). */
+  outcome: "accepted" | "duplicate" | "kept_for_review";
   planned_session_status: string | null;
+  review_reason?: string | null;
 }
 
 export interface LaunchPackage {
@@ -125,7 +127,9 @@ export interface LaunchPackage {
 }
 
 export interface ResultReceipt {
-  outcome: "accepted" | "duplicate";
+  /** kept_for_review: stored, but it arrived after something changed (spec 2026-11-07 offline devices). */
+  outcome: "accepted" | "duplicate" | "kept_for_review";
+  review_reason?: string | null;
   session_id: string;
   progression: { action: "up" | "down" | "hold"; from: number; to: number } | null;
   planned_session_status: string | null;
