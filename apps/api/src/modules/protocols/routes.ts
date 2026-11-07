@@ -321,8 +321,10 @@ export function protocolRoutes(pool: pg.Pool) {
       // Flagged results waiting for review that the caller may decide on (spec §7.4).
       review_count: (
         await db.query<{ n: number }>(
-          `SELECT (SELECT count(*) FROM app.game_session_review r WHERE r.review_reason IS NOT NULL AND r.decision IS NULL AND app.can_treat_patient(r.patient_id))
-                + (SELECT count(*) FROM app.video_view_review r WHERE r.review_reason IS NOT NULL AND r.decision IS NULL AND app.can_treat_patient(r.patient_id)) AS n`,
+          // The same set the patient's session history lists with Count it / Don't count it: valid game sessions.
+          // Flagged video views are kept too, but have no review screen yet, so they aren't counted here.
+          `SELECT count(*) AS n FROM app.game_session_review r JOIN app.game_session g ON g.id = r.id
+            WHERE r.review_reason IS NOT NULL AND r.decision IS NULL AND g.is_valid AND app.can_treat_patient(r.patient_id)`,
         )
       ).rows[0]!.n,
     }));

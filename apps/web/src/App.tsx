@@ -1,4 +1,5 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import { authClient } from "./api/auth.ts";
 import { useEffect, useRef, useState } from "react";
 import { Navigate, Outlet, RouterProvider, createBrowserRouter, createHashRouter, useLocation, useNavigate, type RouteObject } from "react-router";
 import { MazeLoader } from "@emb/ui";
@@ -45,9 +46,27 @@ export function RequireStaff({ bare = false }: { bare?: boolean }) {
   const failure = me.error ?? me.failureReason;
   const networkDown = failure instanceof ApiError && failure.status === 0;
   const sawNetworkDown = useRef(false);
-  if (me.data) sawNetworkDown.current = false;
+  // Any real answer ends "offline": a 401 means back online but signed out, so the sign-in below takes over
+  // (the open space stays open in memory, and the online sign-in then sends what's waiting).
+  if (me.data || (failure instanceof ApiError && failure.status !== 0)) sawNetworkDown.current = false;
   else if (networkDown) sawNetworkDown.current = true;
   const offline = !me.data && (networkDown || sawNetworkDown.current);
+  // Online again, but the cookie is another therapist's (left over from before an offline hand-over): lock the
+  // open space and end that session; whoever holds the tablet signs in as themselves (review finding, ADR 0019).
+  const handedOver = !!me.data && !!device?.space && device.space.info.user_id !== me.data.user.id;
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (!handedOver || !device) return;
+    device.lock();
+    void authClient
+      .signOut()
+      .catch(() => undefined)
+      .then(() => {
+        qc.clear();
+        navigate(`/sign-in?next=${here}`, { replace: true });
+      });
+  }, [handedOver, device, qc, navigate, here]);
   // The browser says it's back: ask right away rather than at the next interval.
   const browserOnline = device?.online ?? true;
   const refetchMe = me.refetch;
@@ -81,6 +100,13 @@ export function RequireStaff({ bare = false }: { bare?: boolean }) {
     return (
       <div className="app-fullpage app-fullpage--pad">
         <LoadError error={e} retry={() => void me.refetch()} />
+      </div>
+    );
+  }
+  if (handedOver) {
+    return (
+      <div className="app-fullpage">
+        <MazeLoader label={t("common.loading")} />
       </div>
     );
   }

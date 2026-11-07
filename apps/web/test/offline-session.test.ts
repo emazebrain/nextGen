@@ -5,7 +5,7 @@ import { openDB } from "idb";
 import { paramsWithinAllowed, type SessionPackage } from "@emb/contracts";
 import { launchFromPackage } from "../src/session/package.ts";
 import { preflight } from "../src/session/preflight.ts";
-import { configureOutbox, enqueue, enqueueView, flush, outboxStatus, send } from "../src/session/outbox.ts";
+import { configureOutbox, enqueue, enqueueAndSend, enqueueView, flush, outboxStatus, retryNeedsHelp, send } from "../src/session/outbox.ts";
 import { generateOutboxKeyPair } from "../src/device/crypto.ts";
 import { deviceDb } from "../src/device/db.ts";
 
@@ -48,6 +48,16 @@ describe("offline sessions", () => {
     expect(paramsWithinAllowed({ exact, difficulty: { min: 1, max: 2 } }, step.params)).toBe(true);
     expect(step.ticket).toBe("T1");
     expect((l.steps[1] as { ticket?: string }).ticket).toBe("T2");
+  });
+
+  it("preflight warns when the package's offline pass has expired", async () => {
+    const b64 = (o: unknown) => btoa(JSON.stringify(o)).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
+    const expired = `${b64({ alg: "EdDSA" })}.${b64({ v: 2, exp: Math.floor(Date.now() / 1000) - 60 })}.sig`;
+    const p = pkg({ ticket: expired } as never);
+    const r = await preflight(p, { online: false, hasVideo: async () => true });
+    expect(r).toMatchObject({ ok: false, expired: true });
+    const fresh = `${b64({ alg: "EdDSA" })}.${b64({ v: 2, exp: Math.floor(Date.now() / 1000) + 3600 })}.sig`;
+    expect(await preflight(pkg({ ticket: fresh } as never), { online: false, hasVideo: async () => true })).toMatchObject({ ok: false, missing: [{ ordinal: 3 }] });
   });
 
   it("preflight names a video that isn't on the device when offline", async () => {
@@ -105,6 +115,15 @@ describe("sealed outbox", () => {
     expect((await outboxStatus()).waiting).toBe(0);
   });
 
+  it("if the device copy can't be written, the result is still sent, and the caller is told it isn't stored", async () => {
+    configureOutbox({ publicKey: "not-a-key", privateKey: null }); // sealing fails, like a full disk would
+    const f = vi.fn(async () => reply(201, { outcome: "accepted", review_reason: null }));
+    vi.stubGlobal("fetch", f);
+    const r = await enqueueAndSend("T1", envelope("01900000-0000-7000-8000-000000000009"));
+    expect(f).toHaveBeenCalledTimes(1);
+    expect(r).toMatchObject({ stored: false, result: { state: "saved" } });
+  });
+
   it("a 401 keeps the outbox and asks for sign-in", async () => {
     configureOutbox({ publicKey: pair.publicKey, privateKey: pair.privateKey });
     vi.stubGlobal("fetch", vi.fn(async () => reply(401, { error: "unauthenticated" })));
@@ -136,6 +155,17 @@ describe("sealed outbox", () => {
     await flush();
     expect(f).toHaveBeenCalledTimes(1);
     expect(await outboxStatus()).toMatchObject({ waiting: 1, needsHelp: 1 });
+  });
+
+  it("results that needed help can be tried again", async () => {
+    configureOutbox({ publicKey: pair.publicKey, privateKey: pair.privateKey });
+    await enqueue("T1", envelope("01900000-0000-7000-8000-00000000000a"));
+    vi.stubGlobal("fetch", vi.fn(async () => reply(422, { error: "invalid_ticket" })));
+    await flush();
+    expect((await outboxStatus()).needsHelp).toBe(1);
+    vi.stubGlobal("fetch", vi.fn(async () => reply(201, { outcome: "kept_for_review", review_reason: "ticket_expired" })));
+    await retryNeedsHelp();
+    expect((await outboxStatus()).waiting).toBe(0);
   });
 
   it("old localStorage results move into the sealed outbox once", async () => {

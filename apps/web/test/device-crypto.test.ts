@@ -19,7 +19,10 @@ describe("device crypto", () => {
     expect(validPassword("1234")).toBe(false);
     expect(validPassword("abc123")).toBe(false); // too short
     expect(validPassword("tablet42!")).toBe(true);
-    expect(validPassword("12345678")).toBe(true); // 8 characters is allowed, even digits
+    // Digits only fall to a copied disk in hours even at 8+ (review finding): letters or symbols are required.
+    expect(validPassword("12345678")).toBe(false);
+    expect(validPassword("20180301")).toBe(false);
+    expect(validPassword("noa-2018")).toBe(true);
   });
 
   it("a data key round-trips through password, secret and passkey wraps", async () => {

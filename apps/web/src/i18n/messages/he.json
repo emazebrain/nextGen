@@ -606,8 +606,8 @@
   "setupOffline.shared": "מטפלים אחרים שמשתמשים בטאבלט לא יכולים לפתוח את המרחב שלכם.",
   "setupOffline.password": "סיסמה לעבודה ללא חיבור",
   "setupOffline.repeat": "הקלדה חוזרת של הסיסמה",
-  "setupOffline.rules": "לפחות 8 תווים. לא קוד מספרי קצר.",
-  "setupOffline.tooShort": "יש להשתמש לפחות ב־8 תווים.",
+  "setupOffline.rules": "לפחות 8 תווים, עם אות או סימן — לא רק מספרים.",
+  "setupOffline.tooShort": "יש להשתמש לפחות ב־8 תווים, עם אות או סימן.",
   "setupOffline.mismatch": "הסיסמאות לא תואמות.",
   "setupOffline.passkey": "פתיחה גם בזיהוי פנים או בטביעת אצבע",
   "setupOffline.submit": "הגדרת עבודה ללא חיבור",
@@ -662,7 +662,7 @@
   "device.installIos": "באייפד או באייפון: לוחצים על שיתוף ואז על \"הוספה למסך הבית\".",
   "device.installOther": "אפשר להתקין את eMazeBrain או להוסיף אותה למסך הבית מתפריט הדפדפן.",
   "review.column": "בדיקה",
-  "review.reason": "{reason, select, consent_withdrawn {הגיעה אחרי שההסכמה בוטלה} not_on_care_team {הגיעה אחרי שהמטפל יצא מהצוות של המטופל} membership_ended {הגיעה אחרי שהמטפל עזב את המרפאה} assignment_not_active {הגיעה אחרי שהפרוטוקול הושהה או הסתיים} step_changed {השלב השתנה אחרי שהופעל} session_closed {הגיעה אחרי שהמפגש נסגר} played_twice {אותו מפגש הופעל פעמיים} params_outside_ticket {הופעלה בהגדרות שמחוץ לפרוטוקול} other {צריכה בדיקה}}",
+  "review.reason": "{reason, select, consent_withdrawn {הגיעה אחרי שההסכמה בוטלה} not_on_care_team {הגיעה אחרי שהמטפל יצא מהצוות של המטופל} membership_ended {הגיעה אחרי שהמטפל עזב את המרפאה} assignment_not_active {הגיעה אחרי שהפרוטוקול הושהה או הסתיים} step_changed {השלב השתנה אחרי שהופעל} session_closed {הגיעה אחרי שהמפגש נסגר} played_twice {אותו מפגש הופעל פעמיים} params_outside_ticket {הופעלה בהגדרות שמחוץ לפרוטוקול} ticket_expired {הופעלה אחרי שתוקף האישור לעבודה ללא חיבור פג} other {צריכה בדיקה}}",
   "review.accept": "לספור",
   "review.exclude": "לא לספור",
   "review.counted": "נספרה",
@@ -671,5 +671,8 @@
   "sync.offline": "אין חיבור",
   "sync.updating": "מעדכנים…",
   "sync.updateReady": "יש עדכון",
-  "sync.applyUpdate": "להפעיל מחדש ולעדכן"
+  "sync.applyUpdate": "להפעיל מחדש ולעדכן",
+  "run.notStored": "חלק מהתוצאות לא נשמרו במכשיר. כדאי להשאיר את המסך פתוח וללחוץ על \"לנסות שוב\" עד שיישלחו.",
+  "run.preflight.expired": "תוקף האישור לעבודה ללא חיבור פג (לא היה עדכון עם חיבור יותר מחודש). עדיין אפשר לשחק: התוצאות יישמרו ויסומנו לבדיקה.",
+  "run.preflight.startAnyway": "להתחיל בכל זאת"
 }

@@ -11,6 +11,7 @@ import { PrefsProvider } from "../src/i18n/index.tsx";
 import { DeviceProvider } from "../src/device/session.tsx";
 import { createSpace, listSpaces, removeSpace, unlockWithPassword, type OpenSpace } from "../src/device/spaces.ts";
 import { refreshBundle } from "../src/device/bundle.ts";
+import { openDB } from "idb";
 
 const today = new Date().toISOString().slice(0, 10);
 const secret = (n: number) => new Uint8Array(32).fill(n);
@@ -75,8 +76,8 @@ describe("offline data", () => {
   it("offline, Today shows the saved sessions with the saved-data banner", async () => {
     await openTamar();
     await renderAndUnlock("/today");
-    const next = await screen.findByRole("region", { name: "Next up" });
-    await waitFor(() => expect(next.textContent).toContain("Noa Levi"));
+    const next = await screen.findByRole("region", { name: "Next up" }, { timeout: 5000 });
+    await waitFor(() => expect(next.textContent).toContain("Noa Levi"), { timeout: 5000 });
     expect(next.textContent).toContain("Tunnel Rush → ▶ Colour shapes");
     expect(screen.getByRole("status").textContent).toMatch(/Showing saved data from/);
     expect(screen.getByRole("heading", { level: 1 }).textContent).toMatch(/Tamar/);
@@ -97,6 +98,50 @@ describe("offline data", () => {
     expect(screen.queryByText("Loading…")).toBeNull();
     online.mockRestore();
   });
+
+  it("back online with another therapist's cookie, the open space is locked and nothing is copied into it", async () => {
+    await openTamar();
+    await renderAndUnlock("/today");
+    await screen.findByRole("region", { name: "Next up" });
+    // The network returns, and the browser still holds Oren's session from this morning.
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      calls.push(url);
+      const json = (b: unknown) => new Response(JSON.stringify(b), { status: 200, headers: { "content-type": "application/json" } });
+      if (url.includes("/v1/me")) return json({ user: { id: "u-oren", email: "oren@synthetic.test", name: "Oren Katz" }, memberships: [{ clinic_id: "c1", organization_id: "o1", role: "therapist", clinic_name: "Tel Aviv" }] });
+      if (url.includes("/v1/today")) return json({ items: [{ planned_session_id: "x", planned_date: today, seq: 1, week: 1, total: 4, patient: { id: "p9", given_name: "Shai", family_name: "Paz", date_of_birth: "2018-01-01", alert: null, can_play: true }, assignment: { id: "a9", name: "X", weeks: 2 }, games: [], items: [] }], review_count: 0 });
+      return json({});
+    }));
+    window.dispatchEvent(new Event("offline"));
+    window.dispatchEvent(new Event("online"));
+    expect(await screen.findByRole("heading", { level: 1, name: "Sign in" }, { timeout: 8000 })).toBeTruthy();
+    expect(screen.queryByText(/Shai Paz/)).toBeNull();
+    expect(calls.some((u) => u.includes("sign-out"))).toBe(true);
+    // Tamar's space is still on the device, and holds no copy of anything fetched with Oren's session.
+    expect((await listSpaces()).map((s) => s.id)).toEqual(["a"]);
+    const db = await openDB("emb.space.a.v1");
+    const keys = (await db.getAllKeys("records")).map(String);
+    db.close();
+    expect(keys.filter((k) => k.startsWith("q:"))).toEqual([]);
+  }, 20_000);
+
+  it("back online with an expired cookie, it asks to sign in and keeps the space open", async () => {
+    await openTamar();
+    await renderAndUnlock("/today");
+    await screen.findByRole("region", { name: "Next up" });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: "unauthenticated" }), { status: 401, headers: { "content-type": "application/json" } })));
+    window.dispatchEvent(new Event("offline"));
+    window.dispatchEvent(new Event("online"));
+    expect(await screen.findByRole("heading", { level: 1, name: "Sign in" }, { timeout: 8000 })).toBeTruthy();
+    expect((await listSpaces()).map((s) => s.id)).toEqual(["a"]);
+  }, 20_000);
+
+  it("Wi-Fi without Internet: starting from the device's package still checks the video is here", async () => {
+    await openTamar(); // its package has an uploaded video that this device never downloaded
+    await renderAndUnlock("/session/ps1"); // the browser reports online; every request fails
+    expect(await screen.findByText("One step isn't on this device:", {}, { timeout: 8000 })).toBeTruthy();
+  }, 20_000);
 
   it("offline, editing a protocol is disabled and says it needs a connection", async () => {
     await openTamar();

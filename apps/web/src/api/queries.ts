@@ -14,7 +14,7 @@ import { usePrefs } from "../i18n/index.tsx";
 import type { BrainRegion, VideoInput, VideoSummary } from "@emb/contracts";
 import type { AssignInput, AssignmentView, GameSessionView, LaunchPackage, ProgressionDecisionView, TemplateDetail, TemplateInput, TemplateSummary, TodayItem } from "@emb/contracts";
 import { useOptionalDevice } from "../device/session.tsx";
-import { offlineOr, todayFromBundle } from "../device/bundle.ts";
+import { offlineOr, setOnlineUser, todayFromBundle } from "../device/bundle.ts";
 
 export type { PatientDetail, PatientListItem, PatientStatus, StaffMember };
 export type Role = "platform_admin" | "org_admin" | "clinic_manager" | "therapist" | "assistant";
@@ -50,7 +50,17 @@ export const ME_RETRY_OFFLINE_MS = 15_000;
 export function useMe() {
   return useQuery({
     queryKey: meKey,
-    queryFn: ({ signal }) => apiGet<Me>("/v1/me", { signal }),
+    queryFn: ({ signal }) =>
+      apiGet<Me>("/v1/me", { signal }).then(
+        (me) => {
+          setOnlineUser(me.user.id);
+          return me;
+        },
+        (e: unknown) => {
+          setOnlineUser(null);
+          throw e;
+        },
+      ),
     retry,
     staleTime: 60_000,
     refetchInterval: (q) => (q.state.error instanceof ApiError && q.state.error.status === 0 ? ME_RETRY_OFFLINE_MS : false),
@@ -266,8 +276,13 @@ export function useToday(clinicId: string | null) {
 // ------------------------------------------------------------------ sessions (slice 4)
 
 export function useLaunch() {
+  // On a device set up for offline use, the launch names it: if the connection drops mid-session, anyone who may use
+  // this device can send the results (offline devices review, ADR 0019).
+  const device = useOptionalDevice();
+  const deviceId = device?.space ? device.deviceId : null;
   return useMutation({
-    mutationFn: (plannedSessionId: string) => apiSend<{ launch: LaunchPackage }>("POST", `/v1/planned-sessions/${plannedSessionId}/launch`).then((r) => r.launch),
+    mutationFn: (plannedSessionId: string) =>
+      apiSend<{ launch: LaunchPackage }>("POST", `/v1/planned-sessions/${plannedSessionId}/launch`, deviceId ? { device_id: deviceId } : {}).then((r) => r.launch),
   });
 }
 

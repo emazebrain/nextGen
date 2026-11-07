@@ -27,7 +27,7 @@ import { firstName, iso } from "../lib/format.ts";
 import { useTitle } from "../lib/title.ts";
 import { ResultSummary } from "../routes/library.tsx";
 import { checkPin, hasPin, PIN_PATTERN, setPin } from "./kidmode.ts";
-import { enqueue, enqueueView, send, sendView, type SendResult, type ViewSendResult } from "./outbox.ts";
+import { enqueueAndSend, enqueueViewAndSend, send, sendView, type SendResult, type ViewSendResult } from "./outbox.ts";
 import { VideoStep, viewSummary } from "./VideoStep.tsx";
 import { launchFromPackage, type SessionPoint } from "./package.ts";
 import { preflight, type Preflight } from "./preflight.ts";
@@ -83,7 +83,8 @@ export function SessionPage() {
           if (!source) return;
           const history: Record<string, SessionPoint[]> = {};
           for (const st of source.steps) if (st.kind === "game") history[st.assignment_step_id] = (await space.read<SessionPoint[]>(`local_history:${st.assignment_step_id}`)) ?? [];
-          const check = await preflight(source, { online: navigator.onLine, hasVideo });
+          // We are here because /launch just failed for lack of a network: whatever navigator.onLine says, plan for none.
+          const check = await preflight(source, { online: false, hasVideo });
           setOffline({ source, space, check, history });
         })();
       },
@@ -100,7 +101,7 @@ export function SessionPage() {
 
   if (offline) {
     if (!offline.check.ok && !withoutMissing) {
-      return <PreflightMissing missing={offline.check.missing} onStartWithout={() => setWithoutMissing(true)} />;
+      return <PreflightMissing missing={offline.check.missing} expired={!!offline.check.expired} onStartWithout={() => setWithoutMissing(true)} />;
     }
     if (offlinePkg) return <Runner pkg={offlinePkg} space={offline.space} />;
   }
@@ -142,23 +143,28 @@ function Shell({ children }: { children: ReactNode }) {
   );
 }
 
-function PreflightMissing({ missing, onStartWithout }: { missing: Array<{ ordinal: number; title: string }>; onStartWithout: () => void }) {
+function PreflightMissing({ missing, expired, onStartWithout }: { missing: Array<{ ordinal: number; title: string }>; expired: boolean; onStartWithout: () => void }) {
   const t = useT();
   return (
     <Shell>
       <Card>
         <div className="handoff__form">
-          <Alert tone="warning">{t("run.preflight.missing", { count: missing.length })}</Alert>
-          <ul className="run-games">
-            {missing.map((m) => (
-              <li key={m.ordinal}>▶ {m.title}</li>
-            ))}
-          </ul>
+          {expired && <Alert tone="warning">{t("run.preflight.expired")}</Alert>}
+          {missing.length > 0 && (
+            <>
+              <Alert tone="warning">{t("run.preflight.missing", { count: missing.length })}</Alert>
+              <ul className="run-games">
+                {missing.map((m) => (
+                  <li key={m.ordinal}>▶ {m.title}</li>
+                ))}
+              </ul>
+            </>
+          )}
           <div className="pform__actions">
             <Link to="/today" className="emb-btn emb-btn--secondary">
               {t("run.preflight.wait")}
             </Link>
-            <Button onClick={onStartWithout}>{t("run.preflight.startWithout")}</Button>
+            <Button onClick={onStartWithout}>{t(missing.length ? "run.preflight.startWithout" : "run.preflight.startAnyway")}</Button>
           </div>
         </div>
       </Card>
@@ -173,6 +179,8 @@ function Runner({ pkg, space = null }: { pkg: LaunchPackage; space?: OpenSpace |
   const queue = pkg.steps.filter((s) => !s.done);
   const [phase, setPhase] = useState<Phase>(queue.length ? { k: "handoff" } : { k: "summary" });
   const [played, setPlayed] = useState<Played[]>([]);
+  // A result couldn't be written to the device: it lives only on this screen until it's sent.
+  const [notStored, setNotStored] = useState(false);
   const gameName = (id: string) => (findGame(id) ? localText(findGame(id)!.manifest.name, locale) : id);
   const stepName = (s: LaunchStep) => (s.kind === "video" ? s.video.title : gameName(s.game_id));
 
@@ -194,13 +202,12 @@ function Runner({ pkg, space = null }: { pkg: LaunchPackage; space?: OpenSpace |
     (step: LaunchGameStep, envelope: ResultEnvelope) => {
       const id = envelope.session_id;
       setPlayed((p) => [...p, { kind: "game", id, step, envelope, send: { state: "sending" } }]);
-      // First to the device, then to the server.
-      void enqueue(step.ticket, envelope)
-        .then(() => send({ ticket: step.ticket, envelope }))
-        .then((r) => {
-          settle(id, r);
-          refresh();
-        });
+      // First to the device, then to the server (sent even if the device copy failed; the summary then says so).
+      void enqueueAndSend(step.ticket, envelope).then(({ stored, result }) => {
+        if (!stored) setNotStored(true);
+        settle(id, result);
+        refresh();
+      });
       // Played from a package: this result also feeds the device's next difficulty choice for the step.
       if (space && envelope.status !== "abandoned") {
         const key = `local_history:${step.assignment_step_id}`;
@@ -217,12 +224,11 @@ function Runner({ pkg, space = null }: { pkg: LaunchPackage; space?: OpenSpace |
       const view = step.ticket ? { ...raw, ticket: step.ticket } : raw;
       const id = view.client_view_id;
       setPlayed((p) => [...p, { kind: "video", id, step, view, send: { state: "sending" } }]);
-      void enqueueView(view) // same rule as results: the device first
-        .then(() => sendView(view))
-        .then((r) => {
-          settle(id, r);
-          refresh();
-        });
+      void enqueueViewAndSend(view).then(({ stored, result }) => {
+        if (!stored) setNotStored(true);
+        settle(id, result);
+        refresh();
+      });
     },
     [refresh],
   );
@@ -274,7 +280,16 @@ function Runner({ pkg, space = null }: { pkg: LaunchPackage; space?: OpenSpace |
   if (phase.k === "finished") {
     return <Finished child={pkg.patient.given_name} onUnlock={() => setPhase({ k: "summary" })} />;
   }
-  return <Summary pkg={pkg} played={played} stepName={stepName} retry={retry} />;
+  return (
+    <>
+      {notStored && played.some((p) => p.send.state !== "saved") && (
+        <div className="handoff__notstored">
+          <Alert tone="danger">{t("run.notStored")}</Alert>
+        </div>
+      )}
+      <Summary pkg={pkg} played={played} stepName={stepName} retry={retry} />
+    </>
+  );
 }
 
 // ------------------------------------------------------------------ hand-off

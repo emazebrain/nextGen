@@ -3,7 +3,7 @@
  * whoever signs in on the device, credited to the ticket's therapist; results that arrive after something changed
  * are stored and kept for review.
  */
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { envelope, step, uuidv7 } from "./offline-fixture.ts";
 import { ADMIN_URL, addMember, platformAdmin, seedClinics, setupApi, staffClient, type Api, type TestEnv } from "./support.ts";
@@ -13,6 +13,7 @@ describe.skipIf(!ADMIN_URL)("offline ingest", () => {
   let env: TestEnv;
   let yael: { api: Api; userId: string };
   let noam: { api: Api; userId: string };
+  let rina: { api: Api; userId: string };
   let ids: Awaited<ReturnType<typeof seedClinics>>;
   let video = "";
   const device = randomUUID();
@@ -51,6 +52,8 @@ describe.skipIf(!ADMIN_URL)("offline ingest", () => {
     noam = await staffClient(env, "noam@synthetic.test", "Noam Cohen");
     await addMember(env.db, yael.userId, ids.org, ids.clinic, "therapist");
     await addMember(env.db, noam.userId, ids.org, ids.clinic, "therapist");
+    rina = await staffClient(env, "rina@synthetic.test", "Rina Haddad"); // same organisation, never set up this device
+    await addMember(env.db, rina.userId, ids.org, ids.other, "therapist");
     video = (await admin("/v1/admin/videos", { method: "POST", body: { source: "youtube", youtube_url: "https://youtu.be/dQw4w9WgXcQ", titles: { en: "Breathing" }, region_ids: [], age_min: null, age_max: null, status: "published" } })).body.video.id;
     await yael.api("/v1/devices/register", { method: "POST", body: { device_id: device, outbox_public_key: "pk" } });
     for (const u of [yael, noam]) await u.api(`/v1/devices/${device}/spaces`, { method: "POST", body: { clinic_id: ids.clinic } });
@@ -138,10 +141,74 @@ describe.skipIf(!ADMIN_URL)("offline ingest", () => {
     expect(stored.rowCount).toBe(1);
   });
 
-  it("an expired v2 ticket is rejected and logged", async () => {
+  it("a colleague of the organisation without a space on the device can send its results", async () => {
     const p = await patientWithProtocol();
     const e = envelope({ ...p.params, difficulty: 2 }, 0.6);
-    const res = await yael.api("/v1/results", { method: "POST", body: { ticket: v2(p, p.sessions[1]!, -10), envelope: e } });
+    const res = await rina.api("/v1/results", { method: "POST", body: { ticket: v2(p, p.sessions[1]!), envelope: e } });
+    expect(res.status).toBe(201);
+    const row = await env.db.query(`SELECT recorded_by, uploaded_by FROM app.game_session WHERE id = $1`, [e.session_id]);
+    expect(row.rows[0]).toEqual({ recorded_by: yael.userId, uploaded_by: rina.userId });
+  });
+
+  it("a ticket naming someone who never had a space on its device is refused, and logged", async () => {
+    const p = await patientWithProtocol();
+    const e = envelope({ ...p.params, difficulty: 2 }, 0.6);
+    const forgedFor = env.tickets.signV2({ jti: randomUUID(), psid: p.sessions[1]!, asid: p.gameStep, pid: p.patient, gid: "catch-me-if-you-can", sub: rina.userId, dev: device, allowed: allowedParamsFor(p.params, { min: 1, max: 5 }) }, OFFLINE_TICKET_TTL_S);
+    const res = await noam.api("/v1/results", { method: "POST", body: { ticket: forgedFor, envelope: e } });
+    expect(res.status).toBe(403);
+    const raw = await env.db.query(`SELECT outcome FROM app.session_result_raw WHERE client_session_id = $1`, [e.session_id]);
+    expect(raw.rows[0]).toEqual({ outcome: "rejected" });
+  });
+
+  it("an online launch on a set-up device gives tickets anyone signed in there can send", async () => {
+    const p = await patientWithProtocol();
+    const launch = await yael.api(`/v1/planned-sessions/${p.sessions[1]}/launch`, { method: "POST", body: { device_id: device } });
+    const [game, video] = launch.body.launch.steps;
+    expect(env.tickets.verify(game.ticket)).toMatchObject({ v: 1, dev: device });
+    expect(env.tickets.verify(video.ticket)).toMatchObject({ v: 2, dev: device, sub: yael.userId });
+    const e = envelope(game.params, 0.6);
+    const res = await rina.api("/v1/results", { method: "POST", body: { ticket: game.ticket, envelope: e } });
+    expect(res.status).toBe(201);
+  });
+
+  // Ticket life is about when the session was PLAYED (spec §7.4 Clock), not when the upload arrives (review finding).
+  const issuedDaysAgo = (days: number, p: { patient: string; gameStep: string; params: Record<string, unknown> }, psid: string) => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.now() - days * 86_400_000);
+    try {
+      return v2(p, psid);
+    } finally {
+      vi.useRealTimers();
+    }
+  };
+  const playedDaysAgo = (e: ReturnType<typeof envelope>, days: number) => {
+    const at = new Date(Date.now() - days * 86_400_000);
+    return { ...e, started_at: at.toISOString(), ended_at: new Date(at.getTime() + 300_000).toISOString() };
+  };
+
+  it("a result played while its ticket was valid is accepted even when it arrives after the ticket expired", async () => {
+    const p = await patientWithProtocol();
+    const ticket = issuedDaysAgo(31, p, p.sessions[1]!); // 30-day ticket: expired a day ago
+    const res = await noam.api("/v1/results", { method: "POST", body: { ticket, envelope: playedDaysAgo(envelope({ ...p.params, difficulty: 2 }, 0.6), 20) } });
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ outcome: "accepted", review_reason: null });
+  });
+
+  it("a result played after its ticket expired is kept and flagged, not refused", async () => {
+    const p = await patientWithProtocol();
+    const ticket = issuedDaysAgo(31, p, p.sessions[1]!);
+    const e = envelope({ ...p.params, difficulty: 2 }, 0.6); // played now, after expiry
+    const res = await noam.api("/v1/results", { method: "POST", body: { ticket, envelope: { ...e, started_at: new Date().toISOString(), ended_at: new Date().toISOString() } } });
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ outcome: "kept_for_review", review_reason: "ticket_expired" });
+  });
+
+  it("a forged ticket is rejected and logged", async () => {
+    const p = await patientWithProtocol();
+    const e = envelope({ ...p.params, difficulty: 2 }, 0.6);
+    const good = v2(p, p.sessions[1]!);
+    const forged = `${good.slice(0, -4)}${good.slice(-4) === "AAAA" ? "BBBB" : "AAAA"}`;
+    const res = await yael.api("/v1/results", { method: "POST", body: { ticket: forged, envelope: e } });
     expect(res.status).toBe(422);
     expect(res.body.error).toBe("invalid_ticket");
     const raw = await env.db.query(`SELECT outcome, error FROM app.session_result_raw WHERE client_session_id = $1`, [e.session_id]);

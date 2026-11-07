@@ -5,8 +5,20 @@
 import { useSyncExternalStore } from "react";
 
 let running = false;
+let pendingReload: (() => void) | null = null;
 export function setSessionRunning(on: boolean): void {
   running = on;
+  if (!on && pendingReload) {
+    const reload = pendingReload;
+    pendingReload = null;
+    reload();
+  }
+}
+
+/** A new version took over (perhaps from another window): reload now, or once this window's session ends. */
+export function controllerChanged(reload: () => void): void {
+  if (running) pendingReload = reload;
+  else reload();
 }
 export const sessionRunning = () => running;
 
@@ -56,11 +68,13 @@ export async function registerServiceWorker(): Promise<void> {
   if (reg.waiting && navigator.serviceWorker.controller) shared.markReady();
   reg.addEventListener("updatefound", () => watch(reg.installing));
   let reloaded = false;
-  navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (reloaded) return;
-    reloaded = true;
-    location.reload();
-  });
+  navigator.serviceWorker.addEventListener("controllerchange", () =>
+    controllerChanged(() => {
+      if (reloaded) return;
+      reloaded = true;
+      location.reload();
+    }),
+  );
 }
 
 export function useAppUpdate(): { ready: boolean; apply(): boolean } {

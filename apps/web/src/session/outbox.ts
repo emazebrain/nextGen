@@ -185,6 +185,39 @@ export function sendView(view: VideoViewInput): Promise<ViewSendResult> {
   return deliver("view", view.client_view_id, () => apiSend<VideoViewReceipt>("POST", "/v1/video-views", view));
 }
 
+/**
+ * The device copy first, then the send — and the send happens even when the copy couldn't be written (a full disk,
+ * a broken database): the result is never dropped silently. `stored: false` tells the screen to say so and keep it.
+ */
+export async function enqueueAndSend(ticket: string, envelope: ResultEnvelope): Promise<{ stored: boolean; result: SendResult }> {
+  const stored = await enqueue(ticket, envelope).then(
+    () => true,
+    () => false,
+  );
+  return { stored, result: await send({ ticket, envelope }) };
+}
+
+export async function enqueueViewAndSend(view: VideoViewInput): Promise<{ stored: boolean; result: ViewSendResult }> {
+  const stored = await enqueueView(view).then(
+    () => true,
+    () => false,
+  );
+  return { stored, result: await sendView(view) };
+}
+
+/** "Try again" for entries a person looked at: clears their needs-help mark and sends everything again. */
+export async function retryNeedsHelp(): Promise<void> {
+  if (cfg) {
+    const db = await deviceDb();
+    for (const r of await db.getAll("outbox")) if (r.needs_help) await db.put("outbox", { ...r, needs_help: false });
+  } else {
+    writeLocal(readLocal().map((i) => (i.last_error === "needs_help" ? { ...i, last_error: "retry" } : i)));
+    writeLocalViews(readLocalViews().map((v) => (v.last_error === "needs_help" ? { ...v, last_error: "retry" } : v)));
+  }
+  emit();
+  await flush();
+}
+
 let flushing: Promise<void> | null = null;
 
 /** Sends everything waiting, oldest first, one at a time. Stops while offline or signed out. Safe to call often. */

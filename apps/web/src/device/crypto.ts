@@ -44,9 +44,12 @@ const iv = () => globalThis.crypto.getRandomValues(new Uint8Array(12));
 const buf = (u: Uint8Array): Uint8Array<ArrayBuffer> => (u.buffer instanceof ArrayBuffer ? (u as Uint8Array<ArrayBuffer>) : new Uint8Array(u));
 const AES = { name: "AES-GCM", length: 256 } as const;
 
-/** 8+ characters; a number code of 6 digits or fewer is never accepted (it would fall to a copied disk in seconds). */
+/**
+ * 8+ characters and not digits only: a number code falls to a copied disk quickly however long it is (an 8-digit
+ * one in hours at 600,000 iterations), so letters or symbols are required.
+ */
 export function validPassword(p: string): boolean {
-  return p.length >= MIN_PASSWORD_LENGTH;
+  return p.length >= MIN_PASSWORD_LENGTH && !/^\d+$/.test(p);
 }
 
 export function newDataKey(): Promise<CryptoKey> {

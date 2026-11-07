@@ -133,5 +133,6 @@ export const REVIEW_REASONS = [
   "session_closed",
   "played_twice",
   "params_outside_ticket",
+  "ticket_expired",
 ] as const;
 export type ReviewReason = (typeof REVIEW_REASONS)[number];

@@ -25,6 +25,8 @@ export interface TicketClaims {
   sub: string;
   iat: number;
   exp: number;
+  /** Set when launched online on a device set up for offline use: anyone who may use that device can send it. */
+  dev?: string;
 }
 
 /**
@@ -57,7 +59,15 @@ export interface TicketSigner {
   sign(claims: Omit<TicketClaims, "v" | "iat" | "exp">, ttlS: number): string;
   signV2(claims: Omit<TicketClaimsV2, "v" | "iat" | "exp">, ttlS: number): string;
   verify(token: string, now?: number): TicketClaims | TicketClaimsV2 | null;
+  /**
+   * Was this ticket valid when the session was played? Signature checked; `playedAt` (the envelope's start) must lie
+   * in [iat − 1 day, exp] (a day of device-clock slack). Returns the claims and whether it was valid then.
+   */
+  verifyPlayed(token: string, playedAt: number): { claims: TicketClaims | TicketClaimsV2; validThen: boolean } | null;
 }
+
+/** Device clocks drift: a session may look like it started a little before its ticket was issued. */
+export const PLAYED_SKEW_MS = 86_400_000;
 
 /** pem: PKCS#8 Ed25519 private key. Without one (local dev, tests) a throwaway key is made. */
 export function ticketSigner(pem?: string): TicketSigner {
@@ -80,6 +90,12 @@ export function ticketSigner(pem?: string): TicketSigner {
     },
     signV2(claims, ttlS) {
       return issue({ v: 2, ...claims }, ttlS);
+    },
+    verifyPlayed(token, playedAt) {
+      const claims = this.verify(token, Number.NEGATIVE_INFINITY); // signature and shape only
+      if (!claims) return null;
+      const validThen = Number.isFinite(playedAt) && playedAt >= claims.iat * 1000 - PLAYED_SKEW_MS && playedAt <= claims.exp * 1000;
+      return { claims, validThen };
     },
     verify(token, now = Date.now()) {
       const parts = token.split(".");

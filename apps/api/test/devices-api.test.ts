@@ -38,8 +38,21 @@ describe.skipIf(!ADMIN_URL)("devices API", () => {
     const b = await dana.api(`/v1/devices/${device}/secrets`);
     expect(a.body.outbox_secret).toMatch(/^[A-Za-z0-9+/=]{40,}$/);
     expect(b.body.outbox_secret).toBe(a.body.outbox_secret);
-    // No space on it: no secrets.
-    expect((await outsider.api(`/v1/devices/${device}/secrets`)).body).toEqual({ outbox_secret: null, spaces: [] });
+    // A colleague of the same organisation without a space: the outbox secret (to send what waits), no space secret.
+    const colleague = await outsider.api(`/v1/devices/${device}/secrets`);
+    expect(colleague.body.outbox_secret).toBe(a.body.outbox_secret);
+    expect(colleague.body.spaces).toEqual([]);
+  });
+
+  it("someone from another organisation gets nothing from the device and can't make a space on it", async () => {
+    const org2 = randomUUID();
+    const clinic2 = randomUUID();
+    await env.db.query(`INSERT INTO app.organization (id, name, region) VALUES ($1,'Other org','il')`, [org2]);
+    await env.db.query(`INSERT INTO app.clinic (id, organization_id, name, country_code, timezone) VALUES ($1,$2,'Eilat','IL','Asia/Jerusalem')`, [clinic2, org2]);
+    const foreign = await staffClient(env, "foreign@synthetic.test", "Foreign");
+    await addMember(env.db, foreign.userId, org2, clinic2, "therapist");
+    expect((await foreign.api(`/v1/devices/${device}/secrets`)).body).toEqual({ outbox_secret: null, spaces: [] });
+    expect((await foreign.api(`/v1/devices/${device}/spaces`, { method: "POST", body: { clinic_id: clinic2 } })).status).toBe(403);
   });
 
   it("a space secret goes only to its owner", async () => {
@@ -63,7 +76,10 @@ describe.skipIf(!ADMIN_URL)("devices API", () => {
     const danaSpace = list.body.find((s: { full_name: string }) => s.full_name === "Dana").id;
     expect((await tal.api(`/v1/devices/${device}/spaces/${danaSpace}`, { method: "DELETE" })).status).toBe(404);
     expect((await maya.api(`/v1/devices/${device}/spaces/${danaSpace}`, { method: "DELETE" })).status).toBe(204);
-    expect((await dana.api(`/v1/devices/${device}/secrets`)).body).toEqual({ outbox_secret: null, spaces: [] });
+    // Her space is gone (no space secret); as staff of the device's organisation she can still send what waits there.
+    const after = (await dana.api(`/v1/devices/${device}/secrets`)).body;
+    expect(after.spaces).toEqual([]);
+    expect(after.outbox_secret).toEqual(expect.any(String));
   });
 
   it("secrets for an unknown device are 404", async () => {

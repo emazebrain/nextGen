@@ -30,11 +30,18 @@ export function deviceRoutes(pool: pg.Pool, key: DeviceKey) {
       // Already registered (by anyone): nothing to change, and nothing about it is revealed.
       const exists = await db.query(`SELECT app.device_exists($1) AS e`, [device_id]);
       if (exists.rows[0].e) return;
-      await db.query(`INSERT INTO app.device (id, outbox_public_key, outbox_secret_enc, created_by) VALUES ($1,$2,$3,app.current_user_id())`, [
+      // The device belongs to its creator's organisation (a clinic membership first); the client never says which.
+      await db.query(
+        `INSERT INTO app.device (id, outbox_public_key, outbox_secret_enc, created_by, organization_id)
+         VALUES ($1,$2,$3,app.current_user_id(),
+                 (SELECT m.organization_id FROM app.membership m WHERE m.user_id = app.current_user_id() AND m.status = 'active'
+                   ORDER BY (m.clinic_id IS NULL), m.organization_id LIMIT 1))`,
+        [
         device_id,
         outbox_public_key,
         key.seal(randomBytes(32)),
-      ]);
+      ],
+      );
     });
     return c.json({ device_id }, 201);
   });
@@ -72,8 +79,10 @@ export function deviceRoutes(pool: pg.Pool, key: DeviceKey) {
           RETURNING id, clinic_id, space_secret_enc`,
         [id],
       );
+      // The outbox secret: to anyone who may use the device (its organisation's staff, or a space holder), so a
+      // colleague signing in sends what waits there; space secrets only to their owner (above).
       let outbox: string | null = null;
-      if (spaces.rows.length) {
+      if ((await db.query<{ ok: boolean }>(`SELECT app.may_use_device($1, app.current_user_id()) AS ok`, [id])).rows[0]!.ok) {
         const d = await db.query<{ outbox_secret_enc: Buffer }>(`UPDATE app.device SET last_seen_at = now() WHERE id = $1 RETURNING outbox_secret_enc`, [id]);
         outbox = key.open(d.rows[0]!.outbox_secret_enc).toString("base64");
       }

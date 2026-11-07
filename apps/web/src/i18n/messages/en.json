@@ -606,8 +606,8 @@
   "setupOffline.shared": "Other therapists who use this tablet can't open your space.",
   "setupOffline.password": "Offline password",
   "setupOffline.repeat": "Repeat the password",
-  "setupOffline.rules": "At least 8 characters. Not a short number code.",
-  "setupOffline.tooShort": "Use at least 8 characters.",
+  "setupOffline.rules": "At least 8 characters, with a letter or symbol — not only numbers.",
+  "setupOffline.tooShort": "Use at least 8 characters, with a letter or symbol.",
   "setupOffline.mismatch": "The passwords don't match.",
   "setupOffline.passkey": "Also unlock with Face ID or fingerprint",
   "setupOffline.submit": "Set up offline use",
@@ -662,7 +662,7 @@
   "device.installIos": "On iPad or iPhone: tap Share, then Add to Home Screen.",
   "device.installOther": "Use your browser's menu to install eMazeBrain or add it to the home screen.",
   "review.column": "Review",
-  "review.reason": "{reason, select, consent_withdrawn {Arrived after consent was withdrawn} not_on_care_team {Arrived after the therapist left the care team} membership_ended {Arrived after the therapist left the clinic} assignment_not_active {Arrived after the protocol was paused or ended} step_changed {The step changed after it was played} session_closed {Arrived after the session was closed} played_twice {The same session was played twice} params_outside_ticket {Played with settings outside the protocol} other {Needs review}}",
+  "review.reason": "{reason, select, consent_withdrawn {Arrived after consent was withdrawn} not_on_care_team {Arrived after the therapist left the care team} membership_ended {Arrived after the therapist left the clinic} assignment_not_active {Arrived after the protocol was paused or ended} step_changed {The step changed after it was played} session_closed {Arrived after the session was closed} played_twice {The same session was played twice} params_outside_ticket {Played with settings outside the protocol} ticket_expired {Played after its offline pass expired} other {Needs review}}",
   "review.accept": "Count it",
   "review.exclude": "Don't count it",
   "review.counted": "Counted",
@@ -671,5 +671,8 @@
   "sync.offline": "Offline",
   "sync.updating": "Updating…",
   "sync.updateReady": "Update ready",
-  "sync.applyUpdate": "Restart to update"
+  "sync.applyUpdate": "Restart to update",
+  "run.notStored": "Some results couldn't be saved on this device. Keep this screen open and use Try again until they're sent.",
+  "run.preflight.expired": "This session's offline pass has run out (no online update for over a month). You can still play: the results will be kept and flagged for review.",
+  "run.preflight.startAnyway": "Start anyway"
 }

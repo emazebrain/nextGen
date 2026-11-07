@@ -75,6 +75,18 @@ describe.skipIf(!ADMIN_URL)("result review", () => {
     expect((await noam.api("/v1/today")).body.review_count).toBe(0);
   });
 
+  it("Today counts only what the history lets a therapist review", async () => {
+    const f = await flagged();
+    const before = (await yael.api("/v1/today")).body.review_count as number;
+    // An invalid session is hidden from the history: it must not be counted either.
+    await env.db.query(`UPDATE app.game_session SET is_valid = false WHERE id = $1`, [f.session]).catch(async () => {
+      await env.db.query(`ALTER TABLE app.game_session DISABLE TRIGGER USER`);
+      await env.db.query(`UPDATE app.game_session SET is_valid = false WHERE id = $1`, [f.session]);
+      await env.db.query(`ALTER TABLE app.game_session ENABLE TRIGGER USER`);
+    });
+    expect((await yael.api("/v1/today")).body.review_count).toBe(before - 1);
+  });
+
   it("a colleague without access can't review", async () => {
     const f = await flagged();
     expect((await noam.api(`/v1/results/${f.session}/review`, { method: "POST", body: { decision: "accept" } })).status).toBe(404);

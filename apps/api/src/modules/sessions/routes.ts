@@ -161,9 +161,16 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
     const id = c.req.param("id");
     if (!UUID.test(id)) return c.json({ error: "not_found" }, 404);
     const me = c.get("user").id;
+    // Launched on a device set up for offline use (the caller holds a space there): tickets name the device, so if
+    // the connection drops mid-session anyone who may use the device can send the results (review finding).
+    const asked = ((await c.req.json().catch(() => null)) as { device_id?: unknown } | null)?.device_id;
     const result = await run(c, async (db) => {
       const loaded = await loadLaunchRows(db, id);
       if ("error" in loaded) return loaded;
+      const dev =
+        typeof asked === "string" && UUID.test(asked) && (await db.query<{ ok: boolean }>(`SELECT app.has_space_on($1, app.current_user_id()) AS ok`, [asked])).rows[0]!.ok
+          ? asked
+          : undefined;
       const { row, steps, videos } = loaded;
       await db.query(`UPDATE app.planned_session SET status = 'in_progress' WHERE id = $1 AND status = 'planned'`, [id]);
       const pkg: LaunchPackage = {
@@ -176,10 +183,14 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
         steps: steps.map((s): LaunchStep => {
           if (s.step_type === "video") {
             const v = videos.get(s.video_id!)!;
+            const vticket = dev
+              ? tickets.signV2({ jti: crypto.randomUUID(), psid: id, asid: s.id, pid: row.patient_id, gid: "video", sub: me, dev, allowed: { exact: {}, difficulty: { min: 1, max: 5 } } }, CLINIC_TICKET_TTL_S)
+              : undefined;
             return {
               kind: "video",
               assignment_step_id: s.id,
               ordinal: s.ordinal,
+              ...(vticket ? { ticket: vticket } : {}),
               video: {
                 id: v.id, version: v.version, source: v.source, youtube_id: v.youtube_id, duration_s: v.duration_s,
                 title: pick(v.titles, row.preferred_locale) ?? "",
@@ -190,7 +201,7 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
             };
           }
           const params = buildParams(s, row, randomInt(1, 2 ** 31));
-          const ticket = tickets.sign({ jti: crypto.randomUUID(), psid: id, asid: s.id, pid: row.patient_id, gid: s.game_id, ph: paramsHash(params), sub: me }, CLINIC_TICKET_TTL_S);
+          const ticket = tickets.sign({ jti: crypto.randomUUID(), psid: id, asid: s.id, pid: row.patient_id, gid: s.game_id, ph: paramsHash(params), sub: me, ...(dev ? { dev } : {}) }, CLINIC_TICKET_TTL_S);
           return { kind: "game", assignment_step_id: s.id, ordinal: s.ordinal, game_id: s.game_id, params, ticket, done: s.done };
         }),
       };
@@ -207,8 +218,9 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
   const uploaderMay = (c: Context<Env>, claims: TicketClaims | TicketClaimsV2) =>
     run(c, async (db) => {
       const { rows } = await db.query<{ ok: boolean }>(
-        `SELECT ($1::uuid = app.current_user_id()) OR ($2::uuid IS NOT NULL AND app.has_space_on($2::uuid, app.current_user_id())) AS ok`,
-        [claims.sub, claims.v === 2 ? claims.dev : null],
+        `SELECT ($1::uuid = app.current_user_id())
+             OR ($2::uuid IS NOT NULL AND app.may_use_device($2::uuid, app.current_user_id()) AND app.held_space_on($2::uuid, $1::uuid)) AS ok`,
+        [claims.sub, claims.dev ?? null],
       );
       return rows[0]!.ok;
     });
@@ -244,7 +256,9 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
       return body.response;
     }
     const { ticket, envelope } = body.data;
-    const claims = tickets.verify(ticket);
+    // Valid when played, not when uploaded (spec §7.4): a month offline must not turn results into refusals.
+    const checked = tickets.verify(ticket) ? { claims: tickets.verify(ticket)!, validThen: true } : tickets.verifyPlayed(ticket, Date.parse(envelope.started_at ?? ""));
+    const claims = checked?.claims ?? null;
     const reject = async (error: string, status: 403 | 422 = 422) => {
       await run(c, (db) => record(db, "rejected", error, { sessionId: envelope.session_id, psid: claims?.psid ?? null, pid: claims?.pid ?? null }));
       return c.json({ error }, status);
@@ -253,10 +267,10 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
     if (envelope.demo) return reject("demo_result");
     if (claims.gid !== envelope.game_id) return reject("game_mismatch");
     // v1 (online launch): the exact parameters. v2 (offline package): within what the ticket allows, or kept for review.
-    let paramsReason: ReviewReason | null = null;
+    let paramsReason: ReviewReason | null = checked && !checked.validThen ? "ticket_expired" : null;
     if (claims.v === 1) {
       if (paramsHash(envelope.params) !== claims.ph) return reject("params_mismatch");
-    } else if (!paramsWithinAllowed(claims.allowed, envelope.params)) paramsReason = "params_outside_ticket";
+    } else if (!paramsReason && !paramsWithinAllowed(claims.allowed, envelope.params)) paramsReason = "params_outside_ticket";
     if (!(await uploaderMay(c, claims))) return reject("uploader_not_allowed", 403);
 
     const receipt = await run(c, (db) => ingest(db, envelope, claims, me, record, paramsReason));
@@ -283,7 +297,9 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
     }
     const v = body.data;
     // Offline views carry the package's v2 ticket for that step: it names the therapist and the device.
-    const claims = v.ticket ? tickets.verify(v.ticket) : null;
+    const checked = v.ticket ? (tickets.verify(v.ticket) ? { claims: tickets.verify(v.ticket)!, validThen: true } : tickets.verifyPlayed(v.ticket, Date.parse(v.started_at))) : null;
+    const claims = checked?.claims ?? null;
+    const expiredReason: ReviewReason | null = checked && !checked.validThen ? "ticket_expired" : null;
     if (v.ticket && (!claims || claims.v !== 2 || claims.asid !== v.assignment_step_id || claims.psid !== v.planned_session_id)) {
       await run(c, (db) => log(db, "rejected", "invalid_ticket", { viewId: v.client_view_id }));
       return c.json({ error: "invalid_ticket" }, 422);
@@ -293,7 +309,7 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
       return c.json({ error: "uploader_not_allowed" }, 403);
     }
     const therapist = claims?.sub ?? me;
-    const device = claims?.v === 2 ? claims.dev : null;
+    const device = claims?.dev ?? null;
     const result = await run(c, async (db): Promise<{ error: string; status: 404 | 409 | 422 } | VideoViewReceipt> => {
       // Without a ticket nothing server-signed vouches for the view: the sender must be able to treat the patient
       // under their own RLS, as before offline support (invariant 3).
@@ -334,7 +350,7 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
         await log(db, "rejected", "step_mismatch", extra);
         return { error: "step_mismatch", status: 422 };
       }
-      let reason = (await db.query<{ r: ReviewReason | null }>(`SELECT app.review_reason_for($1,$2,$3,$4) AS r`, [session.patient_id, therapist, v.assignment_step_id, v.planned_session_id])).rows[0]!.r;
+      let reason = expiredReason ?? (await db.query<{ r: ReviewReason | null }>(`SELECT app.review_reason_for($1,$2,$3,$4) AS r`, [session.patient_id, therapist, v.assignment_step_id, v.planned_session_id])).rows[0]!.r;
       if (!reason && (await db.query<{ p: boolean }>(`SELECT app.ticket_step_played('video', $1, $2) AS p`, [v.planned_session_id, v.assignment_step_id])).rows[0]!.p) reason = "played_twice";
       const { ticket: _t, ...view } = v;
       await db.query(`SELECT app.ingest_video_view($1::jsonb)`, [JSON.stringify({ ...view, patient_id: session.patient_id, review_reason: reason })]);
@@ -425,7 +441,7 @@ async function ingest(
 ): Promise<ResultReceipt | { conflict: true }> {
   const extra = { sessionId: e.session_id, psid: claims.psid, pid: claims.pid };
   // Act for the therapist the (verified) ticket names; the raw log is written back as the sender.
-  await db.query(`SELECT app.act_for_ticket($1, $2)`, [claims.sub, claims.v === 2 ? claims.dev : null]);
+  await db.query(`SELECT app.act_for_ticket($1, $2)`, [claims.sub, claims.dev ?? null]);
   const asUploader = () => db.query(`SELECT set_config('app.user_id', $1, true)`, [me]);
   const sessionStatus = async () => (await db.query<{ status: string }>(`SELECT status FROM app.ticket_session($1)`, [claims.psid])).rows[0]?.status ?? null;
 

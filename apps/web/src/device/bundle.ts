@@ -36,11 +36,20 @@ export function useSavedFrom(): string | null {
 
 export const isNetworkError = (e: unknown) => e instanceof ApiError && e.status === 0;
 
+/**
+ * Who /v1/me last confirmed as signed in online. Online answers are copied into a space only when it belongs to that
+ * person: a stale cookie of another therapist must never fill someone else's space (review finding, ADR 0019).
+ */
+let onlineUser: string | null = null;
+export function setOnlineUser(id: string | null): void {
+  onlineUser = id;
+}
+
 export async function offlineOr<T>(space: OpenSpace | null, name: string, fetcher: () => Promise<T>, fromBundle?: (b: OfflineBundle, done: Set<string>) => T | undefined): Promise<T> {
   try {
     const v = await fetcher();
     setSavedFrom(null);
-    if (space) void space.write(`q:${name}`, v).catch(() => undefined);
+    if (space && onlineUser && space.info.user_id === onlineUser) void space.write(`q:${name}`, v).catch(() => undefined);
     return v;
   } catch (e) {
     if (!space || !isNetworkError(e)) throw e;

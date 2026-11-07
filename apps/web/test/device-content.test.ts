@@ -4,7 +4,7 @@ import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
 import { storedSummary, syncVideos, wantedVideos, type VideoRef } from "../src/device/content.ts";
-import { createUpdater, setSessionRunning } from "../src/device/update.ts";
+import { controllerChanged, createUpdater, setSessionRunning } from "../src/device/update.ts";
 import { deviceDb } from "../src/device/db.ts";
 
 const BASE = "http://clinic.test";
@@ -92,5 +92,16 @@ describe("app updates", () => {
     setSessionRunning(false);
     expect(u.apply()).toBe(true);
     expect(post).toHaveBeenCalledWith({ type: "apply-update" });
+  });
+
+  it("an update taken by another window waits for this window's session to end before reloading", () => {
+    const reload = vi.fn();
+    setSessionRunning(true);
+    controllerChanged(reload);
+    expect(reload).not.toHaveBeenCalled();
+    setSessionRunning(false);
+    expect(reload).toHaveBeenCalledTimes(1);
+    controllerChanged(reload); // no session: right away
+    expect(reload).toHaveBeenCalledTimes(2);
   });
 });

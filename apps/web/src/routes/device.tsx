@@ -21,7 +21,7 @@ import { useInstall } from "../device/install.ts";
 import { useRefreshState } from "../device/refresh.tsx";
 import { useDevice } from "../device/session.tsx";
 import { listSpaces, removeSpace, type SpaceInfo } from "../device/spaces.ts";
-import { useOutboxStatus } from "../session/outbox.ts";
+import { retryNeedsHelp, useOutboxStatus } from "../session/outbox.ts";
 
 export function DevicePage() {
   const t = useT();
@@ -158,6 +158,11 @@ export function DevicePage() {
               {t("sync.waiting", { count: outbox.waiting })}
               {outbox.needsHelp > 0 && ` · ${t("sync.needsHelp", { count: outbox.needsHelp })}`}
             </p>
+          )}
+          {outbox.needsHelp > 0 && (
+            <Button variant="secondary" onClick={() => void retryNeedsHelp()}>
+              {t("common.retry")}
+            </Button>
           )}
         </Card>
 
