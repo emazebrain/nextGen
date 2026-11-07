@@ -30,6 +30,7 @@ import { fullName, LoadError, StatusChip, useAge } from "./shared.tsx";
 import { useT, usePrefs, locales, type Locale, type MessageId, type Motion, type Theme } from "../i18n/index.tsx";
 import { useClinic } from "../lib/clinic.tsx";
 import { ageParts, calendarDate, dayPart, firstName, matchesQuery } from "../lib/format.ts";
+import { joinSteps } from "../lib/steps.ts";
 import { useTitle } from "../lib/title.ts";
 import { useSignOut } from "../shell/ClinicShell.tsx";
 import { SetPinForm } from "../session/SessionPage.tsx";
@@ -144,7 +145,7 @@ function NextUp() {
               <p className="app-muted">
                 {age(it.patient.date_of_birth)} · {t("today.session", { week: it.week, seq: it.seq, total: it.total })}
               </p>
-              <p className="nextup__games">{games.join(" → ")}</p>
+              <p className="nextup__games">{joinSteps(games, locale)}</p>
               {it.planned_date < todayIso && (
                 <p className="nextup__late">{t("today.planned", { date: intl.formatDate(calendarDate(it.planned_date), { weekday: "long", day: "numeric", month: "short" }) })}</p>
               )}

@@ -52,8 +52,9 @@ describe.skipIf(!ADMIN_URL)("video steps API", () => {
     dana = d.api;
     await addMember(env.db, y.userId, ids.org, ids.clinic, "therapist");
     await addMember(env.db, d.userId, ids.org, ids.other, "therapist");
-    upload = await addVideo({ source: "upload", titles: { en: "Shapes" } });
+    upload = await addVideo({ source: "upload", titles: { en: "Shapes" }, status: "draft" });
     await admin.raw(`/v1/admin/videos/${upload}/file`, { method: "PUT", headers: { "content-type": "video/mp4" }, body: new Uint8Array(64).fill(7) });
+    await admin(`/v1/admin/videos/${upload}`, { method: "PUT", body: { source: "upload", titles: { en: "Shapes" }, region_ids: [], age_min: null, age_max: null, status: "published" } });
     youtube = await addVideo({ source: "youtube", youtube_url: "https://youtu.be/dQw4w9WgXcQ", titles: { en: "Breathing" } });
     draft = await addVideo({ source: "youtube", youtube_url: "https://youtu.be/aaaaaaaaaaa", titles: { en: "Draft" }, status: "draft" });
     patient = await newPatient(ids.clinic, y.userId);
@@ -164,5 +165,40 @@ describe.skipIf(!ADMIN_URL)("video steps API", () => {
     const launch = await yael(`/v1/planned-sessions/${next}/launch`, { method: "POST", body: {} });
     expect(launch.body.launch.steps[2].video).toMatchObject({ id: youtube, title: "Breathing" });
     expect(((await yael(`/v1/videos`)).body.videos as Array<{ id: string }>).some((x) => x.id === youtube)).toBe(false); // gone from the picker
+  });
+
+  it("a rejected view is kept in the raw log, never dropped silently", async () => {
+    const before = (await env.db.query(`SELECT count(*)::int AS n FROM app.session_result_raw WHERE outcome = 'rejected' AND error = 'session_closed'`)).rows[0].n;
+    const launch = await env.db.query(`SELECT s.id FROM app.assignment_step s JOIN app.planned_session p ON p.assignment_id = s.assignment_id WHERE p.id = $1 AND s.step_type = 'video' ORDER BY s.ordinal LIMIT 1`, [sessionId]);
+    const late = await yael("/v1/video-views", { method: "POST", body: view(launch.rows[0].id, upload, { video_version: 2 }) });
+    expect(late.status).toBe(409);
+    const after = (await env.db.query(`SELECT count(*)::int AS n FROM app.session_result_raw WHERE outcome = 'rejected' AND error = 'session_closed'`)).rows[0].n;
+    expect(after).toBe(before + 1);
+    const accepted = (await env.db.query(`SELECT count(*)::int AS n FROM app.session_result_raw WHERE outcome = 'accepted' AND envelope_version = 'video_view.1'`)).rows[0].n;
+    expect(accepted).toBeGreaterThanOrEqual(2);
+  });
+
+  it("a session of videos only closes once they are watched; completion may be unknown", async () => {
+    const pid = await newPatient(ids.clinic, (await env.db.query(`SELECT user_id FROM app.patient_care_team WHERE patient_id = $1`, [patient])).rows[0].user_id);
+    await consent(pid, yael);
+    const a = await yael(`/v1/patients/${pid}/assignment`, { method: "POST", body: { template_id: null, name: "Watch", weeks: 1, sessions_per_week: 1, setting: "clinic", start_date: "2026-11-02", steps: [{ step_type: "video", video_id: upload }] } });
+    expect(a.status).toBe(201);
+    const psid = (await env.db.query(`SELECT id FROM app.planned_session WHERE patient_id = $1`, [pid])).rows[0].id;
+    const launch = (await yael(`/v1/planned-sessions/${psid}/launch`, { method: "POST", body: {} })).body.launch;
+    const r = await yael("/v1/video-views", { method: "POST", body: { ...view(launch.steps[0].assignment_step_id, upload, { video_version: 2, completed: null }), planned_session_id: psid } });
+    expect(r.status).toBe(201);
+    expect(r.body.planned_session_status).toBe("done");
+  });
+
+  it("assigning a platform template keeps an archived video it already has", async () => {
+    const tpl = (await env.db.query(`INSERT INTO app.protocol_template (name, weeks, sessions_per_week, visibility) VALUES ('Platform mix', 1, 1, 'platform') RETURNING id`)).rows[0].id;
+    await env.db.query(`INSERT INTO app.template_step (template_id, ordinal, step_type, video_id) VALUES ($1, 1, 'video', $2)`, [tpl, youtube]); // archived by the test above
+    const pid = await newPatient(ids.clinic, (await env.db.query(`SELECT user_id FROM app.patient_care_team WHERE patient_id = $1`, [patient])).rows[0].user_id);
+    const res = await yael(`/v1/patients/${pid}/assignment`, { method: "POST", body: { template_id: tpl, name: "Platform mix", weeks: 1, sessions_per_week: 1, setting: "clinic", start_date: "2026-11-02", steps: [{ step_type: "video", video_id: youtube }] } });
+    expect(res.status).toBe(201);
+    // Without the template, an archived video can't be put into a new protocol.
+    const pid2 = await newPatient(ids.clinic, (await env.db.query(`SELECT user_id FROM app.patient_care_team WHERE patient_id = $1`, [patient])).rows[0].user_id);
+    const bare = await yael(`/v1/patients/${pid2}/assignment`, { method: "POST", body: { template_id: null, name: "Bare", weeks: 1, sessions_per_week: 1, setting: "clinic", start_date: "2026-11-02", steps: [{ step_type: "video", video_id: youtube }] } });
+    expect(bare.body.issues).toEqual([{ path: "steps.0.video_id", code: "video_not_available" }]);
   });
 });

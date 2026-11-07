@@ -14,6 +14,27 @@ import { noteActivity } from "../lib/idle.ts";
 
 const YOUTUBE_CONTINUE_AFTER_S = 3;
 
+/**
+ * What a view says: seconds watched, and whether it was watched to the end. An upload is complete when it played
+ * to its end; a YouTube video after 80% of its length on the clock; unknown (null) when nobody entered a length.
+ */
+const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s) % 60).padStart(2, "0")}`;
+
+/** The summary line for a view: watched to the end, watched for a time (completion unknown), part of it, or not at all. */
+export function viewSummary(v: { completed: boolean | null; watched_s: number }): { id: "run.video.watched" | "run.video.watchedFor" | "run.video.partly" | "run.video.notPlayed"; time: string } {
+  const time = clock(v.watched_s);
+  if (v.completed === true) return { id: "run.video.watched", time };
+  if (v.completed === null && v.watched_s > 0) return { id: "run.video.watchedFor", time };
+  return { id: v.watched_s > 0 ? "run.video.partly" : "run.video.notPlayed", time };
+}
+
+export function viewOutcome(o: { source: "upload" | "youtube"; ended: boolean; watchedS: number; durationS: number | null }): { watched_s: number; completed: boolean | null } {
+  const watched_s = Math.min(7200, Math.max(0, Math.round(o.watchedS)));
+  if (o.source === "upload") return { watched_s, completed: o.ended };
+  if (!o.durationS) return { watched_s, completed: null };
+  return { watched_s, completed: o.watchedS >= o.durationS * 0.8 };
+}
+
 export function VideoStep({
   step,
   plannedSessionId,
@@ -35,6 +56,9 @@ export function VideoStep({
   const watched = useRef(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const offline = v.source === "youtube" && typeof navigator !== "undefined" && navigator.onLine === false;
+  // Nothing to play (an upload without a file): the child must still be able to go on.
+  const playable = (v.source === "upload" && !!v.file_url) || (v.source === "youtube" && !!v.youtube_id);
+  if (!playable && !canContinue) setCanContinue(true);
 
   // YouTube: count wall-clock seconds while the page is visible; offer Continue after a moment.
   useEffect(() => {
@@ -48,8 +72,7 @@ export function VideoStep({
   }, [v.source, offline]);
 
   const finish = () => {
-    const seconds = Math.min(7200, Math.round(watched.current));
-    const completed = v.source === "upload" ? ended : !!v.duration_s && seconds >= v.duration_s * 0.8;
+    const outcome = viewOutcome({ source: v.source, ended, watchedS: watched.current, durationS: v.duration_s });
     onDone({
       client_view_id: uuidv7(),
       planned_session_id: plannedSessionId,
@@ -58,8 +81,7 @@ export function VideoStep({
       video_version: v.version,
       started_at: startedAt.toISOString(),
       ended_at: new Date().toISOString(),
-      watched_s: seconds,
-      completed,
+      ...outcome,
     });
   };
 

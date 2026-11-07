@@ -258,16 +258,19 @@ export interface VideoFilters {
   lang: string;
   q?: string;
   region?: string | null;
+  /** A lobe or area code, in both hemispheres. */
+  code?: string | null;
   all?: boolean;
 }
 
 export function useVideos(f: VideoFilters, enabled = true) {
   return useQuery({
-    queryKey: ["videos", f.lang, f.q ?? "", f.region ?? "", !!f.all],
+    queryKey: ["videos", f.lang, f.q ?? "", f.region ?? "", f.code ?? "", !!f.all],
     queryFn: ({ signal }) => {
       const q = new URLSearchParams({ lang: f.lang });
       if (f.q?.trim()) q.set("q", f.q.trim());
       if (f.region) q.set("region", f.region);
+      if (f.code) q.set("code", f.code);
       if (f.all) q.set("all", "1");
       return apiGet<{ videos: VideoSummary[] }>(`/v1/videos?${q}`, { signal }).then((r) => r.videos);
     },

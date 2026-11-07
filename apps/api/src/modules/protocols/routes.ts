@@ -218,7 +218,11 @@ export function protocolRoutes(pool: pg.Pool) {
       if (!p.rows[0]) return "not_found" as const;
       const running = await db.query(`SELECT 1 FROM app.protocol_assignment WHERE patient_id = $1 AND status IN ('active', 'paused')`, [id]);
       if (running.rowCount) return "already_assigned" as const;
-      const vIssues = await videoIssues(db, input.steps);
+      // Videos the chosen template already has may stay even if archived since (same rule as editing it).
+      const fromTemplate = input.template_id
+        ? (await db.query<{ video_id: string }>(`SELECT video_id FROM app.template_step WHERE template_id = $1 AND video_id IS NOT NULL`, [input.template_id])).rows.map((r) => r.video_id)
+        : [];
+      const vIssues = await videoIssues(db, input.steps, new Set(fromTemplate));
       if (vIssues.length) return { issues: vIssues };
       let version: number | null = null;
       if (input.template_id) {

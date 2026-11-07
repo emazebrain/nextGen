@@ -833,9 +833,11 @@ async function handle(path: string, method: string, q: URLSearchParams, body: Re
     const lang = q.get("lang") ?? "en";
     const region = REGION_NODES.find((x) => x.id === q.get("region"));
     const words = (q.get("q") ?? "").trim().toLowerCase();
+    const code = q.get("code");
     const list = db.videos
       .filter((v) => v.status === "published" || q.get("all") === "1")
       .filter((v) => !region || v.regions.some((r) => r.path === region.path || r.path.startsWith(`${region.path}.`)))
+      .filter((v) => !code || v.regions.some((r) => r.code === code || r.path.split(".")[1] === code))
       .filter((v) => !words || Object.values(v.titles).some((t) => t?.toLowerCase().includes(words)))
       .map((v) => localized(v, lang))
       .sort((x, y) => x.title.localeCompare(y.title));

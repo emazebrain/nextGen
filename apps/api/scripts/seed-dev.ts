@@ -276,8 +276,12 @@ async function seedVideos(db: pg.Client, createdBy: string) {
     const bytes = await readFile(fileURLToPath(new URL(`../../web/public/demo-videos/${c.file}`, import.meta.url)));
     const key = `videos/${id}/2-seed.mp4`;
     const stored = await store.put(key, new Blob([bytes]).stream(), bytes.length + 1);
-    const f = await db.query<{ id: string }>(`INSERT INTO app.file_object (storage_key, sha256, bytes, mime, created_by) VALUES ($1,$2,$3,'video/mp4',$4) RETURNING id`, [key, stored.sha256, stored.bytes, createdBy]);
-    await db.query(`INSERT INTO app.video (id, source, file_id, duration_s, age_min, age_max, status, version, created_by) VALUES ($1,'upload',$2,$3,$4,$5,'published',2,$6)`, [id, f.rows[0]!.id, c.seconds, c.ages[0], c.ages[1], createdBy]);
+    await db.query(`INSERT INTO app.video (id, source, duration_s, age_min, age_max, status, version, created_by) VALUES ($1,'upload',$2,$3,$4,'draft',2,$5)`, [id, c.seconds, c.ages[0], c.ages[1], createdBy]);
+    const f = await db.query<{ id: string }>(
+      `INSERT INTO app.file_object (storage_key, sha256, bytes, mime, created_by, video_id, video_version) VALUES ($1,$2,$3,'video/mp4',$4,$5,2) RETURNING id`,
+      [key, stored.sha256, stored.bytes, createdBy, id],
+    );
+    await db.query(`UPDATE app.video SET file_id = $2, status = 'published' WHERE id = $1`, [id, f.rows[0]!.id]);
     await db.query(`INSERT INTO app.video_i18n (video_id, locale, title) VALUES ($1,'en',$2), ($1,'he',$3)`, [id, c.en, c.he]);
     await db.query(`INSERT INTO app.video_region (video_id, region_id) SELECT $1, id FROM app.brain_region WHERE path = ANY($2::text[])`, [id, c.regions]);
     ids[c.file] = id;

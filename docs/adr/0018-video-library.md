@@ -27,7 +27,8 @@ child can't leave the session through it. Every YouTube video is marked "Needs I
 picker and the protocol, and the session says so and offers Continue when the device is offline.
 
 **Versions.** `video.version` goes up when the media changes (a new upload, or a different YouTube id); editing
-titles, regions, ages or status does not. File URLs carry `?v=<version>` and are served with
+titles, regions, ages or status does not. Each file belongs to one version (`file_object.video_id`, `video_version`); file URLs carry `?v=<version>`,
+serve that version's file (404 for a version that never had one), and are served with
 `Cache-Control: private, max-age=31536000, immutable` and the file's sha256 as ETag; the launch package carries the
 version and sha256 too. That is what project 2's device store keys on. A replaced file stays in storage, because a
 session may be playing it.
@@ -41,13 +42,14 @@ byte ranges are served for seeking. Storage keys are `videos/<video id>/<version
 `path` (`left.frontal.ba44`) and a prefix index instead of `ltree`, so the local version needs no extension. It is
 seeded with v1's mapping of areas to lobes for both hemispheres, plus the cerebellum (not a Brodmann area, but games
 map to it). The mapping is an [Assumption] until a clinical advisor signs it off. Videos are tagged with tree nodes;
-the filter takes one node and matches it and everything under it. "BA44 in either hemisphere" means filtering on
-each hemisphere; a code-only filter can be added if therapists ask.
+the filter takes one node and matches it and everything under it, or a lobe or area code (`code=ba44`) that
+matches in both hemispheres, which the picker offers as "Both hemispheres".
 
 **Who does what (RLS).** `app.is_platform_admin()` (an active `platform_admin` membership) guards every write to
 the content tables. Signed-in staff read published videos. A video that a protocol uses stays readable after it is
 archived, to anyone who can see that protocol, so running protocols keep playing it; the picker offers published
-videos only. Uploads are refused before a byte is stored when the caller isn't a platform admin.
+videos only, and the builder marks a step whose video is no longer published. An upload can't be published until
+its file is in; the editor saves a new upload as a draft, uploads, then publishes, keeping the id across retries. Uploads are refused before a byte is stored when the caller isn't a platform admin.
 
 **Steps.** `template_step` and `assignment_step` gain `step_type` (default `game`) and `video_id`; `game_id` and
 `session_mode` become nullable, and the check is "a video step has only its video, a game step keeps the mode
@@ -60,7 +62,8 @@ and who ran the session. It is append-only (triggers) and audited, and the devic
 retries idempotent. A planned session closes when every game step has a result and every video step a view. The
 app keeps views in its own device outbox (`emb.outbox.views.v1`) until the server answers, like results. "Completed"
 means the file played to its end; for YouTube, which gives no end signal without its script API, it means at least
-80 % of the known length on the clock. A therapist's Skip or End on a video records the view as not completed.
+80 % of the length the admin entered, and is unknown (null) when no length was entered. Every attempt, accepted or
+refused, is also kept in `session_result_raw` (`envelope_version = 'video_view.1'`), so no view is dropped silently. A therapist's Skip or End on a video records the view as not completed.
 
 **Samples.** Three synthetic clips (generated patterns; `scripts/make-sample-videos.sh`) ship with the seed and the
 demo. No real people, no third-party footage.

@@ -64,6 +64,13 @@ test("Videos in protocols: a therapist filters videos by Brodmann area and adds 
   await picker.getByLabel("Area").selectOption({ label: "Brodmann area 4 (BA4)" });
   await expect(picker.getByText("No videos match these filters.")).toBeVisible();
   await picker.getByLabel("Area").selectOption({ label: "Any" });
+  // An area in either hemisphere: Spiral zoom is tagged BA17 on both sides, Colour shapes only on the left frontal lobe.
+  await picker.getByLabel("Hemisphere").selectOption({ label: "Both hemispheres" });
+  await picker.getByLabel("Lobe").selectOption({ label: "Occipital lobe" });
+  await picker.getByLabel("Area").selectOption({ label: "Brodmann area 17 (BA17)" });
+  await expect(picker.getByRole("button", { name: /Spiral zoom/ })).toBeVisible();
+  await expect(picker.getByRole("button", { name: /Colour shapes/ })).toHaveCount(0);
+  await picker.getByLabel("Hemisphere").selectOption({ label: "Any" });
   await picker.getByLabel("Search videos").fill("colour");
   await axe(page, "video picker");
   await shot(page, "51-video-picker");

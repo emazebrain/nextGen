@@ -219,32 +219,58 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
   });
 
   // A watched video (ADR 0018). The app's UUIDv7 view id makes retries safe; the view is kept once, append-only.
+  // Every attempt, accepted or not, also goes to the raw log, as results do (never dropped silently, §9.8).
   r.post("/video-views", async (c) => {
+    const raw = await c.req.raw.clone().json().catch(() => null);
     const body = await parseBody(c, videoViewInput);
-    if (!body.ok) return body.response;
-    const v = body.data;
     const me = c.get("user").id;
+    const log = (db: pg.PoolClient, outcome: string, error: string | null, extra: { viewId?: string | null; psid?: string | null; pid?: string | null } = {}) =>
+      db.query(
+        `INSERT INTO app.session_result_raw (client_session_id, planned_session_id, patient_id, recorded_by, envelope_version, payload, payload_sha256, outcome, error)
+         VALUES ($1,$2,$3,$4,'video_view.1',$5,$6,$7,$8)`,
+        [extra.viewId ?? null, extra.psid ?? null, extra.pid ?? null, me, JSON.stringify(raw ?? {}), createHash("sha256").update(canonicalJson(raw ?? {})).digest(), outcome, error],
+      );
+    if (!body.ok) {
+      const viewId = (raw as { client_view_id?: unknown } | null)?.client_view_id;
+      await run(c, (db) => log(db, "rejected", "invalid_view", { viewId: typeof viewId === "string" && UUID.test(viewId) ? viewId : null }));
+      return body.response;
+    }
+    const v = body.data;
     const result = await run(c, async (db): Promise<{ error: string; status: 404 | 409 | 422 } | VideoViewReceipt> => {
       const ps = await db.query<{ status: string; assignment_id: string; patient_id: string; clinic_id: string }>(
         `SELECT status, assignment_id, patient_id, clinic_id FROM app.planned_session WHERE id = $1`,
         [v.planned_session_id],
       );
       const session = ps.rows[0];
-      if (!session) return { error: "not_found", status: 404 };
+      const extra = { viewId: v.client_view_id, psid: session ? v.planned_session_id : null, pid: session?.patient_id ?? null };
+      if (!session) {
+        await log(db, "rejected", "not_found", extra);
+        return { error: "not_found", status: 404 };
+      }
       const seen = await db.query(`SELECT 1 FROM app.video_view WHERE client_view_id = $1`, [v.client_view_id]);
-      if (seen.rowCount) return { outcome: "duplicate", planned_session_status: session.status };
+      if (seen.rowCount) {
+        await log(db, "duplicate", null, extra);
+        return { outcome: "duplicate", planned_session_status: session.status };
+      }
       const step = await db.query<{ step_type: string; video_id: string | null }>(
         `SELECT step_type, video_id FROM app.assignment_step WHERE id = $1 AND assignment_id = $2`,
         [v.assignment_step_id, session.assignment_id],
       );
       const s = step.rows[0];
-      if (!s || s.step_type !== "video" || s.video_id !== v.video_id) return { error: "step_mismatch", status: 422 };
-      if (session.status !== "planned" && session.status !== "in_progress") return { error: "session_closed", status: 409 };
+      if (!s || s.step_type !== "video" || s.video_id !== v.video_id) {
+        await log(db, "rejected", "step_mismatch", extra);
+        return { error: "step_mismatch", status: 422 };
+      }
+      if (session.status !== "planned" && session.status !== "in_progress") {
+        await log(db, "rejected", "session_closed", extra);
+        return { error: "session_closed", status: 409 };
+      }
       await db.query(
         `INSERT INTO app.video_view (client_view_id, planned_session_id, assignment_step_id, patient_id, clinic_id, video_id, video_version, started_at, ended_at, watched_s, completed, recorded_by)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
         [v.client_view_id, v.planned_session_id, v.assignment_step_id, session.patient_id, session.clinic_id, v.video_id, v.video_version, v.started_at, v.ended_at, v.watched_s, v.completed, me],
       );
+      await log(db, "accepted", null, extra);
       return { outcome: "accepted", planned_session_status: await closeIfComplete(db, v.planned_session_id) };
     });
     if ("error" in result) return c.json({ error: result.error }, result.status);

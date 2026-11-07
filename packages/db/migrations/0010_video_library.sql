@@ -34,8 +34,13 @@ CREATE TABLE app.file_object (
   bytes       bigint NOT NULL CHECK (bytes > 0),
   mime        text NOT NULL,
   created_by  uuid REFERENCES app.app_user(id),
-  created_at  timestamptz NOT NULL DEFAULT now()
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  -- For a video's file: which version of which video it is, so a URL with ?v=<version> always gets those bytes.
+  video_id      uuid,
+  video_version integer CHECK (video_version >= 1),
+  CONSTRAINT file_video_version CHECK ((video_id IS NULL) = (video_version IS NULL))
 );
+CREATE UNIQUE INDEX file_object_video_version_uq ON app.file_object (video_id, video_version) WHERE video_id IS NOT NULL;
 
 CREATE TABLE app.video (
   id          uuid PRIMARY KEY DEFAULT app.uuidv7(),
@@ -54,6 +59,7 @@ CREATE TABLE app.video (
   CONSTRAINT video_ages CHECK (age_min IS NULL OR age_max IS NULL OR age_min <= age_max)
 );
 CREATE INDEX video_status_ix ON app.video (status);
+ALTER TABLE app.file_object ADD CONSTRAINT file_object_video_fk FOREIGN KEY (video_id) REFERENCES app.video(id);
 
 CREATE TABLE app.video_i18n (
   video_id    uuid NOT NULL REFERENCES app.video(id) ON DELETE CASCADE,
@@ -119,7 +125,8 @@ CREATE TABLE app.video_view (
   started_at         timestamptz NOT NULL,
   ended_at           timestamptz NOT NULL,
   watched_s          integer NOT NULL CHECK (watched_s BETWEEN 0 AND 7200),
-  completed          boolean NOT NULL,
+  -- NULL: not known (a YouTube video whose length nobody entered).
+  completed          boolean,
   recorded_by        uuid NOT NULL REFERENCES app.app_user(id),
   created_at         timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT view_times CHECK (ended_at >= started_at)

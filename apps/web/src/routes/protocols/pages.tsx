@@ -14,6 +14,7 @@ import { findGame, localText } from "../../games/registry.ts";
 import { useT, usePrefs, type MessageId } from "../../i18n/index.tsx";
 import { useClinic } from "../../lib/clinic.tsx";
 import { calendarDate } from "../../lib/format.ts";
+import { joinSteps } from "../../lib/steps.ts";
 import { useTitle } from "../../lib/title.ts";
 import { fullName, LoadError } from "../shared.tsx";
 import { StepList, stepProblems } from "./steps.tsx";
@@ -26,14 +27,15 @@ function useGameNames() {
 }
 
 /** "Tunnel Rush → ▶ Colour shapes → Block Crasher": every step in order (ADR 0018). */
-export function stepNames(x: { games: string[]; items?: StepItem[] }, names: (ids: string[]) => string[]) {
+export function stepNames(x: { games: string[]; items?: StepItem[] }, names: (ids: string[]) => string[], locale: string) {
   if (!x.items) return names([...new Set(x.games)]).join(" · ");
-  return x.items.map((i) => (i.kind === "video" ? `▶ ${i.title}` : names([i.game_id])[0])).join(" → ");
+  return joinSteps(x.items.map((i) => (i.kind === "video" ? `▶ ${i.title}` : names([i.game_id])[0]!)), locale);
 }
 
 function TemplateCard({ t: tpl, actions }: { t: TemplateSummary; actions?: ReactNode }) {
   const t = useT();
   const names = useGameNames();
+  const { locale } = usePrefs();
   return (
     <li className="tplcard">
       <div className="tplcard__body">
@@ -41,7 +43,7 @@ function TemplateCard({ t: tpl, actions }: { t: TemplateSummary; actions?: React
         <p className="app-muted">
           {t("protocols.plan", { weeks: tpl.weeks, perWeek: tpl.sessions_per_week })} · {t("builder.settingValue", { s: tpl.setting })}
         </p>
-        <p className="tplcard__games">{stepNames(tpl, names)}</p>
+        <p className="tplcard__games">{stepNames(tpl, names, locale)}</p>
         <p className="app-muted tplcard__meta">
           <Chip>{t("protocols.visibility", { v: tpl.visibility })}</Chip>
           {tpl.owner_name && <span>{t("protocols.by", { name: tpl.owner_name })}</span>}

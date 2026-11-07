@@ -7,7 +7,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
 import { mkdir, rename, rm, stat } from "node:fs/promises";
 import { dirname, join, resolve, sep } from "node:path";
-import { Readable } from "node:stream";
+import { Readable, Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
 
 export class FileTooLarge extends Error {
   constructor() {
@@ -36,20 +37,21 @@ export function localFileStore(dir: string): FileStore {
       await mkdir(dirname(target), { recursive: true });
       const tmp = join(dirname(target), `.upload-${randomUUID()}`);
       const hash = createHash("sha256");
-      const out = createWriteStream(tmp);
       let bytes = 0;
-      try {
-        for await (const chunk of Readable.fromWeb(body as never) as AsyncIterable<Buffer>) {
+      // One pipeline: backpressure, the size cap and every error (network, disk full) end in one rejection.
+      const meter = new Transform({
+        transform(chunk: Buffer, _enc, cb) {
           bytes += chunk.length;
-          if (bytes > maxBytes) throw new FileTooLarge();
+          if (bytes > maxBytes) return cb(new FileTooLarge());
           hash.update(chunk);
-          if (!out.write(chunk)) await new Promise<void>((r) => out.once("drain", () => r()));
-        }
-        await new Promise<void>((res, rej) => out.end((err?: Error | null) => (err ? rej(err) : res())));
+          cb(null, chunk);
+        },
+      });
+      try {
+        await pipeline(Readable.fromWeb(body as never), meter, createWriteStream(tmp));
         await rename(tmp, target);
         return { bytes, sha256: hash.digest() };
       } catch (err) {
-        out.destroy();
         await rm(tmp, { force: true });
         throw err;
       }

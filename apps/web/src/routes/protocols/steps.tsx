@@ -205,6 +205,11 @@ function VideoStepText({ videoId }: { videoId: string }) {
       <p className="step__name">{v.data?.title ?? t("common.loading")}</p>
       <p className="app-muted">{[t("step.video"), v.data ? formatDuration(v.data.duration_s) : null].filter(Boolean).join(" · ")}</p>
       {v.data && <VideoSourceChip video={v.data} />}
+      {v.data && v.data.status !== "published" && (
+        <Chip tone="warning">
+          {t("step.videoGone")}
+        </Chip>
+      )}
     </div>
   );
 }

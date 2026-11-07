@@ -2,7 +2,7 @@
  * The video library for platform admins (ADR 0018): add a YouTube link or upload a file, give it titles, tag the
  * brain regions it works on, publish. Therapists pick published videos into protocols.
  */
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { Film } from "lucide-react";
 import { Alert, Button, Card, Chip, DataList, EmptyState, MazeLoader, PageHeader, SelectField, TextAreaField, TextField, type Column } from "@emb/ui";
@@ -68,7 +68,7 @@ export function VideosAdminPage() {
     { id: "source", header: t("videos.col.source"), cell: (v) => <VideoSourceChip video={v} /> },
     { id: "regions", header: t("videos.col.regions"), cell: (v) => <VideoRegionChips video={v} /> },
     { id: "length", header: t("videos.col.length"), numeric: true, cell: (v) => formatDuration(v.duration_s) },
-    { id: "status", header: t("videos.col.status"), cell: (v) => <Chip tone={statusTone[v.status]}>{t(`videos.status.${v.status}` as MessageId)}</Chip> },
+    { id: "status", header: t("videos.col.status"), cell: (v) => <Chip tone={statusTone[v.status]}>{t(`videos.status.${v.status}`)}</Chip> },
   ];
   return (
     <div className="app-page">
@@ -119,9 +119,11 @@ interface Draft {
   age_max: string;
   status: "draft" | "published" | "archived";
   duration_s: number | null;
+  /** A YouTube video's length as typed (m:ss); the page can't read it from YouTube. */
+  duration_text: string;
 }
 
-const empty: Draft = { source: "upload", youtube_url: "", title_en: "", title_he: "", description_en: "", description_he: "", region_ids: [], age_min: "", age_max: "", status: "draft", duration_s: null };
+const empty: Draft = { source: "upload", youtube_url: "", title_en: "", title_he: "", description_en: "", description_he: "", region_ids: [], age_min: "", age_max: "", status: "draft", duration_s: null, duration_text: "" };
 
 function fromVideo(v: VideoSummary): Draft {
   return {
@@ -136,7 +138,28 @@ function fromVideo(v: VideoSummary): Draft {
     age_max: v.age_max?.toString() ?? "",
     status: v.status,
     duration_s: v.duration_s,
+    duration_text: v.source === "youtube" && v.duration_s ? formatDuration(v.duration_s) : "",
   };
+}
+
+/** "1:30" or "90" → 90; empty → null (unknown); anything else → undefined (invalid). */
+export function parseClock(text: string): number | null | undefined {
+  const s = text.trim();
+  if (!s) return null;
+  const m = /^(?:(\d{1,3}):)?(\d{1,4})$/.exec(s);
+  if (!m) return undefined;
+  if (m[1] !== undefined && Number(m[2]) > 59) return undefined;
+  const total = Number(m[1] ?? 0) * 60 + Number(m[2]);
+  return total > 0 && total <= 86400 ? total : undefined;
+}
+
+/**
+ * The server won't publish an upload that has no file yet. With a file waiting, save it as a draft first, upload,
+ * then publish; the first save's id is kept so a failed upload retried from the same form doesn't add a second video.
+ */
+export function savePlan(o: { want: "draft" | "published" | "archived"; hasFile: boolean; pendingFile: boolean }): { first: "draft" | "published" | "archived"; publishAfter: boolean } {
+  if (o.want === "published" && o.pendingFile && !o.hasFile) return { first: "draft", publishAfter: true };
+  return { first: o.want, publishAfter: false };
 }
 
 /** Reads a local video file's length before it is uploaded. */
@@ -173,6 +196,8 @@ export function VideoEditorPage() {
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [issues, setIssues] = useState<Record<string, string>>({});
+  const savedId = useRef<string | null>(null);
+  const savedHasFile = useRef(false);
   useTitle(t(id ? "videos.edit" : "videos.add"));
   useEffect(() => {
     if (existing.data) setDraft(fromVideo(existing.data));
@@ -191,7 +216,7 @@ export function VideoEditorPage() {
       age_min: draft.age_min ? Number(draft.age_min) : null,
       age_max: draft.age_max ? Number(draft.age_max) : null,
       status: draft.status,
-      duration_s: draft.duration_s,
+      duration_s: draft.source === "youtube" ? (parseClock(draft.duration_text) ?? null) : draft.duration_s,
     }),
     [draft],
   );
@@ -204,22 +229,37 @@ export function VideoEditorPage() {
     e.preventDefault();
     setError(null);
     setIssues({});
-    if (draft.source === "upload" && !id && !file) {
+    const vid = id ?? savedId.current;
+    const hasFile = !!existing.data?.has_file || savedHasFile.current;
+    if (draft.source === "upload" && !hasFile && !file) {
       setIssues({ file: t("videos.err.file") });
       return;
     }
+    if (draft.source === "youtube" && parseClock(draft.duration_text) === undefined) {
+      setIssues({ duration_s: t("videos.err.duration_s") });
+      return;
+    }
+    const uploading = !!file && draft.source === "upload";
+    const plan = savePlan({ want: draft.status, hasFile, pendingFile: uploading });
     try {
-      const saved = await save.mutateAsync({ id, input, lang: locale });
-      if (file && draft.source === "upload") {
+      const saved = await save.mutateAsync({ id: vid, input: { ...input, status: plan.first }, lang: locale });
+      savedId.current = saved.id;
+      if (uploading) {
         setProgress(0);
         await uploadVideoFile(saved.id, file, setProgress);
+        savedHasFile.current = true;
+        setFile(null);
       }
+      if (plan.publishAfter) await save.mutateAsync({ id: saved.id, input, lang: locale });
       navigate("/admin/videos");
     } catch (err) {
       setProgress(null);
       if (err instanceof ApiError && err.issues.length) {
         const map: Record<string, string> = {};
-        for (const i of err.issues) map[i.path.split(".")[0]!] = t(`videos.err.${i.path.split(".")[0]}` as MessageId);
+        for (const i of err.issues) {
+          const field = i.code === "needs_file" ? "file" : i.path.split(".")[0]!;
+          map[field] = t(`videos.err.${field}` as MessageId);
+        }
         setIssues(map);
       } else if (err instanceof ApiError && (err.status === 413 || err.status === 415)) setError(t(err.status === 413 ? "videos.err.tooLarge" : "videos.err.type"));
       else setError(t("videos.err.save"));
@@ -250,6 +290,17 @@ export function VideoEditorPage() {
               onChange={(e) => set("youtube_url", e.target.value)}
               error={ytInvalid || issues.youtube_url ? t("videos.err.youtube_url") : undefined}
               hint={t("videos.youtubeHint")}
+            />
+          ) : null}
+          {draft.source === "youtube" ? (
+            <TextField
+              label={t("videos.length")}
+              dir="ltr"
+              inputMode="numeric"
+              value={draft.duration_text}
+              onChange={(e) => set("duration_text", e.target.value)}
+              error={issues.duration_s ?? (parseClock(draft.duration_text) === undefined ? t("videos.err.duration_s") : undefined)}
+              hint={t("videos.lengthHint")}
             />
           ) : (
             <div className={issues.file ? "emb-field emb-field--invalid" : "emb-field"}>

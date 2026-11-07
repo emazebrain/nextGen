@@ -28,7 +28,7 @@ import { useTitle } from "../lib/title.ts";
 import { ResultSummary } from "../routes/library.tsx";
 import { checkPin, hasPin, PIN_PATTERN, setPin } from "./kidmode.ts";
 import { enqueue, enqueueView, send, sendView, type SendResult, type ViewSendResult } from "./outbox.ts";
-import { VideoStep } from "./VideoStep.tsx";
+import { VideoStep, viewSummary } from "./VideoStep.tsx";
 
 const BETWEEN_GAMES_S = 5;
 const LONG_PRESS_MS = 1500;
@@ -508,7 +508,7 @@ function Summary({ pkg, played, stepName, retry }: { pkg: LaunchPackage; played:
                 </h2>
                 <SendChip s={p.send} />
               </div>
-              <p>{p.view.completed ? t("run.video.watched", { time: clock(p.view.watched_s) }) : p.view.watched_s > 0 ? t("run.video.partly", { time: clock(p.view.watched_s) }) : t("run.video.notPlayed")}</p>
+              <p>{(({ id, time }) => t(id, { time }))(viewSummary(p.view))}</p>
             </Card>
           ) : (
           <Card key={p.id} as="section" labelledBy={`r-${p.id}`}>
@@ -543,7 +543,6 @@ function Summary({ pkg, played, stepName, retry }: { pkg: LaunchPackage; played:
   );
 }
 
-const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s) % 60).padStart(2, "0")}`;
 
 function SendChip({ s }: { s: Played["send"] }) {
   const t = useT();

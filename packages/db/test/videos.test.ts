@@ -112,4 +112,13 @@ describe.skipIf(!ADMIN_URL)("video library", () => {
     const other = await asUser(db, ids.outsider, async (c) => (await c.query(`SELECT id FROM app.video WHERE id = $1`, [ids.published])).rowCount, { rollback: true });
     expect(other).toBe(0);
   });
+
+  it("a file belongs to one version of one video; completion may be unknown", async () => {
+    const f = (v: number) =>
+      db.query(`INSERT INTO app.file_object (storage_key, sha256, bytes, mime, video_id, video_version) VALUES ($1, decode(repeat('ab', 32), 'hex'), 10, 'video/mp4', $2, $3)`, [`k-${v}-${Math.random()}`, ids.draft, v]);
+    await f(2);
+    await expect(f(2)).rejects.toThrow(/duplicate key/);
+    const nullable = await db.query(`SELECT is_nullable FROM information_schema.columns WHERE table_schema = 'app' AND table_name = 'video_view' AND column_name = 'completed'`);
+    expect(nullable.rows[0].is_nullable).toBe("YES");
+  });
 });

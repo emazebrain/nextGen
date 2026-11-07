@@ -20,6 +20,8 @@ import { FileTooLarge, type FileStore } from "../../files.ts";
 import { parseBody } from "../../validate.ts";
 import { UUID } from "../patients/routes.ts";
 
+class NeedsFile extends Error {}
+
 const LANGS = new Set(["en", "he", "ar", "ru", "fr", "es", "zh"]);
 const langOf = (c: Context) => {
   const l = c.req.query("lang");
@@ -105,6 +107,9 @@ export function videoRoutes(pool: pg.Pool, files: FileStore) {
     const region = c.req.query("region");
     if (region !== undefined && !UUID.test(region)) return c.json({ error: "invalid_region" }, 400);
     const q = c.req.query("q")?.trim().slice(0, 100) || null;
+    // A lobe or area code without a hemisphere ("ba44", "frontal") matches it in both hemispheres.
+    const code = c.req.query("code") ?? null;
+    if (code !== null && !/^[a-z0-9_]{1,40}$/.test(code)) return c.json({ error: "invalid_code" }, 400);
     const all = c.req.query("all") === "1";
     const videos = await run(c, async (db) => {
       const like = q ? `%${q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%` : null;
@@ -115,8 +120,11 @@ export function videoRoutes(pool: pg.Pool, files: FileStore) {
                   SELECT 1 FROM app.video_region vr JOIN app.brain_region t ON t.id = vr.region_id, app.brain_region f
                    WHERE vr.video_id = v.id AND f.id = $2::uuid AND (t.path = f.path OR t.path LIKE f.path || '.%')))
             AND ($3::text IS NULL OR EXISTS (SELECT 1 FROM app.video_i18n i WHERE i.video_id = v.id AND (i.title ILIKE $3 OR i.description ILIKE $3)))
+            AND ($4::text IS NULL OR EXISTS (
+                  SELECT 1 FROM app.video_region vr JOIN app.brain_region t ON t.id = vr.region_id
+                   WHERE vr.video_id = v.id AND (t.code = $4 OR split_part(t.path, '.', 2) = $4)))
           ORDER BY v.created_at DESC`,
-        [all, region ?? null, like],
+        [all, region ?? null, like, code],
       );
       return rows.map((row) => toSummary(row, lang)).sort((a, b) => a.title.localeCompare(b.title, lang));
     });
@@ -133,10 +141,16 @@ export function videoRoutes(pool: pg.Pool, files: FileStore) {
   r.get("/videos/:id/file", async (c) => {
     const id = c.req.param("id");
     if (!UUID.test(id)) return notFound(c);
+    // ?v=<version> names exact bytes (a session mid-way keeps getting the file it started with); no v = the current file.
+    const vParam = c.req.query("v");
+    const version = vParam === undefined ? null : /^[1-9]\d{0,8}$/.test(vParam) ? Number(vParam) : -1;
+    if (version === -1) return notFound(c);
     const file = await run(c, async (db) => {
       const { rows } = await db.query<{ storage_key: string; mime: string; sha256: Buffer; bytes: string }>(
-        `SELECT f.storage_key, f.mime, f.sha256, f.bytes FROM app.video v JOIN app.file_object f ON f.id = v.file_id WHERE v.id = $1`,
-        [id],
+        version === null
+          ? `SELECT f.storage_key, f.mime, f.sha256, f.bytes FROM app.video v JOIN app.file_object f ON f.id = v.file_id WHERE v.id = $1`
+          : `SELECT f.storage_key, f.mime, f.sha256, f.bytes FROM app.video v JOIN app.file_object f ON f.video_id = v.id AND f.video_version = $2 WHERE v.id = $1`,
+        version === null ? [id] : [id, version],
       );
       return rows[0] ?? null;
     });
@@ -147,8 +161,8 @@ export function videoRoutes(pool: pg.Pool, files: FileStore) {
       "accept-ranges": "bytes",
       "content-type": file.mime,
       etag: `"${file.sha256.toString("hex")}"`,
-      // The URL carries ?v=<version>; a new upload gets a new version, so a cached copy never goes stale.
-      "cache-control": "private, max-age=31536000, immutable",
+      // A versioned URL never changes its bytes, so it may be kept for good; the bare URL follows new uploads.
+      "cache-control": version === null ? "private, no-cache" : "private, max-age=31536000, immutable",
     };
     if (range === "invalid") return new Response(null, { status: 416, headers: { ...headers, "content-range": `bytes */${size}` } });
     const opened = await files.open(file.storage_key, range ?? undefined);
@@ -167,6 +181,8 @@ export function videoRoutes(pool: pg.Pool, files: FileStore) {
     if (!body.ok) return body.response;
     const input = body.data;
     const me = c.get("user").id;
+    // An upload has no file yet when it is created: it can't be published until its file is in.
+    if (input.source === "upload" && input.status === "published") return c.json({ error: "invalid", issues: [{ path: "status", code: "needs_file" }] }, 400);
     const video = await run(c, async (db) => {
       if (!(await isAdmin(db))) return null;
       const id = randomUUID();
@@ -200,8 +216,14 @@ export function videoRoutes(pool: pg.Pool, files: FileStore) {
         [id, input.source, yt, input.duration_s ?? null, input.age_min, input.age_max, input.status, media ? 1 : 0],
       );
       await writeTexts(db, id, input);
+      const after = await db.query<{ ok: boolean }>(`SELECT NOT (source = 'upload' AND status = 'published' AND file_id IS NULL) AS ok FROM app.video WHERE id = $1`, [id]);
+      if (!after.rows[0]!.ok) throw new NeedsFile(); // rolls the whole edit back
       return loadVideo(db, id, langOf(c));
+    }).catch((err: unknown) => {
+      if (err instanceof NeedsFile) return "needs_file" as const;
+      throw err;
     });
+    if (result === "needs_file") return c.json({ error: "invalid", issues: [{ path: "status", code: "needs_file" }] }, 400);
     if (result === "forbidden") return c.json({ error: "forbidden" }, 403);
     if (result === "not_found" || !result) return notFound(c);
     return c.json({ video: result });
@@ -241,15 +263,13 @@ export function videoRoutes(pool: pg.Pool, files: FileStore) {
     }
     const me = c.get("user").id;
     const video = await run(c, async (db) => {
-      const f = await db.query<{ id: string }>(`INSERT INTO app.file_object (storage_key, sha256, bytes, mime, created_by) VALUES ($1,$2,$3,$4,$5) RETURNING id`, [
-        key,
-        stored.sha256,
-        stored.bytes,
-        mime,
-        me,
-      ]);
-      // The previous file stays: a session may be playing it right now.
-      await db.query(`UPDATE app.video SET file_id = $2, version = version + 1 WHERE id = $1`, [id, f.rows[0]!.id]);
+      // The new file is the next version; the previous one stays reachable at its own ?v= (a session may be playing it).
+      const next = await db.query<{ version: number }>(`UPDATE app.video SET version = version + 1 WHERE id = $1 RETURNING version`, [id]);
+      const f = await db.query<{ id: string }>(
+        `INSERT INTO app.file_object (storage_key, sha256, bytes, mime, created_by, video_id, video_version) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+        [key, stored.sha256, stored.bytes, mime, me, id, next.rows[0]!.version],
+      );
+      await db.query(`UPDATE app.video SET file_id = $2 WHERE id = $1`, [id, f.rows[0]!.id]);
       return loadVideo(db, id, langOf(c));
     });
     return c.json({ video });

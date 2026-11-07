@@ -103,7 +103,8 @@ export const videoViewInput = z
     started_at: z.string().datetime(),
     ended_at: z.string().datetime(),
     watched_s: z.number().int().min(0).max(7200),
-    completed: z.boolean(),
+    /** null: not known (a YouTube video whose length was never entered). */
+    completed: z.boolean().nullable(),
   })
   .refine((v) => v.ended_at >= v.started_at, { path: ["ended_at"], message: "ends_before_start" });
 export type VideoViewInput = z.infer<typeof videoViewInput>;

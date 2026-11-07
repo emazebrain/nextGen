@@ -68,7 +68,7 @@ describe.skipIf(!ADMIN_URL)("videos API", () => {
   });
 
   it("uploads a file, then serves it whole and by range", async () => {
-    const created = await admin("/v1/admin/videos", { method: "POST", body: video({ source: "upload", youtube_url: undefined, titles: { en: "Shapes" } }) });
+    const created = await admin("/v1/admin/videos", { method: "POST", body: video({ source: "upload", youtube_url: undefined, titles: { en: "Shapes" }, status: "draft" }) });
     const id = created.body.video.id;
     expect(created.body.video).toMatchObject({ has_file: false, needs_internet: false });
     const bytes = new Uint8Array(1024).map((_, i) => i % 251);
@@ -76,6 +76,7 @@ describe.skipIf(!ADMIN_URL)("videos API", () => {
     expect(up.status).toBe(200);
     const after = (await up.json()).video;
     expect(after).toMatchObject({ has_file: true, version: 2 });
+    await admin(`/v1/admin/videos/${id}`, { method: "PUT", body: video({ source: "upload", youtube_url: undefined, titles: { en: "Shapes" }, status: "published" }) });
 
     const whole = await yael.raw(`/v1/videos/${id}/file?v=2`);
     expect(whole.status).toBe(200);
@@ -133,5 +134,49 @@ describe.skipIf(!ADMIN_URL)("videos API", () => {
   it("tells the app whether the user is a platform admin", async () => {
     expect((await admin("/v1/me")).body.is_platform_admin).toBe(true);
     expect((await yael("/v1/me")).body.is_platform_admin).toBe(false);
+  });
+
+  const upload = async (id: string, bytes: Uint8Array<ArrayBuffer>) =>
+    (await admin.raw(`/v1/admin/videos/${id}/file`, { method: "PUT", headers: { "content-type": "video/mp4" }, body: bytes })).json();
+
+  it("serves the file for the version asked, and 404 for a version that never existed", async () => {
+    const id = (await admin("/v1/admin/videos", { method: "POST", body: video({ source: "upload", youtube_url: undefined, titles: { en: "Versions" }, status: "draft" }) })).body.video.id;
+    const a = new Uint8Array(32).fill(1);
+    const b = new Uint8Array(48).fill(2);
+    expect((await upload(id, a)).video.version).toBe(2);
+    expect((await upload(id, b)).video.version).toBe(3);
+    const v2 = await admin.raw(`/v1/videos/${id}/file?v=2`);
+    expect(new Uint8Array(await v2.arrayBuffer())).toEqual(a); // the old version stays reachable mid-session
+    expect(v2.headers.get("cache-control")).toContain("immutable");
+    const v2part = await admin.raw(`/v1/videos/${id}/file?v=2`, { headers: { range: "bytes=0-3" } });
+    expect(v2part.headers.get("content-range")).toBe("bytes 0-3/32");
+    expect(new Uint8Array(await (await admin.raw(`/v1/videos/${id}/file?v=3`)).arrayBuffer())).toEqual(b);
+    expect((await admin.raw(`/v1/videos/${id}/file?v=9`)).status).toBe(404);
+    const current = await admin.raw(`/v1/videos/${id}/file`);
+    expect(new Uint8Array(await current.arrayBuffer())).toEqual(b);
+    expect(current.headers.get("cache-control")).not.toContain("immutable");
+  });
+
+  it("an upload video can't be published before its file is in", async () => {
+    const early = await admin("/v1/admin/videos", { method: "POST", body: video({ source: "upload", youtube_url: undefined, titles: { en: "No file yet" }, status: "published" }) });
+    expect(early.status).toBe(400);
+    expect(early.body.issues).toEqual([{ path: "status", code: "needs_file" }]);
+    const id = (await admin("/v1/admin/videos", { method: "POST", body: video({ source: "upload", youtube_url: undefined, titles: { en: "No file yet" }, status: "draft" }) })).body.video.id;
+    const put = await admin(`/v1/admin/videos/${id}`, { method: "PUT", body: video({ source: "upload", youtube_url: undefined, titles: { en: "No file yet" }, status: "published" }) });
+    expect(put.status).toBe(400);
+    await upload(id, new Uint8Array(16).fill(3));
+    const ok = await admin(`/v1/admin/videos/${id}`, { method: "PUT", body: video({ source: "upload", youtube_url: undefined, titles: { en: "No file yet" }, status: "published" }) });
+    expect(ok.status).toBe(200);
+    expect(ok.body.video).toMatchObject({ status: "published", has_file: true });
+  });
+
+  it("finds an area or lobe in both hemispheres by its code", async () => {
+    const id = (await admin("/v1/admin/videos", { method: "POST", body: video({ youtube_url: "https://youtu.be/ddddddddddd", titles: { en: "Both sides" }, region_ids: [region("left.occipital.ba17"), region("right.temporal.ba22")] }) })).body.video.id;
+    const ids = async (q: string) => ((await yael(`/v1/videos?${q}`)).body.videos as Array<{ id: string }>).map((v) => v.id);
+    expect(await ids("code=ba17")).toContain(id);
+    expect(await ids("code=ba22")).toContain(id);
+    expect(await ids("code=temporal")).toContain(id); // a lobe code includes its areas
+    expect(await ids("code=ba44")).not.toContain(id);
+    expect((await yael("/v1/videos?code=DROP%20TABLE")).status).toBe(400);
   });
 });

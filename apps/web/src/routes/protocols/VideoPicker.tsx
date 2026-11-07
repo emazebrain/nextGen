@@ -5,7 +5,7 @@ import { Button, MazeLoader, TextField } from "@emb/ui";
 import type { VideoSummary } from "@emb/contracts";
 import { useBrainRegions, useVideos } from "../../api/queries.ts";
 import { usePrefs, useT } from "../../i18n/index.tsx";
-import { RegionFilter, useRegionTree } from "../admin/RegionPicker.tsx";
+import { RegionFilter, regionParams, useRegionTree, type RegionChoice } from "../admin/RegionPicker.tsx";
 import { formatDuration, VideoRegionChips, VideoSourceChip } from "../admin/videos.tsx";
 import { LoadError } from "../shared.tsx";
 
@@ -13,10 +13,10 @@ export function VideoPicker({ onPick, onCancel }: { onPick: (v: VideoSummary) =>
   const t = useT();
   const { locale } = usePrefs();
   const [q, setQ] = useState("");
-  const [region, setRegion] = useState<string | null>(null);
+  const [region, setRegion] = useState<RegionChoice>(null);
   const regions = useBrainRegions(locale);
   const tree = useRegionTree(regions.data);
-  const videos = useVideos({ lang: locale, q, region });
+  const videos = useVideos({ lang: locale, q, ...regionParams(region) });
   return (
     <div className="gamepick videopick" role="group" aria-label={t("videoPicker.title")}>
       <p className="emb-field__label">{t("videoPicker.title")}</p>
