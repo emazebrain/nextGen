@@ -15,6 +15,9 @@ import {
   resultUpload,
   type GameSessionView,
   type LaunchPackage,
+  type LaunchStep,
+  type VideoViewReceipt,
+  videoViewInput,
   type ProgressionDecisionView,
   type ResultEnvelopeInput,
   type ResultReceipt,
@@ -25,6 +28,7 @@ import { GAME_MANIFESTS } from "../../games.ts";
 import { paramsHash, type TicketSigner } from "../../tickets.ts";
 import { parseBody } from "../../validate.ts";
 import { UUID } from "../patients/routes.ts";
+import { pick } from "../videos/routes.ts";
 import { timerPositionFor, timerShown } from "@emb/session-rules";
 
 const CLINIC_TICKET_TTL_S = 24 * 3600;
@@ -33,6 +37,8 @@ const GAME_LANGS = new Set(["he", "en", "ar", "ru", "fr", "es", "zh"]);
 interface StepRow {
   id: string;
   ordinal: number;
+  step_type?: "game" | "video";
+  video_id?: string | null;
   game_id: string;
   session_mode: "timed" | "lives" | "timed_lives";
   duration_s: number | null;
@@ -109,13 +115,27 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
       if (row.assignment_status !== "active") return { error: "protocol_not_active" as const };
       if (row.status !== "planned" && row.status !== "in_progress") return { error: "session_closed" as const };
       const steps = await db.query<StepRow & { done: boolean }>(
-        `SELECT s.id, s.ordinal, s.game_id, s.session_mode, s.duration_s, s.lives, s.lives_auto, s.current_difficulty, s.hemisphere, s.timer_position, s.monochrome, s.practice, s.trial_window_ms,
+        `SELECT s.id, s.ordinal, s.step_type, s.video_id, s.game_id, s.session_mode, s.duration_s, s.lives, s.lives_auto, s.current_difficulty, s.hemisphere, s.timer_position, s.monochrome, s.practice, s.trial_window_ms,
                 s.game_params, s.sessions_completed,
-                EXISTS (SELECT 1 FROM app.game_session g WHERE g.planned_session_id = $2 AND g.assignment_step_id = s.id) AS done
+                CASE WHEN s.step_type = 'video'
+                     THEN EXISTS (SELECT 1 FROM app.video_view w WHERE w.planned_session_id = $2 AND w.assignment_step_id = s.id)
+                     ELSE EXISTS (SELECT 1 FROM app.game_session g WHERE g.planned_session_id = $2 AND g.assignment_step_id = s.id) END AS done
            FROM app.assignment_step s WHERE s.assignment_id = $1 ORDER BY s.ordinal`,
         [row.assignment_id, id],
       );
       await db.query(`UPDATE app.planned_session SET status = 'in_progress' WHERE id = $1 AND status = 'planned'`, [id]);
+      // Videos are played by the app itself: no ticket, just what it needs to show (and later keep) the file.
+      const videoIds = steps.rows.filter((s) => s.step_type === "video").map((s) => s.video_id!);
+      const videos = new Map<string, { id: string; version: number; source: "upload" | "youtube"; youtube_id: string | null; duration_s: number | null; titles: Record<string, string>; sha256: Buffer | null; has_file: boolean }>();
+      if (videoIds.length) {
+        const v = await db.query(
+          `SELECT v.id, v.version, v.source, v.youtube_id, v.duration_s, f.sha256, v.file_id IS NOT NULL AS has_file,
+                  COALESCE((SELECT jsonb_object_agg(i.locale, i.title) FROM app.video_i18n i WHERE i.video_id = v.id), '{}') AS titles
+             FROM app.video v LEFT JOIN app.file_object f ON f.id = v.file_id WHERE v.id = ANY($1::uuid[])`,
+          [videoIds],
+        );
+        for (const r of v.rows) videos.set(r.id, r);
+      }
       const pkg: LaunchPackage = {
         planned_session_id: id,
         seq: row.seq,
@@ -123,10 +143,25 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
         total: row.total,
         patient: { id: row.patient_id, given_name: row.given_name, family_name: row.family_name, preferred_locale: row.preferred_locale, alert: row.alert },
         assignment: { id: row.assignment_id, name: row.assignment_name },
-        steps: steps.rows.map((s) => {
+        steps: steps.rows.map((s): LaunchStep => {
+          if (s.step_type === "video") {
+            const v = videos.get(s.video_id!)!;
+            return {
+              kind: "video",
+              assignment_step_id: s.id,
+              ordinal: s.ordinal,
+              video: {
+                id: v.id, version: v.version, source: v.source, youtube_id: v.youtube_id, duration_s: v.duration_s,
+                title: pick(v.titles, row.preferred_locale) ?? "",
+                file_url: v.source === "upload" && v.has_file ? `/v1/videos/${v.id}/file?v=${v.version}` : null,
+                sha256: v.sha256 ? v.sha256.toString("hex") : null,
+              },
+              done: s.done,
+            };
+          }
           const params = buildParams(s, row, randomInt(1, 2 ** 31));
           const ticket = tickets.sign({ jti: crypto.randomUUID(), psid: id, asid: s.id, pid: row.patient_id, gid: s.game_id, ph: paramsHash(params), sub: me }, CLINIC_TICKET_TTL_S);
-          return { assignment_step_id: s.id, ordinal: s.ordinal, game_id: s.game_id, params, ticket, done: s.done };
+          return { kind: "game", assignment_step_id: s.id, ordinal: s.ordinal, game_id: s.game_id, params, ticket, done: s.done };
         }),
       };
       return pkg;
@@ -181,6 +216,39 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
 
     const receipt = await run(c, (db) => ingest(db, envelope, claims, me, record));
     return c.json(receipt, receipt.outcome === "accepted" ? 201 : 200);
+  });
+
+  // A watched video (ADR 0018). The app's UUIDv7 view id makes retries safe; the view is kept once, append-only.
+  r.post("/video-views", async (c) => {
+    const body = await parseBody(c, videoViewInput);
+    if (!body.ok) return body.response;
+    const v = body.data;
+    const me = c.get("user").id;
+    const result = await run(c, async (db): Promise<{ error: string; status: 404 | 409 | 422 } | VideoViewReceipt> => {
+      const ps = await db.query<{ status: string; assignment_id: string; patient_id: string; clinic_id: string }>(
+        `SELECT status, assignment_id, patient_id, clinic_id FROM app.planned_session WHERE id = $1`,
+        [v.planned_session_id],
+      );
+      const session = ps.rows[0];
+      if (!session) return { error: "not_found", status: 404 };
+      const seen = await db.query(`SELECT 1 FROM app.video_view WHERE client_view_id = $1`, [v.client_view_id]);
+      if (seen.rowCount) return { outcome: "duplicate", planned_session_status: session.status };
+      const step = await db.query<{ step_type: string; video_id: string | null }>(
+        `SELECT step_type, video_id FROM app.assignment_step WHERE id = $1 AND assignment_id = $2`,
+        [v.assignment_step_id, session.assignment_id],
+      );
+      const s = step.rows[0];
+      if (!s || s.step_type !== "video" || s.video_id !== v.video_id) return { error: "step_mismatch", status: 422 };
+      if (session.status !== "planned" && session.status !== "in_progress") return { error: "session_closed", status: 409 };
+      await db.query(
+        `INSERT INTO app.video_view (client_view_id, planned_session_id, assignment_step_id, patient_id, clinic_id, video_id, video_version, started_at, ended_at, watched_s, completed, recorded_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        [v.client_view_id, v.planned_session_id, v.assignment_step_id, session.patient_id, session.clinic_id, v.video_id, v.video_version, v.started_at, v.ended_at, v.watched_s, v.completed, me],
+      );
+      return { outcome: "accepted", planned_session_status: await closeIfComplete(db, v.planned_session_id) };
+    });
+    if ("error" in result) return c.json({ error: result.error }, result.status);
+    return c.json(result, result.outcome === "accepted" ? 201 : 200);
   });
 
   r.get("/patients/:id/sessions", async (c) => {
@@ -295,18 +363,23 @@ async function ingest(
     }
   }
 
-  // The planned session is done once every game in it has a result.
+  return { outcome: "accepted", session_id: e.session_id, progression, planned_session_status: await closeIfComplete(db, claims.psid) };
+}
+
+/** The planned session is done once every game has a result and every video a view. Returns its status. */
+async function closeIfComplete(db: pg.PoolClient, psid: string): Promise<string | null> {
   const ps = await db.query<{ status: string }>(
     `WITH missing AS (
        SELECT count(*) AS n FROM app.assignment_step s
         JOIN app.planned_session x ON x.assignment_id = s.assignment_id AND x.id = $1
-        WHERE NOT EXISTS (SELECT 1 FROM app.game_session g WHERE g.planned_session_id = $1 AND g.assignment_step_id = s.id))
+        WHERE (s.step_type = 'game'  AND NOT EXISTS (SELECT 1 FROM app.game_session g WHERE g.planned_session_id = $1 AND g.assignment_step_id = s.id))
+           OR (s.step_type = 'video' AND NOT EXISTS (SELECT 1 FROM app.video_view w WHERE w.planned_session_id = $1 AND w.assignment_step_id = s.id)))
      UPDATE app.planned_session ps
         SET status = CASE WHEN (SELECT n FROM missing) = 0 THEN 'done' ELSE 'in_progress' END,
             completed_at = CASE WHEN (SELECT n FROM missing) = 0 THEN now() ELSE NULL END
       WHERE ps.id = $1 AND ps.status IN ('planned', 'in_progress')
       RETURNING status`,
-    [claims.psid],
+    [psid],
   );
-  return { outcome: "accepted", session_id: e.session_id, progression, planned_session_status: ps.rows[0]?.status ?? null };
+  return ps.rows[0]?.status ?? null;
 }

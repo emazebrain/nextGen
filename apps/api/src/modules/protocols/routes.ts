@@ -6,10 +6,13 @@
 import { Hono, type Context } from "hono";
 import type pg from "pg";
 import {
+  isVideoStep,
   assignInput,
   scheduleDates,
   templateInput,
   type AssignmentView,
+  type GameStepInput,
+  type StepItem,
   type StepInput,
   type TemplateDetail,
   type TemplateSummary,
@@ -20,30 +23,67 @@ import { checkStepAgainstGame } from "../../games.ts";
 import { uuidv7 } from "../../ids.ts";
 import { parseBody } from "../../validate.ts";
 import { UUID } from "../patients/routes.ts";
+import { pick } from "../videos/routes.ts";
 import { timerPositionFor, timerShown } from "@emb/session-rules";
 
-const STEP_COLUMNS = `game_id, session_mode, duration_s, lives, difficulty_start, hemisphere, timer_position, practice, trial_window_ms, game_params, progression, monochrome, lives_auto`;
+const STEP_COLUMNS = `game_id, session_mode, duration_s, lives, difficulty_start, hemisphere, timer_position, practice, trial_window_ms, game_params, progression, monochrome, lives_auto, step_type, video_id`;
 
 function stepValues(s: StepInput) {
+  // A video step carries no game settings; the not-null game columns get neutral values (ADR 0018).
+  if (isVideoStep(s)) return [null, null, null, null, 3, "left", "hidden", "off", null, "{}", null, false, false, "video", s.video_id];
   // The timer corner is derived from the hemisphere (ADR 0008); only shown or hidden comes from the client.
-  return [s.game_id, s.session_mode, s.duration_s, s.lives, s.difficulty_start, s.hemisphere, timerPositionFor(s.hemisphere, timerShown(s.timer_position)), s.practice, s.trial_window_ms, JSON.stringify(s.game_params), s.progression ? JSON.stringify(s.progression) : null, s.monochrome === true, s.lives_auto === true];
+  return [s.game_id, s.session_mode, s.duration_s, s.lives, s.difficulty_start, s.hemisphere, timerPositionFor(s.hemisphere, timerShown(s.timer_position)), s.practice, s.trial_window_ms, JSON.stringify(s.game_params), s.progression ? JSON.stringify(s.progression) : null, s.monochrome === true, s.lives_auto === true, "game", null];
 }
 
 function gameIssues(steps: StepInput[]) {
-  return steps.flatMap((s, i) => checkStepAgainstGame(s, i));
+  return steps.flatMap((s, i) => (isVideoStep(s) ? [] : checkStepAgainstGame(s as GameStepInput, i)));
 }
+
+/** A video step may only use a published video, unless the protocol being edited already had it (it stays). */
+async function videoIssues(db: pg.PoolClient, steps: StepInput[], keep: Set<string> = new Set()) {
+  const issues: Array<{ path: string; code: string }> = [];
+  for (const [i, s] of steps.entries()) {
+    if (!isVideoStep(s) || keep.has(s.video_id)) continue;
+    const { rows } = await db.query<{ status: string }>(`SELECT status FROM app.video WHERE id = $1`, [s.video_id]);
+    if (rows[0]?.status !== "published") issues.push({ path: `steps.${i}.video_id`, code: "video_not_available" });
+  }
+  return issues;
+}
+
+/** One step as clients see it: a video step is just the video; a game step has no video_id. */
+export function cleanStep<T extends Record<string, unknown>>(row: T): T {
+  if (row.step_type === "video") {
+    const out: Record<string, unknown> = { step_type: "video", video_id: row.video_id };
+    for (const k of ["id", "ordinal", "current_difficulty", "sessions_completed"]) if (k in row) out[k] = row[k];
+    return out as T;
+  }
+  const { video_id: _v, ...rest } = row;
+  return rest as unknown as T;
+}
+
+type RawItem = { kind: "game" | "video"; game_id: string | null; video_id: string | null; titles: Record<string, string> | null };
+export const ITEMS_SQL = (table: "template_step" | "assignment_step", key: string, owner: string) => `
+  COALESCE((SELECT json_agg(json_build_object('kind', s.step_type, 'game_id', s.game_id, 'video_id', s.video_id,
+                    'titles', (SELECT jsonb_object_agg(i.locale, i.title) FROM app.video_i18n i WHERE i.video_id = s.video_id)) ORDER BY s.ordinal)
+              FROM app.${table} s WHERE s.${key} = ${owner}), '[]') AS items`;
+export function toItems(raw: RawItem[], lang: string): StepItem[] {
+  return raw.map((r) => (r.kind === "video" ? { kind: "video", video_id: r.video_id!, title: pick(r.titles ?? {}, lang) ?? "" } : { kind: "game", game_id: r.game_id! }));
+}
+const LANGS = new Set(["en", "he", "ar", "ru", "fr", "es", "zh"]);
+const langOf = (c: Context) => (LANGS.has(c.req.query("lang") ?? "") ? c.req.query("lang")! : "en");
 
 const SUMMARY_SQL = `
   SELECT t.id, t.clinic_id, t.name, t.description, t.weeks, t.sessions_per_week, t.setting, t.visibility, t.version,
          u.full_name AS owner_name, app.can_edit_template(t.id) AS can_edit,
-         COALESCE((SELECT array_agg(s.game_id ORDER BY s.ordinal) FROM app.template_step s WHERE s.template_id = t.id), '{}') AS games
+         COALESCE((SELECT array_agg(s.game_id ORDER BY s.ordinal) FILTER (WHERE s.step_type = 'game') FROM app.template_step s WHERE s.template_id = t.id), '{}') AS games,
+         ${ITEMS_SQL("template_step", "template_id", "t.id")}
     FROM app.protocol_template t LEFT JOIN app.app_user u ON u.id = t.owner_user_id`;
 
-async function loadTemplate(db: pg.PoolClient, id: string): Promise<TemplateDetail | null> {
+async function loadTemplate(db: pg.PoolClient, id: string, lang = "en"): Promise<TemplateDetail | null> {
   const { rows } = await db.query(`${SUMMARY_SQL} WHERE t.id = $1 AND t.deleted_at IS NULL`, [id]);
   if (!rows[0]) return null;
   const steps = await db.query(`SELECT id, ordinal, ${STEP_COLUMNS} FROM app.template_step WHERE template_id = $1 ORDER BY ordinal`, [id]);
-  return { ...rows[0], steps: steps.rows };
+  return { ...rows[0], items: toItems(rows[0].items, lang), steps: steps.rows.map(cleanStep) };
 }
 
 export async function loadAssignment(db: pg.PoolClient, patientId: string): Promise<AssignmentView | null> {
@@ -57,7 +97,7 @@ export async function loadAssignment(db: pg.PoolClient, patientId: string): Prom
   const a = rows[0];
   if (!a) return null;
   const [steps, sessions] = await Promise.all([
-    db.query(`SELECT id, ordinal, ${STEP_COLUMNS}, current_difficulty, sessions_completed FROM app.assignment_step WHERE assignment_id = $1 ORDER BY ordinal`, [a.id]),
+    db.query(`SELECT id, ordinal, ${STEP_COLUMNS}, current_difficulty, sessions_completed FROM app.assignment_step WHERE assignment_id = $1 ORDER BY ordinal`, [a.id]).then((r) => ({ rows: r.rows.map(cleanStep) })),
     db.query(`SELECT id, seq, week, to_char(planned_date, 'YYYY-MM-DD') AS planned_date, status FROM app.planned_session WHERE assignment_id = $1 ORDER BY seq`, [a.id]),
   ]);
   return { ...a, steps: steps.rows, sessions: sessions.rows };
@@ -79,7 +119,7 @@ export function protocolRoutes(pool: pg.Pool) {
           ORDER BY (t.visibility = 'platform'), t.name`,
         [clinic ?? null],
       );
-      return rows;
+      return rows.map((t) => ({ ...t, items: toItems(t.items as unknown as RawItem[], langOf(c)) }));
     });
     return c.json({ templates });
   });
@@ -87,7 +127,7 @@ export function protocolRoutes(pool: pg.Pool) {
   r.get("/templates/:id", async (c) => {
     const id = c.req.param("id");
     if (!UUID.test(id)) return notFound(c);
-    const t = await run(c, (db) => loadTemplate(db, id));
+    const t = await run(c, (db) => loadTemplate(db, id, langOf(c)));
     return t ? c.json({ template: t }) : notFound(c);
   });
 
@@ -99,6 +139,8 @@ export function protocolRoutes(pool: pg.Pool) {
     if (issues.length) return c.json({ error: "invalid", issues }, 400);
     const me = c.get("user").id;
     const result = await run(c, async (db) => {
+      const vIssues = await videoIssues(db, input.steps);
+      if (vIssues.length) return { issues: vIssues };
       const { rows } = await db.query(`SELECT organization_id FROM app.clinic WHERE id = $1`, [input.clinic_id]);
       if (!rows[0]) return null;
       const id = uuidv7();
@@ -108,8 +150,9 @@ export function protocolRoutes(pool: pg.Pool) {
         [id, rows[0].organization_id, input.clinic_id, me, input.name, input.description ?? null, input.weeks, input.sessions_per_week, input.setting, input.visibility],
       );
       await insertTemplateSteps(db, id, input.steps);
-      return loadTemplate(db, id);
+      return loadTemplate(db, id, langOf(c));
     });
+    if (result && "issues" in result) return c.json({ error: "invalid", issues: result.issues }, 400);
     return result ? c.json({ template: result }, 201) : c.json({ error: "forbidden" }, 403);
   });
 
@@ -123,6 +166,9 @@ export function protocolRoutes(pool: pg.Pool) {
     const issues = gameIssues(input.steps);
     if (issues.length) return c.json({ error: "invalid", issues }, 400);
     const result = await run(c, async (db) => {
+      const had = await db.query<{ video_id: string }>(`SELECT video_id FROM app.template_step WHERE template_id = $1 AND video_id IS NOT NULL`, [id]);
+      const vIssues = await videoIssues(db, input.steps, new Set(had.rows.map((r) => r.video_id)));
+      if (vIssues.length) return { issues: vIssues };
       const upd = await db.query(
         `UPDATE app.protocol_template SET name = $2, description = $3, weeks = $4, sessions_per_week = $5, setting = $6, visibility = $7, version = version + 1
           WHERE id = $1 AND deleted_at IS NULL`,
@@ -131,8 +177,9 @@ export function protocolRoutes(pool: pg.Pool) {
       if (upd.rowCount === 0) return null;
       await db.query(`DELETE FROM app.template_step WHERE template_id = $1`, [id]);
       await insertTemplateSteps(db, id, input.steps);
-      return loadTemplate(db, id);
+      return loadTemplate(db, id, langOf(c));
     });
+    if (result && "issues" in result) return c.json({ error: "invalid", issues: result.issues }, 400);
     return result ? c.json({ template: result }) : notFound(c);
   });
 
@@ -171,6 +218,8 @@ export function protocolRoutes(pool: pg.Pool) {
       if (!p.rows[0]) return "not_found" as const;
       const running = await db.query(`SELECT 1 FROM app.protocol_assignment WHERE patient_id = $1 AND status IN ('active', 'paused')`, [id]);
       if (running.rowCount) return "already_assigned" as const;
+      const vIssues = await videoIssues(db, input.steps);
+      if (vIssues.length) return { issues: vIssues };
       let version: number | null = null;
       if (input.template_id) {
         const t = await db.query(`SELECT version FROM app.protocol_template WHERE id = $1 AND deleted_at IS NULL`, [input.template_id]);
@@ -187,7 +236,7 @@ export function protocolRoutes(pool: pg.Pool) {
       for (const [i, s] of input.steps.entries()) {
         await db.query(
           `INSERT INTO app.assignment_step (assignment_id, patient_id, ordinal, ${STEP_COLUMNS}, current_difficulty)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$8)`,
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$8)`,
           [aid, id, i + 1, ...stepValues(s)],
         );
       }
@@ -200,6 +249,7 @@ export function protocolRoutes(pool: pg.Pool) {
       }
       return loadAssignment(db, id);
     });
+    if (typeof result === "object" && result && "issues" in result) return c.json({ error: "invalid", issues: result.issues }, 400);
     if (result === "not_found" || result === "template_not_found") return notFound(c);
     if (result === "already_assigned") return c.json({ error: "already_assigned" }, 409);
     return c.json({ assignment: result }, 201);
@@ -239,7 +289,8 @@ export function protocolRoutes(pool: pg.Pool) {
                                   'date_of_birth', to_char(p.date_of_birth, 'YYYY-MM-DD'), 'alert', p.alert,
                                   'can_play', app.patient_can_play(p.id)) AS patient,
                 json_build_object('id', a.id, 'name', a.name, 'weeks', a.weeks) AS assignment,
-                (SELECT array_agg(s.game_id ORDER BY s.ordinal) FROM app.assignment_step s WHERE s.assignment_id = a.id) AS games
+                (SELECT array_agg(s.game_id ORDER BY s.ordinal) FILTER (WHERE s.step_type = 'game') FROM app.assignment_step s WHERE s.assignment_id = a.id) AS games,
+                ${ITEMS_SQL("assignment_step", "assignment_id", "a.id")}
            FROM app.planned_session ps
            JOIN app.protocol_assignment a ON a.id = ps.assignment_id AND a.status = 'active'
            JOIN app.patient p ON p.id = ps.patient_id AND p.deleted_at IS NULL
@@ -253,7 +304,7 @@ export function protocolRoutes(pool: pg.Pool) {
         [clinic ?? null, date ?? null],
       );
       if (rows.length) await db.query(`SELECT app.record_audit('list', 'planned_session', NULL)`);
-      return rows;
+      return rows.map((r) => ({ ...r, games: r.games ?? [], items: toItems((r as unknown as { items: RawItem[] }).items, langOf(c)) }));
     });
     return c.json({ items });
   });
@@ -263,6 +314,6 @@ export function protocolRoutes(pool: pg.Pool) {
 
 async function insertTemplateSteps(db: pg.PoolClient, templateId: string, steps: StepInput[]) {
   for (const [i, s] of steps.entries()) {
-    await db.query(`INSERT INTO app.template_step (template_id, ordinal, ${STEP_COLUMNS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`, [templateId, i + 1, ...stepValues(s)]);
+    await db.query(`INSERT INTO app.template_step (template_id, ordinal, ${STEP_COLUMNS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`, [templateId, i + 1, ...stepValues(s)]);
   }
 }

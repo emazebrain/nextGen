@@ -66,7 +66,7 @@ export const stepInput = z.preprocess(
 export type GameStepInput = z.input<typeof gameStepInput>;
 export type VideoStepInput = z.input<typeof videoStepInput>;
 export type StepInput = GameStepInput | VideoStepInput;
-export const isVideoStep = (s: { step_type?: string }): s is VideoStepInput => s.step_type === "video";
+export const isVideoStep = (s: { step_type?: string | undefined }): s is VideoStepInput => s.step_type === "video";
 
 const planFields = {
   name: z.string().trim().min(1).max(120),
@@ -154,6 +154,8 @@ export interface TodayItem {
   patient: { id: string; given_name: string; family_name: string; date_of_birth: string; alert: string | null; can_play: boolean };
   assignment: { id: string; name: string; weeks: number };
   games: string[];
+  /** Every step in order, games and videos. */
+  items: StepItem[];
 }
 
 function addDays(iso: string, days: number): string {
