@@ -9,6 +9,7 @@ import { protocolRoutes } from "./modules/protocols/routes.ts";
 import { sessionRoutes } from "./modules/sessions/routes.ts";
 import { videoRoutes } from "./modules/videos/routes.ts";
 import { deviceRoutes } from "./modules/devices/routes.ts";
+import { offlineRoutes } from "./modules/offline/routes.ts";
 import { deviceKey, type DeviceKey } from "./device-crypto.ts";
 import { localFileStore, type FileStore } from "./files.ts";
 import { ticketSigner, type TicketSigner } from "./tickets.ts";
@@ -62,6 +63,7 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
     v1.route("/", sessionRoutes(deps.pool, deps.tickets ?? ticketSigner()));
     v1.route("/", videoRoutes(deps.pool, deps.files ?? localFileStore(process.env.FILE_STORE_DIR ?? ".data/files")));
     v1.route("/", deviceRoutes(deps.pool, deps.deviceKey ?? deviceKey(undefined)));
+    v1.route("/", offlineRoutes(deps.pool, deps.tickets ?? ticketSigner()));
     app.route("/v1", v1);
   }
 

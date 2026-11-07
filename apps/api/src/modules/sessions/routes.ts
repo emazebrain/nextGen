@@ -48,7 +48,7 @@ export function allowedParamsFor(params: Record<string, unknown>, difficulty: { 
 }
 const GAME_LANGS = new Set(["he", "en", "ar", "ru", "fr", "es", "zh"]);
 
-interface StepRow {
+export interface StepRow {
   id: string;
   ordinal: number;
   step_type?: "game" | "video";
@@ -66,6 +66,7 @@ interface StepRow {
   trial_window_ms: number | null;
   game_params: Record<string, unknown>;
   sessions_completed: number;
+  progression?: Rule | null;
 }
 
 /** Platform parameters (§8.2) for one step, plus the game's own settings namespaced by game id. */
@@ -101,6 +102,57 @@ export function buildParams(step: StepRow, patient: { preferred_locale: string; 
   };
 }
 
+
+export type LaunchRows = {
+  row: { id: string; seq: number; week: number; status: string; assignment_id: string; assignment_name: string; total: number; patient_id: string; given_name: string; family_name: string; preferred_locale: string; alert: string | null; colour_vision_deficiency: boolean; planned_date: string };
+  steps: Array<StepRow & { done: boolean }>;
+  videos: Map<string, { id: string; version: number; source: "upload" | "youtube"; youtube_id: string | null; duration_s: number | null; titles: Record<string, string>; sha256: Buffer | null; has_file: boolean; bytes: number | null }>;
+};
+
+/** What a launch needs for one planned session, checked (care, consent, active, open); changes nothing. */
+export async function loadLaunchRows(db: pg.PoolClient, id: string): Promise<LaunchRows | { error: "not_found" | "forbidden" | "consent_required" | "protocol_not_active" | "session_closed" }> {
+  const { rows } = await db.query(
+    `SELECT ps.id, ps.seq, ps.week, ps.status, to_char(ps.planned_date, 'YYYY-MM-DD') AS planned_date, a.id AS assignment_id, a.name AS assignment_name, a.status AS assignment_status,
+            (SELECT count(*)::int FROM app.planned_session x WHERE x.assignment_id = a.id AND x.status <> 'cancelled') AS total,
+            p.id AS patient_id, p.given_name, p.family_name, p.preferred_locale, p.alert, p.colour_vision_deficiency,
+            app.patient_can_play(p.id) AS can_play, app.can_treat_patient(p.id) AS can_treat
+       FROM app.planned_session ps
+       JOIN app.protocol_assignment a ON a.id = ps.assignment_id
+       JOIN app.patient p ON p.id = ps.patient_id
+      WHERE ps.id = $1`,
+    [id],
+  );
+  const row = rows[0];
+  if (!row) return { error: "not_found" as const };
+  if (!row.can_treat) return { error: "forbidden" as const };
+  // Consent for clinic sessions must be in place (§11.3). Checked again here, not only in the app.
+  if (!row.can_play) return { error: "consent_required" as const };
+  if (row.assignment_status !== "active") return { error: "protocol_not_active" as const };
+  if (row.status !== "planned" && row.status !== "in_progress") return { error: "session_closed" as const };
+  const steps = await db.query<StepRow & { done: boolean }>(
+    `SELECT s.id, s.ordinal, s.step_type, s.video_id, s.game_id, s.session_mode, s.duration_s, s.lives, s.lives_auto, s.current_difficulty, s.hemisphere, s.timer_position, s.monochrome, s.practice, s.trial_window_ms,
+            s.game_params, s.sessions_completed, s.progression,
+            CASE WHEN s.step_type = 'video'
+                 THEN EXISTS (SELECT 1 FROM app.video_view w WHERE w.planned_session_id = $2 AND w.assignment_step_id = s.id)
+                 ELSE EXISTS (SELECT 1 FROM app.game_session g WHERE g.planned_session_id = $2 AND g.assignment_step_id = s.id) END AS done
+       FROM app.assignment_step s WHERE s.assignment_id = $1 ORDER BY s.ordinal`,
+    [row.assignment_id, id],
+  );
+  // Videos are played by the app itself: no ticket, just what it needs to show (and later keep) the file.
+  const videoIds = steps.rows.filter((s) => s.step_type === "video").map((s) => s.video_id!);
+  const videos: LaunchRows["videos"] = new Map();
+  if (videoIds.length) {
+    const v = await db.query(
+      `SELECT v.id, v.version, v.source, v.youtube_id, v.duration_s, f.sha256, f.bytes::int AS bytes, v.file_id IS NOT NULL AS has_file,
+              COALESCE((SELECT jsonb_object_agg(i.locale, i.title) FROM app.video_i18n i WHERE i.video_id = v.id), '{}') AS titles
+         FROM app.video v LEFT JOIN app.file_object f ON f.id = v.file_id WHERE v.id = ANY($1::uuid[])`,
+      [videoIds],
+    );
+    for (const r of v.rows) videos.set(r.id, r);
+  }
+  return { row, steps: steps.rows, videos };
+}
+
 export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
   const r = new Hono<Env>();
   const run = <T>(c: Context<Env>, fn: (db: pg.PoolClient) => Promise<T>) => withUser(pool, c.get("user").id, c.get("requestId"), fn);
@@ -110,46 +162,10 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
     if (!UUID.test(id)) return c.json({ error: "not_found" }, 404);
     const me = c.get("user").id;
     const result = await run(c, async (db) => {
-      const { rows } = await db.query(
-        `SELECT ps.id, ps.seq, ps.week, ps.status, a.id AS assignment_id, a.name AS assignment_name, a.status AS assignment_status,
-                (SELECT count(*)::int FROM app.planned_session x WHERE x.assignment_id = a.id AND x.status <> 'cancelled') AS total,
-                p.id AS patient_id, p.given_name, p.family_name, p.preferred_locale, p.alert, p.colour_vision_deficiency,
-                app.patient_can_play(p.id) AS can_play, app.can_treat_patient(p.id) AS can_treat
-           FROM app.planned_session ps
-           JOIN app.protocol_assignment a ON a.id = ps.assignment_id
-           JOIN app.patient p ON p.id = ps.patient_id
-          WHERE ps.id = $1`,
-        [id],
-      );
-      const row = rows[0];
-      if (!row) return { error: "not_found" as const };
-      if (!row.can_treat) return { error: "forbidden" as const };
-      // Consent for clinic sessions must be in place (§11.3). Checked again here, not only in the app.
-      if (!row.can_play) return { error: "consent_required" as const };
-      if (row.assignment_status !== "active") return { error: "protocol_not_active" as const };
-      if (row.status !== "planned" && row.status !== "in_progress") return { error: "session_closed" as const };
-      const steps = await db.query<StepRow & { done: boolean }>(
-        `SELECT s.id, s.ordinal, s.step_type, s.video_id, s.game_id, s.session_mode, s.duration_s, s.lives, s.lives_auto, s.current_difficulty, s.hemisphere, s.timer_position, s.monochrome, s.practice, s.trial_window_ms,
-                s.game_params, s.sessions_completed,
-                CASE WHEN s.step_type = 'video'
-                     THEN EXISTS (SELECT 1 FROM app.video_view w WHERE w.planned_session_id = $2 AND w.assignment_step_id = s.id)
-                     ELSE EXISTS (SELECT 1 FROM app.game_session g WHERE g.planned_session_id = $2 AND g.assignment_step_id = s.id) END AS done
-           FROM app.assignment_step s WHERE s.assignment_id = $1 ORDER BY s.ordinal`,
-        [row.assignment_id, id],
-      );
+      const loaded = await loadLaunchRows(db, id);
+      if ("error" in loaded) return loaded;
+      const { row, steps, videos } = loaded;
       await db.query(`UPDATE app.planned_session SET status = 'in_progress' WHERE id = $1 AND status = 'planned'`, [id]);
-      // Videos are played by the app itself: no ticket, just what it needs to show (and later keep) the file.
-      const videoIds = steps.rows.filter((s) => s.step_type === "video").map((s) => s.video_id!);
-      const videos = new Map<string, { id: string; version: number; source: "upload" | "youtube"; youtube_id: string | null; duration_s: number | null; titles: Record<string, string>; sha256: Buffer | null; has_file: boolean }>();
-      if (videoIds.length) {
-        const v = await db.query(
-          `SELECT v.id, v.version, v.source, v.youtube_id, v.duration_s, f.sha256, v.file_id IS NOT NULL AS has_file,
-                  COALESCE((SELECT jsonb_object_agg(i.locale, i.title) FROM app.video_i18n i WHERE i.video_id = v.id), '{}') AS titles
-             FROM app.video v LEFT JOIN app.file_object f ON f.id = v.file_id WHERE v.id = ANY($1::uuid[])`,
-          [videoIds],
-        );
-        for (const r of v.rows) videos.set(r.id, r);
-      }
       const pkg: LaunchPackage = {
         planned_session_id: id,
         seq: row.seq,
@@ -157,7 +173,7 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
         total: row.total,
         patient: { id: row.patient_id, given_name: row.given_name, family_name: row.family_name, preferred_locale: row.preferred_locale, alert: row.alert },
         assignment: { id: row.assignment_id, name: row.assignment_name },
-        steps: steps.rows.map((s): LaunchStep => {
+        steps: steps.map((s): LaunchStep => {
           if (s.step_type === "video") {
             const v = videos.get(s.video_id!)!;
             return {

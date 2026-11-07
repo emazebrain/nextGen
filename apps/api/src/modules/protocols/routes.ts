@@ -103,6 +103,44 @@ export async function loadAssignment(db: pg.PoolClient, patientId: string): Prom
   return { ...a, steps: steps.rows, sessions: sessions.rows };
 }
 
+
+/** Templates the caller may use (their clinic's and platform ones), with steps in order. */
+export async function listTemplates(db: pg.PoolClient, clinic: string | null, lang: string): Promise<TemplateSummary[]> {
+  const { rows } = await db.query<TemplateSummary>(
+    `${SUMMARY_SQL} WHERE t.deleted_at IS NULL AND ($1::uuid IS NULL OR t.clinic_id IS NULL OR t.clinic_id = $1::uuid)
+      ORDER BY (t.visibility = 'platform'), t.name`,
+    [clinic],
+  );
+  return rows.map((t) => ({ ...t, items: toItems(t.items as unknown as RawItem[], lang) }));
+}
+
+/** Today: each of the caller's patients' earliest open clinic session, planned up to today (and overdue 7 days). */
+export async function todayItems(db: pg.PoolClient, clinic: string | null, date: string | null, lang: string): Promise<TodayItem[]> {
+  const { rows } = await db.query<TodayItem & { patient_id: string }>(
+    `SELECT ps.id AS planned_session_id, to_char(ps.planned_date, 'YYYY-MM-DD') AS planned_date, ps.seq, ps.week,
+            (SELECT count(*)::int FROM app.planned_session x WHERE x.assignment_id = a.id AND x.status <> 'cancelled') AS total,
+            json_build_object('id', p.id, 'given_name', p.given_name, 'family_name', p.family_name,
+                              'date_of_birth', to_char(p.date_of_birth, 'YYYY-MM-DD'), 'alert', p.alert,
+                              'can_play', app.patient_can_play(p.id)) AS patient,
+            json_build_object('id', a.id, 'name', a.name, 'weeks', a.weeks) AS assignment,
+            (SELECT array_agg(s.game_id ORDER BY s.ordinal) FILTER (WHERE s.step_type = 'game') FROM app.assignment_step s WHERE s.assignment_id = a.id) AS games,
+            ${ITEMS_SQL("assignment_step", "assignment_id", "a.id")}
+       FROM app.planned_session ps
+       JOIN app.protocol_assignment a ON a.id = ps.assignment_id AND a.status = 'active'
+       JOIN app.patient p ON p.id = ps.patient_id AND p.deleted_at IS NULL
+      WHERE ps.status IN ('planned', 'in_progress') AND ps.location = 'clinic'
+        AND ps.planned_date BETWEEN COALESCE($2::date, current_date) - 7 AND COALESCE($2::date, current_date)
+        AND ($1::uuid IS NULL OR ps.clinic_id = $1::uuid)
+        AND EXISTS (SELECT 1 FROM app.patient_care_team t WHERE t.patient_id = p.id AND t.user_id = app.current_user_id() AND t.ended_at IS NULL)
+        -- one item per patient: their earliest open session
+        AND ps.seq = (SELECT min(y.seq) FROM app.planned_session y WHERE y.assignment_id = a.id AND y.status IN ('planned', 'in_progress'))
+      ORDER BY ps.planned_date, p.family_name, p.given_name`,
+    [clinic, date],
+  );
+  if (rows.length) await db.query(`SELECT app.record_audit('list', 'planned_session', NULL)`);
+  return rows.map((r) => ({ ...r, games: r.games ?? [], items: toItems((r as unknown as { items: RawItem[] }).items, lang) }));
+}
+
 export function protocolRoutes(pool: pg.Pool) {
   const r = new Hono<Env>();
   const run = <T>(c: Context<Env>, fn: (db: pg.PoolClient) => Promise<T>) => withUser(pool, c.get("user").id, c.get("requestId"), fn);
@@ -113,14 +151,7 @@ export function protocolRoutes(pool: pg.Pool) {
   r.get("/templates", async (c) => {
     const clinic = c.req.query("clinic");
     if (clinic !== undefined && !UUID.test(clinic)) return c.json({ error: "invalid_clinic" }, 400);
-    const templates = await run(c, async (db) => {
-      const { rows } = await db.query<TemplateSummary>(
-        `${SUMMARY_SQL} WHERE t.deleted_at IS NULL AND ($1::uuid IS NULL OR t.clinic_id IS NULL OR t.clinic_id = $1::uuid)
-          ORDER BY (t.visibility = 'platform'), t.name`,
-        [clinic ?? null],
-      );
-      return rows.map((t) => ({ ...t, items: toItems(t.items as unknown as RawItem[], langOf(c)) }));
-    });
+    const templates = await run(c, (db) => listTemplates(db, clinic ?? null, langOf(c)));
     return c.json({ templates });
   });
 
@@ -285,31 +316,7 @@ export function protocolRoutes(pool: pg.Pool) {
     const date = c.req.query("date");
     if (clinic !== undefined && !UUID.test(clinic)) return c.json({ error: "invalid_clinic" }, 400);
     if (date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return c.json({ error: "invalid_date" }, 400);
-    const items = await run(c, async (db) => {
-      const { rows } = await db.query<TodayItem & { patient_id: string }>(
-        `SELECT ps.id AS planned_session_id, to_char(ps.planned_date, 'YYYY-MM-DD') AS planned_date, ps.seq, ps.week,
-                (SELECT count(*)::int FROM app.planned_session x WHERE x.assignment_id = a.id AND x.status <> 'cancelled') AS total,
-                json_build_object('id', p.id, 'given_name', p.given_name, 'family_name', p.family_name,
-                                  'date_of_birth', to_char(p.date_of_birth, 'YYYY-MM-DD'), 'alert', p.alert,
-                                  'can_play', app.patient_can_play(p.id)) AS patient,
-                json_build_object('id', a.id, 'name', a.name, 'weeks', a.weeks) AS assignment,
-                (SELECT array_agg(s.game_id ORDER BY s.ordinal) FILTER (WHERE s.step_type = 'game') FROM app.assignment_step s WHERE s.assignment_id = a.id) AS games,
-                ${ITEMS_SQL("assignment_step", "assignment_id", "a.id")}
-           FROM app.planned_session ps
-           JOIN app.protocol_assignment a ON a.id = ps.assignment_id AND a.status = 'active'
-           JOIN app.patient p ON p.id = ps.patient_id AND p.deleted_at IS NULL
-          WHERE ps.status IN ('planned', 'in_progress') AND ps.location = 'clinic'
-            AND ps.planned_date BETWEEN COALESCE($2::date, current_date) - 7 AND COALESCE($2::date, current_date)
-            AND ($1::uuid IS NULL OR ps.clinic_id = $1::uuid)
-            AND EXISTS (SELECT 1 FROM app.patient_care_team t WHERE t.patient_id = p.id AND t.user_id = app.current_user_id() AND t.ended_at IS NULL)
-            -- one item per patient: their earliest open session
-            AND ps.seq = (SELECT min(y.seq) FROM app.planned_session y WHERE y.assignment_id = a.id AND y.status IN ('planned', 'in_progress'))
-          ORDER BY ps.planned_date, p.family_name, p.given_name`,
-        [clinic ?? null, date ?? null],
-      );
-      if (rows.length) await db.query(`SELECT app.record_audit('list', 'planned_session', NULL)`);
-      return rows.map((r) => ({ ...r, games: r.games ?? [], items: toItems((r as unknown as { items: RawItem[] }).items, langOf(c)) }));
-    });
+    const items = await run(c, (db) => todayItems(db, clinic ?? null, date ?? null, langOf(c)));
     return c.json({ items });
   });
 
