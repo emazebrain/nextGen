@@ -21,6 +21,8 @@ url.pathname = `/${name}`;
 process.env.DATABASE_URL = url.toString();
 process.env.AUTH_SECRET ??= `e2e-${randomUUID()}-${randomUUID()}`;
 process.env.CELL = "e2e";
+// Device secrets (offline devices, ADR 0019) are sealed with this key for the run.
+process.env.DEVICE_SECRET_KEY ??= (await import("node:crypto")).randomBytes(32).toString("base64");
 // Uploaded videos for this run live in their own folder (removed with the database).
 const { mkdtempSync, rmSync } = await import("node:fs");
 const { tmpdir } = await import("node:os");

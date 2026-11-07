@@ -6,7 +6,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router";
 import { useIntl } from "react-intl";
-import { CloudDownload, HardDrive, Smartphone, Trash2, Users } from "lucide-react";
+import { CloudDownload, Trash2 } from "lucide-react";
 import type { LibraryManifest } from "@emb/contracts";
 import { Alert, Button, Card, Chip, ConfirmDialog, PageHeader } from "@emb/ui";
 import { apiGet, apiSend } from "../api/http.ts";
@@ -100,7 +100,7 @@ export function DevicePage() {
       <div className="settings">
         <Card as="section" labelledBy="dev-content">
           <h2 id="dev-content" className="app-cardtitle">
-            <HardDrive size={20} aria-hidden="true" /> {t("device.content")}
+            {t("device.content")}
           </h2>
           <fieldset className="choice">
             <legend className="emb-field__label">{t("device.playFrom")}</legend>
@@ -163,7 +163,7 @@ export function DevicePage() {
 
         <Card as="section" labelledBy="dev-people">
           <h2 id="dev-people" className="app-cardtitle">
-            <Users size={20} aria-hidden="true" /> {t("device.people")}
+            {t("device.people")}
           </h2>
           {!own && me.data && (
             <Alert tone="info">
@@ -191,7 +191,7 @@ export function DevicePage() {
 
         <Card as="section" labelledBy="dev-install">
           <h2 id="dev-install" className="app-cardtitle">
-            <Smartphone size={20} aria-hidden="true" /> {t("device.install")}
+            {t("device.install")}
           </h2>
           {install.installed ? (
             <Chip tone="success">{t("device.installed")}</Chip>

@@ -60,6 +60,11 @@ if (existing.rowCount) {
     await signUp(`sapir@${SYNTHETIC_EMAIL_DOMAIN}`, "Sapir Levy"),
     await signUp(`ran@${SYNTHETIC_EMAIL_DOMAIN}`, "Ran Biton"),
     await signUp(`noga@${SYNTHETIC_EMAIL_DOMAIN}`, "Noga Peleg"),
+    // Offline devices (ADR 0019): therapists who share one tablet in the e2e tests.
+    await signUp(`tamar@${SYNTHETIC_EMAIL_DOMAIN}`, "Tamar Golan"),
+    await signUp(`gali@${SYNTHETIC_EMAIL_DOMAIN}`, "Gali Ron"),
+    await signUp(`oren@${SYNTHETIC_EMAIL_DOMAIN}`, "Oren Katz"),
+    await signUp(`dvir@${SYNTHETIC_EMAIL_DOMAIN}`, "Dvir Amar"),
   ];
 
   const org = uuidv7();
@@ -91,7 +96,7 @@ if (existing.rowCount) {
       );
       await admin.query(`INSERT INTO app.patient_care_team (patient_id, user_id) VALUES ($1,$2)`, [id, yael]);
       // Tal, Shira, Noam and Maya share Yael's Tel Aviv caseload as secondary therapists.
-      if (i === 0) for (const u of extra.slice(1)) await admin.query(`INSERT INTO app.patient_care_team (patient_id, user_id, role) VALUES ($1,$2,'secondary')`, [id, u]);
+      if (i === 0) for (const u of extra.slice(1, -4)) await admin.query(`INSERT INTO app.patient_care_team (patient_id, user_id, role) VALUES ($1,$2,'secondary')`, [id, u]);
       const g = syntheticGuardian(p, 1000 * (i + 1) + n);
       const gid = uuidv7();
       await admin.query(
@@ -165,9 +170,14 @@ if (existing.rowCount) {
       await admin.query(`INSERT INTO app.planned_session (assignment_id, patient_id, clinic_id, seq, week, planned_date) VALUES ($1,$2,$3,$4,$5,$6)`, [aid, row.id, telAviv, s.seq, s.week, s.date]);
     }
   }
-  await seedHistory(admin, { clinic: telAviv, therapist: yael, shared: extra.slice(1), template: templates[1]! });
+  await seedHistory(admin, { clinic: telAviv, therapist: yael, shared: extra.slice(1, -4), template: templates[1]! });
   const videoIds = await seedVideos(admin, contentAdmin);
-  await seedVideoPatient(admin, { clinic: telAviv, therapist: extra.find((_, i) => i === extra.length - 2)!, video: videoIds["colour-shapes.mp4"]! });
+  const ran = extra[extra.length - 6]!;
+  await seedVideoPatient(admin, { clinic: telAviv, therapist: ran, video: videoIds["colour-shapes.mp4"]! });
+  const sharing: Array<[string, string, string]> = [["Lia", "Mor", "Dana Mor"], ["Itay", "Ron", "Hadas Ron"], ["Shai", "Paz", "Michal Paz"], ["Nir", "Gal", "Orly Gal"]];
+  for (const [i, [given, family, guardian]] of sharing.entries()) {
+    await seedVideoPatient(admin, { clinic: telAviv, therapist: extra[extra.length - 4 + i]!, video: videoIds["colour-shapes.mp4"]!, given, family, guardian });
+  }
   await admin.query("COMMIT");
   await pool.end();
   await authDb.end();
@@ -290,21 +300,21 @@ async function seedVideos(db: pg.Client, createdBy: string) {
 }
 
 /** A child on Ran's caseload whose protocol plays a video after a game (ADR 0018), consent in place, sessions from today. */
-async function seedVideoPatient(db: pg.Client, o: { clinic: string; therapist: string; video: string }) {
+async function seedVideoPatient(db: pg.Client, o: { clinic: string; therapist: string; video: string; given?: string; family?: string; guardian?: string }) {
   const DAY = 86_400_000;
   const patient = uuidv7();
   await db.query(
-    `INSERT INTO app.patient (id, clinic_id, given_name, family_name, date_of_birth, preferred_locale, status, created_by) VALUES ($1,$2,'Yoav','Sela',$3,'en','active',$4)`,
-    [patient, o.clinic, new Date(Date.now() - 8.2 * 365.25 * DAY).toISOString().slice(0, 10), o.therapist],
+    `INSERT INTO app.patient (id, clinic_id, given_name, family_name, date_of_birth, preferred_locale, status, created_by) VALUES ($1,$2,$5,$6,$3,'en','active',$4)`,
+    [patient, o.clinic, new Date(Date.now() - 8.2 * 365.25 * DAY).toISOString().slice(0, 10), o.therapist, o.given ?? "Yoav", o.family ?? "Sela"],
   );
   await db.query(`INSERT INTO app.patient_care_team (patient_id, user_id) VALUES ($1,$2)`, [patient, o.therapist]);
   const guardian = uuidv7();
-  await db.query(`INSERT INTO app.guardian (id, clinic_id, full_name, phone, preferred_locale, created_by) VALUES ($1,$2,'Hila Sela','+972500000998','en',$3)`, [guardian, o.clinic, o.therapist]);
+  await db.query(`INSERT INTO app.guardian (id, clinic_id, full_name, phone, preferred_locale, created_by) VALUES ($1,$2,$4,'+972500000998','en',$3)`, [guardian, o.clinic, o.therapist, o.guardian ?? "Hila Sela"]);
   await db.query(`INSERT INTO app.guardian_patient (guardian_id, patient_id, relationship) VALUES ($1,$2,'mother')`, [guardian, patient]);
   await db.query(
     `INSERT INTO app.consent (patient_id, guardian_id, purpose, decision, policy_version, method, locale, signer_name, captured_by, record_hash)
-     VALUES ($1,$2,'treatment','granted','draft-2026-10','in_clinic_esign','en','Hila Sela',$3,'\\x')`,
-    [patient, guardian, o.therapist],
+     VALUES ($1,$2,'treatment','granted','draft-2026-10','in_clinic_esign','en',$4,$3,'\\x')`,
+    [patient, guardian, o.therapist, o.guardian ?? "Hila Sela"],
   );
   const aid = uuidv7();
   const start = new Date().toISOString().slice(0, 10);

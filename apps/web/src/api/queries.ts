@@ -44,8 +44,17 @@ const retry = (count: number, err: unknown) => {
 export const meKey = ["me"] as const;
 export const patientKey = (id: string) => ["patient", id] as const;
 
+/** While the network is down, ask again every so often: the browser's "online" event can't be relied on. */
+export const ME_RETRY_OFFLINE_MS = 15_000;
+
 export function useMe() {
-  return useQuery({ queryKey: meKey, queryFn: ({ signal }) => apiGet<Me>("/v1/me", { signal }), retry, staleTime: 60_000 });
+  return useQuery({
+    queryKey: meKey,
+    queryFn: ({ signal }) => apiGet<Me>("/v1/me", { signal }),
+    retry,
+    staleTime: 60_000,
+    refetchInterval: (q) => (q.state.error instanceof ApiError && q.state.error.status === 0 ? ME_RETRY_OFFLINE_MS : false),
+  });
 }
 
 export function usePatients(clinicId: string | null, archived = false) {

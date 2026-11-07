@@ -93,6 +93,18 @@ describe("sealed outbox", () => {
     expect((await outboxStatus()).waiting).toBe(0);
   });
 
+  it("a flush with nobody signed in doesn't block the next one", async () => {
+    configureOutbox({ publicKey: pair.publicKey, privateKey: null });
+    await flush(); // offline, nobody signed in: nothing to open
+    await enqueue("T1", envelope("01900000-0000-7000-8000-000000000008"));
+    configureOutbox({ publicKey: pair.publicKey, privateKey: pair.privateKey });
+    const f = vi.fn(async () => reply(201, { outcome: "accepted", review_reason: null }));
+    vi.stubGlobal("fetch", f);
+    await flush();
+    expect(f).toHaveBeenCalledTimes(1);
+    expect((await outboxStatus()).waiting).toBe(0);
+  });
+
   it("a 401 keeps the outbox and asks for sign-in", async () => {
     configureOutbox({ publicKey: pair.publicKey, privateKey: pair.privateKey });
     vi.stubGlobal("fetch", vi.fn(async () => reply(401, { error: "unauthenticated" })));

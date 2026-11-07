@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Navigate, Outlet, RouterProvider, createBrowserRouter, createHashRouter, useLocation, useNavigate, type RouteObject } from "react-router";
 import { MazeLoader } from "@emb/ui";
 import { ApiError } from "./api/http.ts";
@@ -40,9 +40,20 @@ export function RequireStaff({ bare = false }: { bare?: boolean }) {
   const device = useOptionalDevice();
   const here = encodeURIComponent(location.pathname + location.search);
   // No connection (offline devices spec §7.5): an unlocked space runs the app; otherwise pick yourself and unlock.
-  // A refetch after a failure is "pending" again; its last failure still says whether the network is down.
+  // Once /v1/me has failed for lack of a network, stay offline until it succeeds: a refetch clears its failure, and
+  // flipping back to "Loading…" would unmount the app, whose remount refetches again — a loop.
   const failure = me.error ?? me.failureReason;
-  const offline = !me.data && failure instanceof ApiError && failure.status === 0;
+  const networkDown = failure instanceof ApiError && failure.status === 0;
+  const sawNetworkDown = useRef(false);
+  if (me.data) sawNetworkDown.current = false;
+  else if (networkDown) sawNetworkDown.current = true;
+  const offline = !me.data && (networkDown || sawNetworkDown.current);
+  // The browser says it's back: ask right away rather than at the next interval.
+  const browserOnline = device?.online ?? true;
+  const refetchMe = me.refetch;
+  useEffect(() => {
+    if (browserOnline && sawNetworkDown.current) void refetchMe();
+  }, [browserOnline, refetchMe]);
   if (offline && device) {
     if (!device.ready) {
       return (
@@ -185,7 +196,9 @@ export const routes: RouteObject[] = [
 ];
 
 export function makeQueryClient() {
-  return new QueryClient({ defaultOptions: { queries: { refetchOnWindowFocus: false } } });
+  // networkMode "always": offline, requests must still run and fail fast, because the app answers them from the
+  // device (offline devices spec §7.3); TanStack's default would pause them until the network returns.
+  return new QueryClient({ defaultOptions: { queries: { refetchOnWindowFocus: false, networkMode: "always" }, mutations: { networkMode: "always" } } });
 }
 
 export function App({ queryClient = makeQueryClient(), hashRouting = false }: { queryClient?: QueryClient; hashRouting?: boolean }) {

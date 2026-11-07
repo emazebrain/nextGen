@@ -5,7 +5,7 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useIntl } from "react-intl";
-import { CloudOff, Fingerprint } from "lucide-react";
+import { Fingerprint } from "lucide-react";
 import { Alert, Button, TextField } from "@emb/ui";
 import { useT } from "../i18n/index.tsx";
 import { useDevice } from "../device/session.tsx";
@@ -65,9 +65,7 @@ export function OfflineSignInPage() {
   return (
     <AuthLayout>
       <h1 className="auth__title">{t("offline.title")}</h1>
-      <p className="auth__subtitle">
-        <CloudOff size={16} aria-hidden="true" className="offline__icon" /> {t("offline.body")}
-      </p>
+      <p className="auth__subtitle">{t("offline.body")}</p>
       {device.ready && device.spaces.length === 0 ? (
         <Alert tone="info">{t("offline.none")}</Alert>
       ) : (

@@ -31,6 +31,7 @@ import { useT, usePrefs, locales, type Locale, type MessageId, type Motion, type
 import { useClinic } from "../lib/clinic.tsx";
 import { ageParts, calendarDate, dayPart, firstName, matchesQuery } from "../lib/format.ts";
 import { joinSteps } from "../lib/steps.ts";
+import { useOptionalDevice } from "../device/session.tsx";
 import { useTitle } from "../lib/title.ts";
 import { useSignOut } from "../shell/ClinicShell.tsx";
 import { SetPinForm } from "../session/SessionPage.tsx";
@@ -48,7 +49,9 @@ export function TodayPage() {
   const reviewCount = useReviewCount(clinicId);
   const age = useAge();
   useTitle(t("nav.today"));
-  const name = firstName(me.data?.user.name ?? "");
+  // Offline, the greeting uses the therapist as last seen online (offline devices spec §7.5).
+  const offlineMe = useOptionalDevice()?.offlineMe;
+  const name = firstName(me.data?.user.name ?? offlineMe?.user.name ?? "");
   const mine = (patients.data ?? []).filter((p) => p.status !== "discharged").slice(0, 6);
 
   return (

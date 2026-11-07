@@ -189,8 +189,9 @@ let flushing: Promise<void> | null = null;
 
 /** Sends everything waiting, oldest first, one at a time. Stops while offline or signed out. Safe to call often. */
 export function flush(): Promise<void> {
-  flushing ??= (async () => {
-    try {
+  if (flushing) return flushing;
+  const run = (async () => {
+    {
       const stop = (r: { state: string; code?: string }) => r.state === "waiting" && (r.code === "network" || r.code === "signed_out");
       if (cfg) {
         if (!cfg.privateKey) return; // nobody signed in online on this device: the outbox can't be opened
@@ -205,11 +206,15 @@ export function flush(): Promise<void> {
       }
       for (const item of readLocal().filter((i) => i.last_error !== "needs_help")) if (stop(await send(item))) return;
       for (const view of readLocalViews().filter((v) => v.last_error !== "needs_help")) if (stop(await sendView(view))) return;
-    } finally {
-      flushing = null;
     }
   })();
-  return flushing;
+  // Cleared only after the run has been stored: a run that returns without awaiting anything (nobody signed in)
+  // used to clear the marker before it was set, and then every later flush thought one was still running.
+  const tracked: Promise<void> = run.finally(() => {
+    if (flushing === tracked) flushing = null;
+  });
+  flushing = tracked;
+  return tracked;
 }
 
 // ---- status ---------------------------------------------------------------------------------------------------------

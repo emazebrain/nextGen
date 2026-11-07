@@ -79,6 +79,23 @@ describe("offline data", () => {
     await waitFor(() => expect(next.textContent).toContain("Noa Levi"));
     expect(next.textContent).toContain("Tunnel Rush → ▶ Colour shapes");
     expect(screen.getByRole("status").textContent).toMatch(/Showing saved data from/);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toMatch(/Tamar/);
+  });
+
+  it("offline, the app stays up instead of looping on failed requests", async () => {
+    await openTamar();
+    const calls = vi.fn(async () => {
+      throw new TypeError("offline");
+    });
+    vi.stubGlobal("fetch", calls);
+    const online = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    await renderAndUnlock("/today");
+    await screen.findByRole("region", { name: "Next up" });
+    const before = calls.mock.calls.length;
+    await new Promise((r) => setTimeout(r, 1500));
+    expect(calls.mock.calls.length - before).toBeLessThan(5);
+    expect(screen.queryByText("Loading…")).toBeNull();
+    online.mockRestore();
   });
 
   it("offline, editing a protocol is disabled and says it needs a connection", async () => {

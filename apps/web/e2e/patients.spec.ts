@@ -124,7 +124,7 @@ test("a clinic manager archives and restores a patient, and sees the team", asyn
   await page.getByRole("button", { name: "Account" }).click();
   await page.getByRole("link", { name: "Team" }).click();
   const team = page.getByRole("table", { name: "People who work in this clinic" });
-  await expect(team.getByRole("row")).toHaveCount(19); // header + the eighteen seeded staff in Tel Aviv
+  await expect(team.getByRole("row")).toHaveCount(23); // header + the twenty-two seeded staff in Tel Aviv
   await axe(page, "team");
 
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Patients" }).click();
