@@ -108,7 +108,10 @@ test("Videos in sessions: the session plays the video step after the game and re
 
   // The game first: skipped from the therapist controls.
   const game = page.frameLocator("iframe.gameframe");
-  await expect(game.getByRole("button", { name: /Play|Let's go/ }).first()).toBeVisible({ timeout: 20_000 });
+  const play = game.getByRole("button", { name: /Play|Let's go/ }).first();
+  await expect(play).toBeVisible({ timeout: 20_000 });
+  // The game focuses its own start button once it's ready; take focus back only after that.
+  await expect(play).toBeFocused();
   await page.getByRole("button", { name: "Therapist controls" }).focus();
   await page.keyboard.press("Enter");
   const controls = page.getByRole("dialog", { name: "Therapist controls" });
