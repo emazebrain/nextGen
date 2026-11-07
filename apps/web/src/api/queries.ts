@@ -10,6 +10,7 @@ import type {
   UpdatePatient,
 } from "@emb/contracts";
 import { ApiError, apiGet, apiSend } from "./http.ts";
+import type { BrainRegion, VideoInput, VideoSummary } from "@emb/contracts";
 import type { AssignInput, AssignmentView, GameSessionView, LaunchPackage, ProgressionDecisionView, TemplateDetail, TemplateInput, TemplateSummary, TodayItem } from "@emb/contracts";
 
 export type { PatientDetail, PatientListItem, PatientStatus, StaffMember };
@@ -23,6 +24,8 @@ export interface Membership {
 export interface Me {
   user: { id: string; email: string; name: string };
   memberships: Membership[];
+  /** Manages the platform content library (videos). */
+  is_platform_admin?: boolean;
 }
 /** Kept for older screens: the list row. */
 export type PatientRow = PatientListItem;
@@ -234,5 +237,81 @@ export function useProgression(patientId: string) {
     queryKey: ["progression", patientId],
     queryFn: ({ signal }) => apiGet<{ decisions: ProgressionDecisionView[] }>(`/v1/patients/${patientId}/progression`, { signal }).then((r) => r.decisions),
     retry,
+  });
+}
+
+// ---------------------------------------------------------------- video library (ADR 0018)
+
+export function useBrainRegions(lang: string) {
+  return useQuery({
+    queryKey: ["brain-regions", lang],
+    queryFn: ({ signal }) => apiGet<{ regions: BrainRegion[] }>(`/v1/brain-regions?lang=${lang}`, { signal }).then((r) => r.regions),
+    retry,
+    staleTime: 10 * 60_000,
+  });
+}
+
+export interface VideoFilters {
+  lang: string;
+  q?: string;
+  region?: string | null;
+  all?: boolean;
+}
+
+export function useVideos(f: VideoFilters, enabled = true) {
+  return useQuery({
+    queryKey: ["videos", f.lang, f.q ?? "", f.region ?? "", !!f.all],
+    queryFn: ({ signal }) => {
+      const q = new URLSearchParams({ lang: f.lang });
+      if (f.q?.trim()) q.set("q", f.q.trim());
+      if (f.region) q.set("region", f.region);
+      if (f.all) q.set("all", "1");
+      return apiGet<{ videos: VideoSummary[] }>(`/v1/videos?${q}`, { signal }).then((r) => r.videos);
+    },
+    enabled,
+    retry,
+  });
+}
+
+export function useVideo(id: string | null, lang: string) {
+  return useQuery({
+    queryKey: ["video", id, lang],
+    queryFn: ({ signal }) => apiGet<{ video: VideoSummary }>(`/v1/videos/${id}?lang=${lang}`, { signal }).then((r) => r.video),
+    enabled: !!id,
+    retry,
+  });
+}
+
+export function useSaveVideo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input, lang }: { id: string | null; input: VideoInput; lang: string }) =>
+      apiSend<{ video: VideoSummary }>(id ? "PUT" : "POST", id ? `/v1/admin/videos/${id}?lang=${lang}` : `/v1/admin/videos?lang=${lang}`, input).then((r) => r.video),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["videos"] }),
+  });
+}
+
+/** Uploads a video file with progress (fetch can't report upload progress). Resolves with the updated video. */
+export function uploadVideoFile(id: string, file: File, onProgress: (fraction: number) => void): Promise<VideoSummary> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", `/v1/admin/videos/${id}/file`);
+    xhr.withCredentials = true;
+    xhr.setRequestHeader("content-type", file.type || "video/mp4");
+    xhr.setRequestHeader("accept", "application/json");
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
+    xhr.onload = () => {
+      const body = (() => {
+        try {
+          return JSON.parse(xhr.responseText);
+        } catch {
+          return null;
+        }
+      })();
+      if (xhr.status >= 200 && xhr.status < 300) resolve(body.video as VideoSummary);
+      else reject(new ApiError(xhr.status, body?.error ?? "unknown", body?.requestId));
+    };
+    xhr.onerror = () => reject(new ApiError(0, "network"));
+    xhr.send(file);
   });
 }

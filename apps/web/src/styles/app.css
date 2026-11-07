@@ -1543,3 +1543,26 @@ a.gamecard:hover {
 .trend__tipnote {
   font-weight: 500;
 }
+
+/* ---------------------------------------------------------------- video library (ADR 0018) */
+.choice--row { display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); }
+.choice--row > legend { inline-size: 100%; }
+.choice--row .choice__option { flex: 1 1 10rem; }
+.video-editor { display: grid; gap: var(--space-4, 16px); max-inline-size: 60rem; }
+.video-editor__pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: var(--space-3, 12px); }
+.video-editor__actions { display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); }
+.video-editor__progress { display: flex; align-items: center; gap: var(--space-2, 8px); margin-block-start: var(--space-2, 8px); }
+.video-editor__progress progress { inline-size: min(100%, 20rem); }
+.region-picker__tabs { display: flex; gap: var(--space-1, 4px); border-block-end: 1px solid var(--border-decorative); margin-block: var(--space-2, 8px); }
+.region-picker__tab { appearance: none; background: none; border: 0; border-block-end: 3px solid transparent; padding-block: var(--space-2, 8px); padding-inline: var(--space-3, 12px); font: inherit; font-weight: 600; color: inherit; cursor: pointer; display: inline-flex; gap: var(--space-2, 8px); align-items: center; min-block-size: 44px; }
+.region-picker__tab[aria-selected="true"] { border-block-end-color: var(--brand-primary); }
+.region-picker__tab:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.region-picker__count { font-weight: 500; font-size: 0.85em; padding-inline: 0.5em; border-radius: 999px; background: var(--brand-primary-subtle); }
+.region-picker__panel[hidden] { display: none; }
+.region-picker__panel { display: grid; gap: var(--space-3, 12px); }
+.region-picker__lobe { border: 1px solid var(--border-decorative); border-radius: 12px; padding-block: var(--space-2, 8px); padding-inline: var(--space-3, 12px); margin: 0; }
+.region-picker__lobe legend { font-weight: 600; padding-inline: var(--space-1, 4px); }
+.region-picker__areas { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: var(--space-1, 4px) var(--space-3, 12px); }
+.region-picker__area { display: flex; align-items: center; gap: var(--space-2, 8px); min-block-size: 36px; cursor: pointer; }
+.region-picker__area input { inline-size: 18px; block-size: 18px; }
+.region-filter { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: var(--space-3, 12px); }

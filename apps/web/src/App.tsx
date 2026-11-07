@@ -21,6 +21,7 @@ import { useIdleTimeout } from "./lib/idle.ts";
 import { useSignOut } from "./shell/ClinicShell.tsx";
 import { ClinicShell } from "./shell/ClinicShell.tsx";
 import { SessionPage } from "./session/SessionPage.tsx";
+import { VideoEditorPage, VideosAdminPage } from "./routes/admin/videos.tsx";
 import { flush } from "./session/outbox.ts";
 
 /**
@@ -119,6 +120,8 @@ export const routes: RouteObject[] = [
       { path: "/library/:gameId", element: <GamePage /> },
       { path: "/messages", element: <ComingSoonPage area="messages" /> },
       { path: "/reports", element: <ComingSoonPage area="reports" /> },
+      { path: "/admin/videos", element: <VideosAdminPage /> },
+      { path: "/admin/videos/:id", element: <VideoEditorPage /> },
       { path: "/settings", element: <SettingsPage /> },
       { path: "/more", element: <MorePage /> },
       { path: "*", element: <NotFoundPage /> },

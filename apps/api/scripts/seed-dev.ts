@@ -57,6 +57,8 @@ if (existing.rowCount) {
     await signUp(`rina@${SYNTHETIC_EMAIL_DOMAIN}`, "Rina Haddad"),
     await signUp(`eli@${SYNTHETIC_EMAIL_DOMAIN}`, "Eli Ben Ami"),
     await signUp(`yarden@${SYNTHETIC_EMAIL_DOMAIN}`, "Yarden Cohen"),
+    await signUp(`sapir@${SYNTHETIC_EMAIL_DOMAIN}`, "Sapir Levy"),
+    await signUp(`ran@${SYNTHETIC_EMAIL_DOMAIN}`, "Ran Biton"),
   ];
 
   const org = uuidv7();
@@ -64,7 +66,12 @@ if (existing.rowCount) {
     { id: uuidv7(), name: "Tel Aviv Child Development Center" },
     { id: uuidv7(), name: "Haifa North Clinic" },
   ];
+  // The content team: a platform admin in the eMazeBrain organization (manages the video library, ADR 0018).
+  const contentAdmin = await signUp(`admin@${SYNTHETIC_EMAIL_DOMAIN}`, "Content Admin");
   await admin.query("BEGIN");
+  const platformOrg = uuidv7();
+  await admin.query(`INSERT INTO app.organization (id, name, region) VALUES ($1, 'eMazeBrain', 'il')`, [platformOrg]);
+  await admin.query(`INSERT INTO app.membership (user_id, organization_id, clinic_id, role) VALUES ($1,$2,NULL,'platform_admin')`, [contentAdmin, platformOrg]);
   await admin.query(`INSERT INTO app.organization (id, name, region) VALUES ($1, 'Synthetic Health Network', 'il')`, [org]);
   for (const [i, c] of clinics.entries()) {
     await admin.query(`INSERT INTO app.clinic (id, organization_id, name, country_code, timezone) VALUES ($1,$2,$3,'IL','Asia/Jerusalem')`, [c.id, org, c.name]);
