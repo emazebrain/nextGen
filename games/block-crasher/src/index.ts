@@ -14,6 +14,7 @@ import { Application, Container, FillGradient, Graphics, type Ticker } from "pix
 import type { GameDefinition, GameModule, InitContext, PauseReason, SessionStatus } from "@emb/game-sdk";
 import { BALL_R, BlockEngine, BOARD_H, BOARD_W, BRICK_H, BRICK_W, PADDLE_H, PADDLE_Y, type Brick, type LevelOut, type UpdateOut } from "./engine.ts";
 import { clamp, PRACTICE_S, type Difficulty, type SpecialKind } from "./levels.ts";
+import { sceneForLevel, SceneView } from "./scenes.ts";
 import { Sfx } from "./sound.ts";
 import { strings } from "./strings.ts";
 import { manifest } from "./manifest.ts";
@@ -25,10 +26,6 @@ const TOP_INSET = 72; // the host's HUD (timer, hearts) sits above the board
 const BOTTOM_INSET = 20;
 
 interface Look {
-  sky: [string, string];
-  far: string;
-  near: string;
-  glow: string;
   panel: string;
   edge: string;
   rows: Array<[string, string]>;
@@ -47,10 +44,6 @@ interface Look {
 /** Warm "Canyon Fort" and cold "Glacier Castle" (design doc §8.4 asset table). */
 const LOOKS: Record<"warm" | "cold" | "mono", Look> = {
   warm: {
-    sky: ["#FFB547", "#B8322B"],
-    far: "#C2502F",
-    near: "#7A2420",
-    glow: "#FFE2B0",
     panel: "#3D1410",
     edge: "#FFB547",
     rows: [["#FF8F3D", "#E0702A"], ["#E0483A", "#B8322B"], ["#F2A65A", "#D6823A"], ["#C9573A", "#9E3A26"]],
@@ -66,10 +59,6 @@ const LOOKS: Record<"warm" | "cold" | "mono", Look> = {
     say: "#FFB547",
   },
   cold: {
-    sky: ["#6CC4E8", "#232C6B"],
-    far: "#3D63D6",
-    near: "#1B2A5A",
-    glow: "#F0F7FF",
     panel: "#0E1530",
     edge: "#9FE3F5",
     rows: [["#2FB3C8", "#1F8FA3"], ["#3D63D6", "#2C49A8"], ["#6CC4E8", "#3E9CC4"], ["#5470E0", "#3A52B8"]],
@@ -85,10 +74,6 @@ const LOOKS: Record<"warm" | "cold" | "mono", Look> = {
     say: "#9FE3F5",
   },
   mono: {
-    sky: ["#BDBDBD", "#3A3A3A"],
-    far: "#7A7A7A",
-    near: "#2E2E2E",
-    glow: "#F5F5F5",
     panel: "#1A1A1A",
     edge: "#E0E0E0",
     rows: [["#E6E6E6", "#BDBDBD"], ["#9E9E9E", "#7A7A7A"], ["#CFCFCF", "#A8A8A8"], ["#8A8A8A", "#666666"]],
@@ -133,7 +118,7 @@ class BlockCrasher implements GameModule {
   private assist: 0 | 1 | 2 = 0;
   private sfx!: Sfx;
   private board = new Container();
-  private bg = new Graphics();
+  private scene!: SceneView;
   private frame = new Graphics();
   private bricksG = new Graphics();
   private fx = new Graphics();
@@ -178,7 +163,8 @@ class BlockCrasher implements GameModule {
     ctx.mount.appendChild(this.app.canvas);
     ctx.mount.style.touchAction = "none"; // dragging the paddle must not scroll the page
     this.board.addChild(this.frame, this.bricksG, this.fx, this.paddleG, this.ballsG);
-    this.app.stage.addChild(this.bg, this.board);
+    this.scene = new SceneView(ctx.palette, ctx.monochrome, ctx.reducedMotion);
+    this.app.stage.addChild(this.scene, this.board);
     this.buildDom();
     this.layout();
     this.app.renderer.on("resize", () => this.layout());
@@ -273,6 +259,7 @@ class BlockCrasher implements GameModule {
     this.trails.clear();
     this.bricksDirty = true;
     this.updateStatus();
+    this.scene?.show(sceneForLevel(this.engine.level));
   }
 
   private serve() {
@@ -339,6 +326,7 @@ class BlockCrasher implements GameModule {
       } else {
         this.say(this.ctx.t("cleared"), 1400);
         this.after(1400, () => {
+          this.scene.show(sceneForLevel(this.engine.level));
           if (!this.ended) this.say(this.ctx.t("level", { n: this.engine.level, name: this.ctx.t(`layout.${this.engine.layout.id}`) }), 1600);
         });
       }
@@ -360,7 +348,7 @@ class BlockCrasher implements GameModule {
       errors: l.ballsLost,
       livesLost: l.livesLost,
       outcome,
-      detail: { layout: this.engine.layout.id, bricks: l.bricks, specials: l.specials, ball_speed: this.engine.baseSpeed, paddle: this.engine.basePaddle },
+      detail: { layout: this.engine.layout.id, scene: this.scene.sceneId, bricks: l.bricks, specials: l.specials, ball_speed: this.engine.baseSpeed, paddle: this.engine.basePaddle },
     });
   }
 
@@ -402,6 +390,8 @@ class BlockCrasher implements GameModule {
       }
     }
     this.squash = Math.max(0, this.squash - dt);
+    this.scene.setParallax((e.paddleX / BOARD_W) * 2 - 1);
+    this.scene.update(dt);
     this.draw(dt);
   }
 
@@ -412,7 +402,7 @@ class BlockCrasher implements GameModule {
     this.board.scale.set(s);
     const top = TOP_INSET + Math.max(0, (H - TOP_INSET - BOTTOM_INSET - BOARD_H * s) / 2);
     this.board.position.set((W - BOARD_W * s) / 2, top);
-    this.drawScene(W, H);
+    this.scene.resize(W, H);
     this.drawFrame();
     // Messages go under the board when there is room (phones in portrait), otherwise over its lower middle.
     const below = top + BOARD_H * s + 16;
@@ -428,49 +418,11 @@ class BlockCrasher implements GameModule {
     return (clientX - r.left - this.board.x) / this.scale;
   }
 
-  /** The scenery around the board: mesas and a fort at sunrise (warm), mountains and a castle by moonlight (cold). */
-  private drawScene(W: number, H: number) {
-    const L = this.look;
-    const g = this.bg;
-    g.clear();
-    const sky = new FillGradient({ type: "linear", start: { x: 0, y: 0 }, end: { x: 0, y: 1 }, colorStops: [{ offset: 0, color: L.sky[0] }, { offset: 1, color: L.sky[1] }], textureSpace: "local" });
-    g.rect(0, 0, W, H).fill(sky);
-    const warm = this.ctx.palette === "warm" && !this.ctx.monochrome;
-    if (warm) {
-      g.circle(W * 0.86, H * 0.07, Math.min(W, H) * 0.09).fill({ color: L.glow, alpha: 0.45 });
-      g.circle(W * 0.86, H * 0.07, Math.min(W, H) * 0.06).fill({ color: L.glow, alpha: 0.85 });
-    } else {
-      g.circle(W * 0.14, H * 0.07, Math.min(W, H) * 0.05).fill({ color: L.glow, alpha: 0.9 });
-      for (let i = 0; i < 70; i++) g.circle((((i * 7919) % 997) / 997) * W, (((i * 104729) % 991) / 991) * H * 0.6, 0.7 + (i % 3) * 0.5).fill({ color: "#FFFFFF", alpha: 0.3 + (i % 4) * 0.12 });
-    }
-    // Far ridge: flat-topped mesas (warm) or peaks (cold).
-    const far: number[] = [0, H];
-    const n = 7;
-    for (let i = 0; i <= n; i++) {
-      const x = (i / n) * W;
-      const h = H * (0.32 + 0.12 * Math.sin(i * 1.7));
-      if (warm) far.push(x - W / n / 3, H - h, x + W / n / 3, H - h);
-      else far.push(x, H - h - (i % 2 ? H * 0.08 : 0));
-    }
-    far.push(W, H);
-    g.poly(far).fill({ color: L.far, alpha: 0.7 });
-    // Near ground with a fort or castle at one end.
-    const ground = H * 0.16;
-    g.rect(0, H - ground, W, ground).fill({ color: L.near });
-    const fx = W * 0.08;
-    const fw = Math.min(W * 0.22, 260);
-    const fh = ground * 1.6;
-    g.rect(fx, H - ground - fh * 0.6, fw, fh * 0.6).fill({ color: L.near });
-    for (let i = 0; i < 5; i++) g.rect(fx + (i * fw) / 5 + 2, H - ground - fh * 0.6 - 12, fw / 10, 12).fill({ color: L.near });
-    g.rect(fx + fw * 0.4, H - ground - fh, fw * 0.2, fh * 0.4).fill({ color: L.near });
-    if (!warm) g.poly([fx + fw * 0.38, H - ground - fh, fx + fw * 0.5, H - ground - fh - 30, fx + fw * 0.62, H - ground - fh]).fill({ color: L.near });
-  }
-
   private drawFrame() {
     const L = this.look;
     const g = this.frame;
     g.clear();
-    g.roundRect(-10, -10, BOARD_W + 20, BOARD_H + 20, 18).fill({ color: L.panel, alpha: 0.84 }).stroke({ width: 4, color: L.edge, alpha: 0.85 });
+    g.roundRect(-10, -10, BOARD_W + 20, BOARD_H + 20, 18).fill({ color: L.panel, alpha: 0.74 }).stroke({ width: 4, color: L.edge, alpha: 0.85 });
     // The bottom edge is open: a dashed line shows where the ball is lost.
     for (let x = 0; x < BOARD_W; x += 24) g.moveTo(x, BOARD_H + 4).lineTo(x + 12, BOARD_H + 4).stroke({ width: 2, color: L.edge, alpha: 0.35 });
   }

@@ -6,7 +6,7 @@ const rng = () => ((s = (s * 16807) % 2147483647) / 2147483647);
 const mount = document.getElementById("stage")!;
 const g = game.create();
 const strings = (game.strings as Record<string, Record<string, string>>)[q.get("lang") ?? "en"]!;
-const params: Record<string, unknown> = { session_mode: q.get("mode") ?? "timed", duration_s: 120, difficulty: Number(q.get("d") ?? 3), hemisphere: q.get("h") ?? "left", lang: q.get("lang") ?? "en", show_score: false };
+const params: Record<string, unknown> = { session_mode: q.get("mode") ?? "timed", duration_s: 120, difficulty: Number(q.get("d") ?? 3), hemisphere: q.get("h") ?? "left", lang: q.get("lang") ?? "en", show_score: false, ...(q.get("lvl") ? { start_level: Number(q.get("lvl")) } : {}) };
 for (const [k, v] of q) if (k.startsWith("block_crasher.")) params[k] = v === "true" ? true : v === "false" ? false : isNaN(Number(v)) ? v : Number(v);
 const log: string[] = [];
 (window as unknown as { __log: string[] }).__log = log;

@@ -58,6 +58,14 @@ hidden status line tells screen readers the level and how many bricks are left w
 sit under the board when there is room (phones in portrait). Reduced motion turns off the ball trail, the paddle
 squash and the brick particles.
 
+**Backgrounds.** Five scenes per look, as in the §8.4 asset table, each in three parallax layers (far, middle,
+near) drawn in code: warm sunrise mesa, red rock arches, desert market, lava-glow cave and sunset fort; cold dawn
+fjord, ice arches, frozen harbour, aurora cave and moonlit castle. Two levels share a scene (levels 1–2 → the first
+… 9–10 → the fifth), and a new scene fades in when its first board starts. The layers shift up to 6, 16 and 30 px
+as the paddle crosses the board; embers rise in the lava cave, lanterns flicker in the market, snow falls on the
+ice arches and the castle, and the aurora shimmers. Under reduced motion nothing moves and scenes change at once.
+Monochrome turns every scene grey. Each level's history row names its scene.
+
 **Sound.** Synthesised with Web Audio (no files, no network): wood-block hits and a marimba level-up (warm), glass
 taps and a celesta level-up (cold); a lost ball gives a soft falling note, never a buzzer.
 
@@ -74,4 +82,5 @@ miss as an omission); one level-history row per board.
 - The start-level speeds and paddle widths are the §8.4 assumptions; the per-level steps are v1's, not pilot-fitted.
 - The magnet paddle makes `avg_intercept_gap_px` and the miss rate not comparable with sessions without it; reports
   should compare like with like.
-- One scene per look is drawn in code; the five scenes per look in the asset table come with the commissioned art.
+- The five scenes per look from the asset table are drawn in code (`scenes.ts`), three parallax layers each, until
+  the commissioned art replaces them.
