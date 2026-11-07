@@ -296,6 +296,14 @@ export function useSaveVideo() {
 
 /** Uploads a video file with progress (fetch can't report upload progress). Resolves with the updated video. */
 export function uploadVideoFile(id: string, file: File, onProgress: (fraction: number) => void): Promise<VideoSummary> {
+  // The demo build answers in the browser (fetch is patched there), so it can't use XMLHttpRequest.
+  if (import.meta.env.MODE === "demo")
+    return fetch(`/v1/admin/videos/${id}/file`, { method: "PUT", body: file, headers: { "content-type": file.type } }).then(async (r) => {
+      onProgress(1);
+      const body = await r.json();
+      if (!r.ok) throw new ApiError(r.status, body?.error ?? "unknown");
+      return body.video as VideoSummary;
+    });
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", `/v1/admin/videos/${id}/file`);

@@ -15,7 +15,8 @@
  */
 import { syntheticGuardian, syntheticPatients } from "@emb/db/synthetic";
 import { decide, type Rule } from "@emb/progression";
-import { scheduleDates } from "@emb/contracts";
+import { isVideoStep, scheduleDates } from "@emb/contracts";
+import { AREAS, HEMISPHERES, LOBES } from "@emb/db/brain-regions";
 import { timerPositionFor, timerShown } from "@emb/session-rules";
 import type {
   AssignmentView,
@@ -26,13 +27,19 @@ import type {
   PatientDetail,
   PatientListItem,
   ProgressionDecisionView,
+  BrainRegion,
+  GameStepInput,
+  LaunchStep,
   StepInput,
+  StepItem,
   TemplateDetail,
   TodayItem,
+  VideoSummary,
+  VideoViewInput,
 } from "@emb/contracts";
 import { findGame } from "../games/registry.ts";
 
-const KEY = "emb.demo.v2";
+const KEY = "emb.demo.v3";
 const DAY = 86_400_000;
 const ME = "0192f3a0-0000-7000-8000-0000000000a1";
 const CLINIC_A = "0192f3a0-0000-7000-8000-00000000c11a";
@@ -70,6 +77,9 @@ interface Db {
   assignments: Assignment[];
   games: GameRow[];
   decisions: Decision[];
+  /** The video library (ADR 0018); file_url points at the bundled synthetic clips or an uploaded blob. */
+  videos: Array<VideoSummary & { file_url: string | null }>;
+  views: VideoViewInput[];
   seq: number;
 }
 
@@ -92,7 +102,7 @@ const today = () => isoDay(Date.now());
 // ------------------------------------------------------------------ seed (synthetic only)
 
 const PROGRESSION: Rule = { metric: "accuracy", up_at: 0.8, up_after: 2, down_below: 0.5, down_after: 1 };
-function step(s: Partial<StepInput>): StepInput {
+function step(s: Partial<GameStepInput>): GameStepInput {
   return {
     game_id: "catch-me-if-you-can",
     session_mode: "timed_lives",
@@ -110,7 +120,7 @@ function step(s: Partial<StepInput>): StepInput {
 }
 
 function seed(): Db {
-  const db: Db = { auth: { email: null, name: "Yael Bar", mfa: false, stage: "out" }, patients: [], guardians: [], consents: [], templates: [], assignments: [], games: [], decisions: [], seq: 0 };
+  const db: Db = { auth: { email: null, name: "Yael Bar", mfa: false, stage: "out" }, patients: [], guardians: [], consents: [], templates: [], assignments: [], games: [], decisions: [], videos: seedVideos(), views: [], seq: 0 };
   const add = (clinic: string, p: ReturnType<typeof syntheticPatients>[number], n: number) => {
     const id = uid(Date.now() - 400 * DAY + n * 1000);
     const g = syntheticGuardian(p, 1000 + n);
@@ -153,6 +163,7 @@ function seed(): Db {
     owner_name: null,
     can_edit: false,
     games: ["catch-me-if-you-can", "catch-me-if-you-can"],
+    items: [],
     clinic_id: null,
     steps: [
       { ...step({}), id: uid(), ordinal: 1 },
@@ -171,6 +182,7 @@ function seed(): Db {
     owner_name: null,
     can_edit: false,
     games: ["catch-me-if-you-can"],
+    items: [],
     clinic_id: null,
     steps: [{ ...step({ session_mode: "lives", duration_s: null, lives: 5, difficulty_start: 3, trial_window_ms: 8000 }), id: uid(), ordinal: 1 }],
   };
@@ -186,6 +198,7 @@ function seed(): Db {
     owner_name: null,
     can_edit: false,
     games: ["peek-peek"],
+    items: [],
     clinic_id: null,
     steps: [
       {
@@ -207,6 +220,7 @@ function seed(): Db {
     owner_name: null,
     can_edit: false,
     games: ["orbital-order"],
+    items: [],
     clinic_id: null,
     steps: [
       {
@@ -228,6 +242,7 @@ function seed(): Db {
     owner_name: null,
     can_edit: false,
     games: ["tunnel-rush"],
+    items: [],
     clinic_id: null,
     steps: [
       {
@@ -249,6 +264,7 @@ function seed(): Db {
     owner_name: null,
     can_edit: false,
     games: ["beep-beep"],
+    items: [],
     clinic_id: null,
     steps: [
       {
@@ -270,6 +286,7 @@ function seed(): Db {
     owner_name: null,
     can_edit: false,
     games: ["echo-keys"],
+    items: [],
     clinic_id: null,
     steps: [
       {
@@ -291,6 +308,7 @@ function seed(): Db {
     owner_name: null,
     can_edit: false,
     games: ["block-crasher"],
+    items: [],
     clinic_id: null,
     steps: [
       {
@@ -300,7 +318,29 @@ function seed(): Db {
       },
     ],
   };
-  db.templates.push(starter, discrimination, memory, sequencing, steering, parking, rhythm, bounce);
+  const breakVideo = db.videos[0]!;
+  const steerAndWatch: TemplateDetail = {
+    id: uid(Date.now() - 191 * DAY),
+    name: "Steer, watch, play",
+    description: "Tunnel Rush, a short video, then Block Crasher. Videos are chosen from the library by brain region.",
+    weeks: 4,
+    sessions_per_week: 2,
+    setting: "clinic",
+    visibility: "platform",
+    version: 1,
+    owner_name: null,
+    can_edit: false,
+    games: ["tunnel-rush", "block-crasher"],
+    items: [],
+    clinic_id: null,
+    steps: [
+      { ...step({ game_id: "tunnel-rush", session_mode: "timed", duration_s: 120, lives: null, progression: null }), id: uid(), ordinal: 1 },
+      { step_type: "video", video_id: breakVideo.id, id: uid(), ordinal: 2 },
+      { ...step({ game_id: "block-crasher", session_mode: "timed", duration_s: 120, lives: null, progression: null }), id: uid(), ordinal: 3 },
+    ],
+  };
+  db.templates.push(starter, discrimination, memory, sequencing, steering, parking, rhythm, bounce, steerAndWatch);
+  for (const t of db.templates) t.items = itemsOf(db, t.steps);
 
   const byName = (a: Patient, b: Patient) => a.family_name.localeCompare(b.family_name) || a.given_name.localeCompare(b.given_name);
   const active = db.patients.filter((p) => p.clinic_id === CLINIC_A && p.status === "active").sort(byName);
@@ -326,7 +366,7 @@ function assign(db: Db, p: Patient, t: { id: string | null; name: string; weeks:
       ...strip(s),
       id: uid(),
       ordinal: i + 1,
-      current_difficulty: s.difficulty_start,
+      current_difficulty: isVideoStep(s) ? 3 : s.difficulty_start,
       sessions_completed: 0,
     })),
     sessions: scheduleDates(start, t.weeks, t.sessions_per_week).map((s) => ({ id: uid(), seq: s.seq, week: s.week, planned_date: s.date, status: "planned" })),
@@ -487,8 +527,10 @@ function assignmentView(a: Assignment | undefined): AssignmentView | null {
 }
 const running = (db: Db, pid: string) => db.assignments.find((a) => a.patient_id === pid && (a.status === "active" || a.status === "paused"));
 
+type GameAssignmentStep = GameStepInput & { id: string; ordinal: number; current_difficulty: number; sessions_completed: number };
+
 /** Platform parameters for a step (the same shape as the API's buildParams). */
-function params(s: Assignment["steps"][number], p: Patient) {
+function params(s: GameAssignmentStep, p: Patient) {
   const ns = s.game_id.replace(/-/g, "_");
   const own: Record<string, unknown> = { ...s.game_params };
   if (p.colour_vision_deficiency && findGame(s.game_id)?.manifest.paramsSchema.properties.cvd_mode) own.cvd_mode = true;
@@ -584,6 +626,8 @@ async function handle(path: string, method: string, q: URLSearchParams, body: Re
         { clinic_id: CLINIC_A, organization_id: "org", role: "clinic_manager", clinic_name: "Tel Aviv Child Development Center" },
         { clinic_id: CLINIC_B, organization_id: "org", role: "therapist", clinic_name: "Haifa North Clinic" },
       ],
+      // The demo user also manages the video library, so the Videos page can be tried (ADR 0018).
+      is_platform_admin: true,
     });
   }
 
@@ -615,7 +659,8 @@ async function handle(path: string, method: string, q: URLSearchParams, body: Re
         total: asg.sessions.filter((s) => s.status !== "cancelled").length,
         patient: { id: p.id, given_name: p.given_name, family_name: p.family_name, date_of_birth: p.date_of_birth, alert: p.alert, can_play: canPlay(db, p) },
         assignment: { id: asg.id, name: asg.name, weeks: asg.weeks },
-        games: asg.steps.map((s) => s.game_id),
+        games: asg.steps.flatMap((s) => (isVideoStep(s) ? [] : [s.game_id])),
+        items: itemsOf(db, asg.steps),
       });
     }
     items.sort((x, y) => x.planned_date.localeCompare(y.planned_date) || x.patient.family_name.localeCompare(y.patient.family_name));
@@ -758,14 +803,15 @@ async function handle(path: string, method: string, q: URLSearchParams, body: Re
           version: 1,
           owner_name: a.name,
           can_edit: true,
-          games: steps.map((s) => s.game_id),
+          games: steps.flatMap((s) => (isVideoStep(s) ? [] : [s.game_id])),
+          items: itemsOf(db, steps),
           clinic_id: (body.clinic_id as string) ?? CLINIC_A,
           steps,
         };
         db.templates.push(t);
         return done(json({ template: t }, 201));
       }
-      return json({ templates: db.templates.map(({ steps: _s, clinic_id: _c, ...t }) => t) });
+      return json({ templates: db.templates.map(({ steps, clinic_id: _c, ...t }) => ({ ...t, items: itemsOf(db, steps) })) });
     }
     const t = db.templates.find((x) => x.id === r1);
     if (!t) return notFound();
@@ -775,10 +821,75 @@ async function handle(path: string, method: string, q: URLSearchParams, body: Re
     }
     if (method === "PUT") {
       const steps = (body.steps as StepInput[]).map((s, i) => ({ ...s, id: uid(), ordinal: i + 1 }));
-      Object.assign(t, { name: body.name, description: body.description ?? null, weeks: body.weeks, sessions_per_week: body.sessions_per_week, setting: body.setting, visibility: body.visibility, version: t.version + 1, steps, games: steps.map((s) => s.game_id) });
+      Object.assign(t, { name: body.name, description: body.description ?? null, weeks: body.weeks, sessions_per_week: body.sessions_per_week, setting: body.setting, visibility: body.visibility, version: t.version + 1, steps, games: steps.flatMap((s) => (isVideoStep(s) ? [] : [s.game_id])), items: itemsOf(db, steps) });
       return done(json({ template: t }));
     }
-    return json({ template: t });
+    return json({ template: { ...t, items: itemsOf(db, t.steps) } });
+  }
+
+  // ---- video library (ADR 0018)
+  if (r0 === "brain-regions") return json({ regions: regionsIn(q.get("lang") ?? "en") });
+  if (r0 === "videos" && !r1) {
+    const lang = q.get("lang") ?? "en";
+    const region = REGION_NODES.find((x) => x.id === q.get("region"));
+    const words = (q.get("q") ?? "").trim().toLowerCase();
+    const list = db.videos
+      .filter((v) => v.status === "published" || q.get("all") === "1")
+      .filter((v) => !region || v.regions.some((r) => r.path === region.path || r.path.startsWith(`${region.path}.`)))
+      .filter((v) => !words || Object.values(v.titles).some((t) => t?.toLowerCase().includes(words)))
+      .map((v) => localized(v, lang))
+      .sort((x, y) => x.title.localeCompare(y.title));
+    return json({ videos: list });
+  }
+  if (r0 === "videos" && r1 && !r2) {
+    const v = db.videos.find((x) => x.id === r1);
+    return v ? json({ video: localized(v, q.get("lang") ?? "en") }) : notFound();
+  }
+  if (r0 === "admin" && r1 === "videos") {
+    const lang = q.get("lang") ?? "en";
+    const fields = (v: Partial<Db["videos"][number]>) => {
+      const yt = String(body.youtube_url ?? "").match(/(?:v=|youtu\.be\/|shorts\/|embed\/)([A-Za-z0-9_-]{11})/)?.[1] ?? null;
+      const titles = (body.titles ?? {}) as Record<string, string>;
+      const descriptions = (body.descriptions ?? {}) as Record<string, string>;
+      return {
+        source: body.source as "upload" | "youtube",
+        youtube_id: body.source === "youtube" ? yt : null,
+        titles: Object.fromEntries(Object.entries(titles).filter(([, x]) => x?.trim())),
+        descriptions: Object.fromEntries(Object.entries(descriptions).filter(([, x]) => x?.trim())),
+        regions: ((body.region_ids ?? []) as string[]).map((id) => REGION_NODES.find((x) => x.id === id)).filter((x): x is BrainRegion => !!x).map(({ id, kind, code, path }) => ({ id, kind, code, path })),
+        age_min: (body.age_min as number | null) ?? null,
+        age_max: (body.age_max as number | null) ?? null,
+        status: (body.status as VideoSummary["status"]) ?? "draft",
+        duration_s: (body.duration_s as number | null | undefined) ?? v.duration_s ?? null,
+        needs_internet: body.source === "youtube",
+      };
+    };
+    if (!r2 && method === "POST") {
+      const v = { id: uid(), version: 1, has_file: false, file_url: null, title: "", description: null, ...fields({}) };
+      db.videos.push(v);
+      return done(json({ video: localized(v, lang) }, 201));
+    }
+    const v = db.videos.find((x) => x.id === r2);
+    if (!v) return notFound();
+    if (!r3 && method === "PUT") {
+      const next = fields(v);
+      const media = next.source !== v.source || next.youtube_id !== v.youtube_id;
+      Object.assign(v, next, { version: v.version + (media ? 1 : 0) }, next.source === "youtube" ? { has_file: false, file_url: null } : {});
+      return done(json({ video: localized(v, lang) }));
+    }
+  }
+  if (r0 === "video-views" && method === "POST") {
+    const view = body as unknown as VideoViewInput;
+    const asg = db.assignments.find((x) => x.sessions.some((s) => s.id === view.planned_session_id));
+    const ps = asg?.sessions.find((s) => s.id === view.planned_session_id);
+    if (!asg || !ps) return notFound();
+    if (db.views.some((x) => x.client_view_id === view.client_view_id)) return json({ outcome: "duplicate", planned_session_status: ps.status });
+    const st = asg.steps.find((s) => s.id === view.assignment_step_id);
+    if (!st || !isVideoStep(st) || st.video_id !== view.video_id) return json({ error: "step_mismatch" }, 422);
+    if (ps.status !== "planned" && ps.status !== "in_progress") return json({ error: "session_closed" }, 409);
+    db.views.push(view);
+    ps.status = asg.steps.every((s) => stepDone(db, ps.id, s)) ? "done" : "in_progress";
+    return done(json({ outcome: "accepted", planned_session_status: ps.status }, 201));
   }
 
   // ---- sessions
@@ -798,15 +909,29 @@ async function handle(path: string, method: string, q: URLSearchParams, body: Re
       total: asg.sessions.filter((s) => s.status !== "cancelled").length,
       patient: { id: p.id, given_name: p.given_name, family_name: p.family_name, preferred_locale: p.preferred_locale, alert: p.alert },
       assignment: { id: asg.id, name: asg.name },
-      steps: asg.steps.map((s) => ({
-        assignment_step_id: s.id,
-        ordinal: s.ordinal,
-        game_id: s.game_id,
-        params: params(s, p),
-        // Not a real signature: in the demo nothing leaves the browser. The real API signs an Ed25519 ticket.
-        ticket: `demo.${btoa(JSON.stringify({ psid: ps.id, asid: s.id, pid: p.id }))}`,
-        done: db.games.some((g) => g.planned_session_id === ps.id && g.assignment_step_id === s.id),
-      })),
+      steps: asg.steps.map((s): LaunchStep => {
+        if (isVideoStep(s)) {
+          const v = db.videos.find((x) => x.id === s.video_id)!;
+          const lv = localized(v, p.preferred_locale);
+          return {
+            kind: "video",
+            assignment_step_id: s.id,
+            ordinal: s.ordinal,
+            video: { id: v.id, version: v.version, source: v.source, youtube_id: v.youtube_id, title: lv.title, duration_s: v.duration_s, file_url: v.file_url, sha256: null },
+            done: stepDone(db, ps.id, s),
+          };
+        }
+        return {
+          kind: "game",
+          assignment_step_id: s.id,
+          ordinal: s.ordinal,
+          game_id: s.game_id,
+          params: params(s, p),
+          // Not a real signature: in the demo nothing leaves the browser. The real API signs an Ed25519 ticket.
+          ticket: `demo.${btoa(JSON.stringify({ psid: ps.id, asid: s.id, pid: p.id }))}`,
+          done: stepDone(db, ps.id, s),
+        };
+      }),
     };
     return done(json({ launch }));
   }
@@ -820,9 +945,10 @@ async function handle(path: string, method: string, q: URLSearchParams, body: Re
       return json({ error: "invalid_ticket" }, 422);
     }
     const asg = db.assignments.find((x) => x.steps.some((s) => s.id === claims.asid));
-    const st = asg?.steps.find((s) => s.id === claims.asid);
+    const found = asg?.steps.find((s) => s.id === claims.asid);
     const ps = asg?.sessions.find((s) => s.id === claims.psid);
-    if (!asg || !st || !ps) return json({ error: "invalid_ticket" }, 422);
+    if (!asg || !found || isVideoStep(found) || !ps) return json({ error: "invalid_ticket" }, 422);
+    const st = found as GameAssignmentStep;
     const sid = String(env.session_id);
     if (db.games.some((g) => g.id === sid)) return json({ outcome: "duplicate", session_id: sid, progression: null, planned_session_status: ps.status }); // stored once
     const ended = Date.parse(String(env.ended_at)) || Date.now();
@@ -849,7 +975,7 @@ async function handle(path: string, method: string, q: URLSearchParams, body: Re
         db.decisions.push({ id: uid(), game_session_id: sid, game_id: st.game_id, decided_at: new Date().toISOString(), action: d.action, from_difficulty: d.from, to_difficulty: d.to, reason: d.reason, patient_id: claims.pid });
       }
     }
-    const allIn = asg.steps.every((s) => db.games.some((g) => g.planned_session_id === ps.id && g.assignment_step_id === s.id));
+    const allIn = asg.steps.every((s) => stepDone(db, ps.id, s));
     ps.status = allIn ? "done" : "in_progress";
     return done(json({ outcome: "accepted", session_id: sid, progression, planned_session_status: ps.status }, 201));
   }
@@ -864,8 +990,91 @@ export function installDemoApi() {
     const url = new URL(req.url);
     const at = url.pathname.search(/\/(api\/auth|v1)\//);
     if (url.origin !== location.origin || at < 0) return real(input, init);
+    const upload = url.pathname.match(/\/v1\/admin\/videos\/([^/]+)\/file$/);
+    if (upload && req.method === "PUT") return uploadFile(upload[1]!, await req.blob());
     let body: Record<string, unknown> = {};
     if (req.method !== "GET" && req.method !== "HEAD") body = (await req.clone().json().catch(() => ({}))) as Record<string, unknown>;
     return handle(url.pathname.slice(at), req.method, url.searchParams, body);
   };
+}
+
+// ------------------------------------------------------------------ video library (ADR 0018)
+
+/** The brain-region tree with stable demo ids (the real API uses UUIDv7 rows from migration 0010). */
+const REGION_NODES: BrainRegion[] = (() => {
+  const out: BrainRegion[] = [];
+  let n = 0;
+  const id = () => `0192f3a0-0000-7000-8000-${(++n).toString(16).padStart(12, "0")}`;
+  HEMISPHERES.forEach((h, hi) => {
+    const hid = id();
+    out.push({ id: hid, parent_id: null, kind: "hemisphere", code: h.code, path: h.code, label: h.en, sort: hi + 1 });
+    LOBES.forEach((l, li) => {
+      const lid = id();
+      out.push({ id: lid, parent_id: hid, kind: "lobe", code: l.code, path: `${h.code}.${l.code}`, label: l.en, sort: li + 1 });
+      AREAS.filter((a) => a.lobe === l.code).forEach((a, ai) => out.push({ id: id(), parent_id: lid, kind: "area", code: a.code, path: `${h.code}.${l.code}.${a.code}`, label: a.en, sort: ai + 1 }));
+    });
+  });
+  return out;
+})();
+const NAMES = new Map([...HEMISPHERES, ...LOBES, ...AREAS].map((x) => [x.en, x.he]));
+function regionsIn(lang: string): BrainRegion[] {
+  return REGION_NODES.map((r) => (lang === "he" ? { ...r, label: NAMES.get(r.label) ?? r.label } : r));
+}
+const regionRef = (path: string) => {
+  const r = REGION_NODES.find((x) => x.path === path)!;
+  return { id: r.id, kind: r.kind, code: r.code, path: r.path };
+};
+
+function seedVideos(): Db["videos"] {
+  const clip = (file: string, en: string, he: string, seconds: number, ages: [number, number], paths: string[]) => ({
+    id: uid(Date.now() - 200 * DAY),
+    source: "upload" as const,
+    youtube_id: null,
+    title: en,
+    description: null,
+    titles: { en, he },
+    descriptions: {},
+    duration_s: seconds,
+    age_min: ages[0],
+    age_max: ages[1],
+    status: "published" as const,
+    version: 2,
+    has_file: true,
+    needs_internet: false,
+    regions: paths.map(regionRef),
+    // Synthetic clips bundled with the demo (scripts/make-sample-videos.sh): generated patterns, no people.
+    file_url: `./demo-videos/${file}`,
+  });
+  return [
+    clip("colour-shapes.mp4", "Colour shapes", "צורות צבעוניות", 10, [5, 12], ["left.frontal.ba44", "left.frontal.ba46"]),
+    clip("spiral-zoom.mp4", "Spiral zoom", "זום ספירלה", 10, [4, 14], ["left.occipital.ba17", "right.occipital.ba17"]),
+    clip("growing-dots.mp4", "Growing dots", "נקודות צומחות", 8, [6, 14], ["right.parietal.ba40", "right.cerebellum.cerebellum"]),
+  ];
+}
+
+function pickText(texts: Record<string, string | undefined>, lang: string) {
+  for (const l of [lang, "en", "he"]) if (texts[l]) return texts[l]!;
+  return Object.values(texts).find(Boolean) ?? "";
+}
+function localized(v: Db["videos"][number], lang: string): VideoSummary {
+  const { file_url: _f, ...rest } = v;
+  return { ...rest, title: pickText(v.titles, lang), description: pickText(v.descriptions, lang) || null };
+}
+function itemsOf(db: Db, steps: StepInput[]): StepItem[] {
+  return steps.map((s) => (isVideoStep(s) ? { kind: "video", video_id: s.video_id, title: pickText(db.videos.find((v) => v.id === s.video_id)?.titles ?? {}, "en") } : { kind: "game", game_id: s.game_id }));
+}
+function stepDone(db: Db, psid: string, s: StepInput & { id: string }) {
+  return isVideoStep(s) ? db.views.some((v) => v.planned_session_id === psid && v.assignment_step_id === s.id) : db.games.some((g) => g.planned_session_id === psid && g.assignment_step_id === s.id);
+}
+
+/** An uploaded file stays in this tab only (a blob URL); the demo keeps nothing anywhere else. */
+async function uploadFile(id: string, blob: Blob): Promise<Response> {
+  const db = load();
+  const v = db.videos.find((x) => x.id === id);
+  if (!v) return notFound();
+  if (v.source !== "upload") return json({ error: "not_an_upload" }, 409);
+  if (!["video/mp4", "video/webm"].includes(blob.type)) return json({ error: "unsupported_type" }, 415);
+  Object.assign(v, { file_url: URL.createObjectURL(blob), has_file: true, version: v.version + 1 });
+  save();
+  return json({ video: localized(v, "en") });
 }
