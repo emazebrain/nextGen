@@ -1,7 +1,7 @@
 # Offline therapist devices — design (project 2 of 3)
 
 - Date: 2026-11-07
-- Status: Draft for product-owner approval
+- Status: Approved by the product owner, 2026-11-07
 - Design doc: §3 journey T1 (two taps to start), M1 ("download offline packs"), §5.6 (session runner: "Offline: results stored on the device with a 'Will sync' indicator", "Peek Peek isn't on this device"), §8.2 (launch ticket: "valid up to 30 days so play works offline … the allowed parameter ranges"), §9.8 (on-device database with idempotent sync), §11 (security)
 - Builds on: ADR 0018 (video library; versioned file URLs, `(video id, version, sha256)`)
 
