@@ -129,7 +129,7 @@ describe.skipIf(!ADMIN_URL)("video steps API", () => {
     const first = view(v.assignment_step_id, upload, { video_version: 2 });
     const r1 = await yael("/v1/video-views", { method: "POST", body: first });
     expect(r1.status).toBe(201);
-    expect(r1.body).toEqual({ outcome: "accepted", planned_session_status: "in_progress" });
+    expect(r1.body).toEqual({ outcome: "accepted", planned_session_status: "in_progress", review_reason: null });
     const again = await yael("/v1/video-views", { method: "POST", body: first });
     expect(again.status).toBe(200);
     expect(again.body.outcome).toBe("duplicate");
@@ -153,8 +153,9 @@ describe.skipIf(!ADMIN_URL)("video steps API", () => {
     expect(result.status).toBe(201);
     expect(result.body.planned_session_status).toBe("done");
     const late = await yael("/v1/video-views", { method: "POST", body: view(v.assignment_step_id, upload, { video_version: 2 }) });
-    expect(late.status).toBe(409);
-    expect(late.body.error).toBe("session_closed");
+    // Offline devices can send a view after the session closed: it is kept and flagged (spec 2026-11-07), not refused.
+    expect(late.status).toBe(201);
+    expect(late.body).toMatchObject({ outcome: "kept_for_review", review_reason: "session_closed" });
   });
 
   it("an assignment keeps an archived video", async () => {
@@ -167,12 +168,12 @@ describe.skipIf(!ADMIN_URL)("video steps API", () => {
     expect(((await yael(`/v1/videos`)).body.videos as Array<{ id: string }>).some((x) => x.id === youtube)).toBe(false); // gone from the picker
   });
 
-  it("a rejected view is kept in the raw log, never dropped silently", async () => {
-    const before = (await env.db.query(`SELECT count(*)::int AS n FROM app.session_result_raw WHERE outcome = 'rejected' AND error = 'session_closed'`)).rows[0].n;
+  it("a late view is kept in the raw log as kept for review, never dropped silently", async () => {
+    const before = (await env.db.query(`SELECT count(*)::int AS n FROM app.session_result_raw WHERE outcome = 'kept_for_review' AND error = 'session_closed'`)).rows[0].n;
     const launch = await env.db.query(`SELECT s.id FROM app.assignment_step s JOIN app.planned_session p ON p.assignment_id = s.assignment_id WHERE p.id = $1 AND s.step_type = 'video' ORDER BY s.ordinal LIMIT 1`, [sessionId]);
     const late = await yael("/v1/video-views", { method: "POST", body: view(launch.rows[0].id, upload, { video_version: 2 }) });
-    expect(late.status).toBe(409);
-    const after = (await env.db.query(`SELECT count(*)::int AS n FROM app.session_result_raw WHERE outcome = 'rejected' AND error = 'session_closed'`)).rows[0].n;
+    expect(late.status).toBe(201);
+    const after = (await env.db.query(`SELECT count(*)::int AS n FROM app.session_result_raw WHERE outcome = 'kept_for_review' AND error = 'session_closed'`)).rows[0].n;
     expect(after).toBe(before + 1);
     const accepted = (await env.db.query(`SELECT count(*)::int AS n FROM app.session_result_raw WHERE outcome = 'accepted' AND envelope_version = 'video_view.1'`)).rows[0].n;
     expect(accepted).toBeGreaterThanOrEqual(2);

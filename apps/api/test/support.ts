@@ -10,6 +10,7 @@ import { createApp } from "../src/app.ts";
 import { authPool, createAuth } from "../src/auth.ts";
 import { localFileStore } from "../src/files.ts";
 import { deviceKey, type DeviceKey } from "../src/device-crypto.ts";
+import { ticketSigner, type TicketSigner } from "../src/tickets.ts";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -74,6 +75,8 @@ export interface TestEnv {
   nextStep: () => void;
   /** The key the app seals device and space secrets with. */
   deviceKey: DeviceKey;
+  /** The app's launch ticket signer (tests sign offline tickets with it). */
+  tickets: TicketSigner;
   close: () => Promise<void>;
 }
 
@@ -94,13 +97,15 @@ export async function setupApi(): Promise<TestEnv> {
   const auth = createAuth({ databaseUrl: url.toString(), secret: randomUUID() + randomUUID(), baseURL: BASE, pool: authDb, rateLimit: false }, pool);
   const fileDir = mkdtempSync(join(tmpdir(), "emb-files-"));
   const key = deviceKey(randomBytes(32).toString("base64"));
-  const app = createApp({ cell: "test", version: "test" }, { pool, auth, files: localFileStore(fileDir), deviceKey: key });
+  const tickets = ticketSigner();
+  const app = createApp({ cell: "test", version: "test" }, { pool, auth, files: localFileStore(fileDir), deviceKey: key, tickets });
   return {
     app,
     db,
     pool,
     nextStep: () => vi.setSystemTime(Date.now() + 30_000),
     deviceKey: key,
+    tickets,
     close: async () => {
       vi.useRealTimers();
       await pool.end();

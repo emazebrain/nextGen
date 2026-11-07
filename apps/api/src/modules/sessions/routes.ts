@@ -21,17 +21,31 @@ import {
   type ProgressionDecisionView,
   type ResultEnvelopeInput,
   type ResultReceipt,
+  paramsWithinAllowed,
+  type AllowedParams,
+  type ReviewReason,
 } from "../../../../../packages/contracts/src/index.ts";
 import { decide, type Rule } from "../../../../../packages/progression/src/index.ts";
 import { withUser, type Env } from "../../context.ts";
 import { GAME_MANIFESTS } from "../../games.ts";
-import { paramsHash, type TicketSigner } from "../../tickets.ts";
+import { paramsHash, type TicketClaims, type TicketClaimsV2, type TicketSigner } from "../../tickets.ts";
 import { parseBody } from "../../validate.ts";
 import { UUID } from "../patients/routes.ts";
 import { pick } from "../videos/routes.ts";
 import { timerPositionFor, timerShown } from "@emb/session-rules";
 
 const CLINIC_TICKET_TTL_S = 24 * 3600;
+/** Offline package tickets live 30 days (design doc §8.2; offline devices spec §7.4). */
+export const OFFLINE_TICKET_TTL_S = 30 * 24 * 3600;
+
+/** Offline tickets leave these to the device: difficulty within a range, and the free per-session values. */
+const DEVICE_CHOSEN = new Set(["difficulty", "seed", "practice", "instructions"]);
+/** The settings that define a step; if any differs now from what the ticket allowed, the step changed. */
+const STRUCTURAL = ["session_mode", "duration_s", "lives", "hemisphere", "timer_position", "monochrome", "trial_window_ms"];
+
+export function allowedParamsFor(params: Record<string, unknown>, difficulty: { min: number; max: number }): AllowedParams {
+  return { exact: Object.fromEntries(Object.entries(params).filter(([k]) => !DEVICE_CHOSEN.has(k))), difficulty };
+}
 const GAME_LANGS = new Set(["he", "en", "ar", "ru", "fr", "es", "zh"]);
 
 interface StepRow {
@@ -173,6 +187,16 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
     return c.json({ launch: result });
   });
 
+  /** The sender must be the ticket's therapist, or hold an active space on the device an offline ticket was issued to. */
+  const uploaderMay = (c: Context<Env>, claims: TicketClaims | TicketClaimsV2) =>
+    run(c, async (db) => {
+      const { rows } = await db.query<{ ok: boolean }>(
+        `SELECT ($1::uuid = app.current_user_id()) OR ($2::uuid IS NOT NULL AND app.has_space_on($2::uuid, app.current_user_id())) AS ok`,
+        [claims.sub, claims.v === 2 ? claims.dev : null],
+      );
+      return rows[0]!.ok;
+    });
+
   r.post("/results", async (c) => {
     const me = c.get("user").id;
     const raw = await c.req.json().catch(() => null);
@@ -205,17 +229,23 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
     }
     const { ticket, envelope } = body.data;
     const claims = tickets.verify(ticket);
-    const reject = async (error: string) => {
+    const reject = async (error: string, status: 403 | 422 = 422) => {
       await run(c, (db) => record(db, "rejected", error, { sessionId: envelope.session_id, psid: claims?.psid ?? null, pid: claims?.pid ?? null }));
-      return c.json({ error }, 422);
+      return c.json({ error }, status);
     };
     if (!claims) return reject("invalid_ticket");
     if (envelope.demo) return reject("demo_result");
     if (claims.gid !== envelope.game_id) return reject("game_mismatch");
-    if (paramsHash(envelope.params) !== claims.ph) return reject("params_mismatch");
+    // v1 (online launch): the exact parameters. v2 (offline package): within what the ticket allows, or kept for review.
+    let paramsReason: ReviewReason | null = null;
+    if (claims.v === 1) {
+      if (paramsHash(envelope.params) !== claims.ph) return reject("params_mismatch");
+    } else if (!paramsWithinAllowed(claims.allowed, envelope.params)) paramsReason = "params_outside_ticket";
+    if (!(await uploaderMay(c, claims))) return reject("uploader_not_allowed", 403);
 
-    const receipt = await run(c, (db) => ingest(db, envelope, claims, me, record));
-    return c.json(receipt, receipt.outcome === "accepted" ? 201 : 200);
+    const receipt = await run(c, (db) => ingest(db, envelope, claims, me, record, paramsReason));
+    if ("conflict" in receipt) return c.json({ error: "session_id_reused" }, 409);
+    return c.json(receipt, receipt.outcome === "duplicate" ? 200 : 201);
   });
 
   // A watched video (ADR 0018). The app's UUIDv7 view id makes retries safe; the view is kept once, append-only.
@@ -236,45 +266,69 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
       return body.response;
     }
     const v = body.data;
+    // Offline views carry the package's v2 ticket for that step: it names the therapist and the device.
+    const claims = v.ticket ? tickets.verify(v.ticket) : null;
+    if (v.ticket && (!claims || claims.v !== 2 || claims.asid !== v.assignment_step_id || claims.psid !== v.planned_session_id)) {
+      await run(c, (db) => log(db, "rejected", "invalid_ticket", { viewId: v.client_view_id }));
+      return c.json({ error: "invalid_ticket" }, 422);
+    }
+    if (claims && !(await uploaderMay(c, claims))) {
+      await run(c, (db) => log(db, "rejected", "uploader_not_allowed", { viewId: v.client_view_id }));
+      return c.json({ error: "uploader_not_allowed" }, 403);
+    }
+    const therapist = claims?.sub ?? me;
+    const device = claims?.v === 2 ? claims.dev : null;
     const result = await run(c, async (db): Promise<{ error: string; status: 404 | 409 | 422 } | VideoViewReceipt> => {
-      const ps = await db.query<{ status: string; assignment_id: string; patient_id: string; clinic_id: string }>(
-        `SELECT status, assignment_id, patient_id, clinic_id FROM app.planned_session WHERE id = $1`,
-        [v.planned_session_id],
-      );
+      // Without a ticket nothing server-signed vouches for the view: the sender must be able to treat the patient
+      // under their own RLS, as before offline support (invariant 3).
+      if (!claims) {
+        const mine = await db.query<{ ok: boolean }>(
+          `SELECT app.can_treat_patient(ps.patient_id) AS ok FROM app.planned_session ps WHERE ps.id = $1`,
+          [v.planned_session_id],
+        );
+        if (!mine.rows[0]?.ok) {
+          await log(db, "rejected", "not_found", { viewId: v.client_view_id });
+          return { error: "not_found", status: 404 };
+        }
+      }
+      await db.query(`SELECT app.act_for_ticket($1, $2)`, [therapist, device]);
+      const asUploader = () => db.query(`SELECT set_config('app.user_id', $1, true)`, [me]);
+      const ps = await db.query<{ status: string; assignment_id: string; patient_id: string; clinic_id: string }>(`SELECT * FROM app.ticket_session($1)`, [v.planned_session_id]);
       const session = ps.rows[0];
       const extra = { viewId: v.client_view_id, psid: session ? v.planned_session_id : null, pid: session?.patient_id ?? null };
       if (!session) {
+        await asUploader();
         await log(db, "rejected", "not_found", extra);
         return { error: "not_found", status: 404 };
       }
-      const seen = await db.query(`SELECT 1 FROM app.video_view WHERE client_view_id = $1`, [v.client_view_id]);
-      if (seen.rowCount) {
+      const stored = (await db.query<{ s: string | null }>(`SELECT app.ticket_stored_step('video', $1) AS s`, [v.client_view_id])).rows[0]!.s;
+      if (stored) {
+        await asUploader();
+        if (stored !== v.assignment_step_id) {
+          await log(db, "conflict", "view_id_reused", extra);
+          return { error: "view_id_reused", status: 409 };
+        }
         await log(db, "duplicate", null, extra);
-        return { outcome: "duplicate", planned_session_status: session.status };
+        return { outcome: "duplicate", planned_session_status: session.status, review_reason: null };
       }
-      const step = await db.query<{ step_type: string; video_id: string | null }>(
-        `SELECT step_type, video_id FROM app.assignment_step WHERE id = $1 AND assignment_id = $2`,
-        [v.assignment_step_id, session.assignment_id],
-      );
+      const step = await db.query<{ step_type: string; video_id: string | null; assignment_id: string }>(`SELECT step_type, video_id, assignment_id FROM app.ticket_step($1)`, [v.assignment_step_id]);
       const s = step.rows[0];
-      if (!s || s.step_type !== "video" || s.video_id !== v.video_id) {
+      if (!s || s.assignment_id !== session.assignment_id || s.step_type !== "video" || s.video_id !== v.video_id) {
+        await asUploader();
         await log(db, "rejected", "step_mismatch", extra);
         return { error: "step_mismatch", status: 422 };
       }
-      if (session.status !== "planned" && session.status !== "in_progress") {
-        await log(db, "rejected", "session_closed", extra);
-        return { error: "session_closed", status: 409 };
-      }
-      await db.query(
-        `INSERT INTO app.video_view (client_view_id, planned_session_id, assignment_step_id, patient_id, clinic_id, video_id, video_version, started_at, ended_at, watched_s, completed, recorded_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-        [v.client_view_id, v.planned_session_id, v.assignment_step_id, session.patient_id, session.clinic_id, v.video_id, v.video_version, v.started_at, v.ended_at, v.watched_s, v.completed, me],
-      );
-      await log(db, "accepted", null, extra);
-      return { outcome: "accepted", planned_session_status: await closeIfComplete(db, v.planned_session_id) };
+      let reason = (await db.query<{ r: ReviewReason | null }>(`SELECT app.review_reason_for($1,$2,$3,$4) AS r`, [session.patient_id, therapist, v.assignment_step_id, v.planned_session_id])).rows[0]!.r;
+      if (!reason && (await db.query<{ p: boolean }>(`SELECT app.ticket_step_played('video', $1, $2) AS p`, [v.planned_session_id, v.assignment_step_id])).rows[0]!.p) reason = "played_twice";
+      const { ticket: _t, ...view } = v;
+      await db.query(`SELECT app.ingest_video_view($1::jsonb)`, [JSON.stringify({ ...view, patient_id: session.patient_id, review_reason: reason })]);
+      const status = reason ? session.status : await closeIfComplete(db, v.planned_session_id);
+      await asUploader();
+      await log(db, reason ? "kept_for_review" : "accepted", reason, extra);
+      return { outcome: reason ? "kept_for_review" : "accepted", planned_session_status: status, review_reason: reason };
     });
     if ("error" in result) return c.json({ error: result.error }, result.status);
-    return c.json(result, result.outcome === "accepted" ? 201 : 200);
+    return c.json(result, result.outcome === "duplicate" ? 200 : 201);
   });
 
   r.get("/patients/:id/sessions", async (c) => {
@@ -325,55 +379,69 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
 async function ingest(
   db: pg.PoolClient,
   e: ResultEnvelopeInput,
-  claims: { psid: string; asid: string; pid: string },
+  claims: TicketClaims | TicketClaimsV2,
   me: string,
   record: (db: pg.PoolClient, outcome: string, error: string | null, extra: { sessionId?: string | null; psid?: string | null; pid?: string | null }) => Promise<unknown>,
-): Promise<ResultReceipt> {
+  paramsReason: ReviewReason | null,
+): Promise<ResultReceipt | { conflict: true }> {
   const extra = { sessionId: e.session_id, psid: claims.psid, pid: claims.pid };
+  // Act for the therapist the (verified) ticket names; the raw log is written back as the sender.
+  await db.query(`SELECT app.act_for_ticket($1, $2)`, [claims.sub, claims.v === 2 ? claims.dev : null]);
+  const asUploader = () => db.query(`SELECT set_config('app.user_id', $1, true)`, [me]);
+  const sessionStatus = async () => (await db.query<{ status: string }>(`SELECT status FROM app.ticket_session($1)`, [claims.psid])).rows[0]?.status ?? null;
+
+  const stored = (await db.query<{ s: string | null }>(`SELECT app.ticket_stored_step('game', $1) AS s`, [e.session_id])).rows[0]!.s;
+  if (stored) {
+    // Already stored (a retry after a lost response, or the outbox sending twice): same answer, nothing new.
+    const status = await sessionStatus();
+    await asUploader();
+    if (stored !== claims.asid) {
+      await record(db, "conflict", "session_id_reused", extra);
+      return { conflict: true };
+    }
+    await record(db, "duplicate", null, extra);
+    return { outcome: "duplicate", session_id: e.session_id, progression: null, planned_session_status: status, review_reason: null };
+  }
+
+  let reason: ReviewReason | null =
+    paramsReason ?? (await db.query<{ r: ReviewReason | null }>(`SELECT app.review_reason_for($1,$2,$3,$4) AS r`, [claims.pid, claims.sub, claims.asid, claims.psid])).rows[0]!.r;
+  if (!reason && claims.v === 2 && (await stepChanged(db, claims))) reason = "step_changed";
+  if (!reason && (await db.query<{ p: boolean }>(`SELECT app.ticket_step_played('game', $1, $2) AS p`, [claims.psid, claims.asid])).rows[0]!.p) reason = "played_twice";
+
   const p = e.params as Record<string, unknown>;
   const metrics = e.metrics as Record<string, unknown>;
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
-  const inserted = await db.query(
-    `INSERT INTO app.game_session (id, patient_id, clinic_id, assignment_step_id, planned_session_id, recorded_by, game_id, game_version, location, status, end_reason,
-        session_mode, difficulty, hemisphere, started_at, ended_at, active_ms, paused_ms, lives_start, lives_lost, lives_remaining,
-        trials_total, correct, errors, timeouts, accuracy, rt_median_ms, rt_mean_ms, left_accuracy, right_accuracy, highest_level, levels_completed,
-        metrics, std, levels, config_echo)
-     SELECT $1, $2, p.clinic_id, $3, $4, $5, $6, $7, 'clinic', $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19,
-            $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34
-       FROM app.patient p WHERE p.id = $2
-     ON CONFLICT (id) DO NOTHING
-     RETURNING id`,
-    [
-      e.session_id, claims.pid, claims.asid, claims.psid, me, e.game_id, e.game_version, e.status, e.end_reason,
-      e.mode, p.difficulty, p.hemisphere, e.started_at, e.ended_at, e.active_ms, e.paused_ms, e.lives_start, e.lives_lost, e.lives_remaining,
-      e.std.trials_total, e.std.correct, e.std.errors, e.std.timeouts, e.std.accuracy, e.std.rt_median_ms !== null ? Math.round(e.std.rt_median_ms) : null,
-      e.std.rt_mean_ms !== null ? Math.round(e.std.rt_mean_ms) : null, e.std.left_accuracy, e.std.right_accuracy,
-      num(metrics.highest_level), num(metrics.levels_completed),
-      JSON.stringify(e.metrics), JSON.stringify(e.std), JSON.stringify(e.levels), JSON.stringify(e.params),
-    ],
-  );
-
-  if (inserted.rowCount === 0) {
-    // Already stored (a retry after a lost response, or the outbox sending twice): same answer, nothing new.
-    const existing = await db.query(`SELECT assignment_step_id FROM app.game_session WHERE id = $1`, [e.session_id]);
-    const same = existing.rows[0]?.assignment_step_id === claims.asid;
-    await record(db, same ? "duplicate" : "conflict", same ? null : "session_id_reused", extra);
-    const ps = await db.query(`SELECT status FROM app.planned_session WHERE id = $1`, [claims.psid]);
-    return { outcome: "duplicate", session_id: e.session_id, progression: null, planned_session_status: ps.rows[0]?.status ?? null };
+  const row = {
+    id: e.session_id, patient_id: claims.pid, assignment_step_id: claims.asid, planned_session_id: claims.psid, review_reason: reason,
+    game_id: e.game_id, game_version: e.game_version, status: e.status, end_reason: e.end_reason, session_mode: e.mode, difficulty: p.difficulty,
+    hemisphere: p.hemisphere, started_at: e.started_at, ended_at: e.ended_at, active_ms: e.active_ms, paused_ms: e.paused_ms,
+    lives_start: e.lives_start, lives_lost: e.lives_lost, lives_remaining: e.lives_remaining,
+    trials_total: e.std.trials_total, correct: e.std.correct, errors: e.std.errors, timeouts: e.std.timeouts, accuracy: e.std.accuracy,
+    rt_median_ms: e.std.rt_median_ms !== null ? Math.round(e.std.rt_median_ms) : null, rt_mean_ms: e.std.rt_mean_ms !== null ? Math.round(e.std.rt_mean_ms) : null,
+    left_accuracy: e.std.left_accuracy, right_accuracy: e.std.right_accuracy, highest_level: num(metrics.highest_level), levels_completed: num(metrics.levels_completed),
+    metrics: e.metrics, std: e.std, levels: e.levels, config_echo: e.params,
+  };
+  const inserted = (await db.query<{ id: string | null }>(`SELECT app.ingest_game_session($1::jsonb) AS id`, [JSON.stringify(row)])).rows[0]!.id;
+  if (!inserted) {
+    const status = await sessionStatus();
+    await asUploader();
+    await record(db, "duplicate", null, extra);
+    return { outcome: "duplicate", session_id: e.session_id, progression: null, planned_session_status: status, review_reason: null };
   }
-  await record(db, "accepted", null, extra);
 
   let progression: ResultReceipt["progression"] = null;
-  if (e.status !== "abandoned") {
-    const step = await db.query<{ current_difficulty: number; progression: Rule | null }>(
-      `UPDATE app.assignment_step SET sessions_completed = sessions_completed + 1 WHERE id = $1 RETURNING current_difficulty, progression`,
-      [claims.asid],
+  if (!reason && e.status !== "abandoned") {
+    const step = await db.query<{ current_difficulty: number; progression: Rule | null; set_after_ticket: boolean }>(
+      `UPDATE app.assignment_step SET sessions_completed = sessions_completed + 1 WHERE id = $1
+       RETURNING current_difficulty, progression, (difficulty_set_at IS NOT NULL AND difficulty_set_at > to_timestamp($2)) AS set_after_ticket`,
+      [claims.asid, claims.iat],
     );
     const s = step.rows[0];
-    if (s) {
+    // A difficulty the therapist set by hand after this ticket was issued wins over a late result.
+    if (s && !s.set_after_ticket) {
       const history = await db.query<{ accuracy: number | null; difficulty: number; valid: boolean }>(
         `SELECT accuracy::float8 AS accuracy, difficulty, (is_valid AND status <> 'abandoned') AS valid
-           FROM app.game_session WHERE assignment_step_id = $1 ORDER BY ended_at, id`,
+           FROM app.game_session WHERE assignment_step_id = $1 AND review_reason IS NULL ORDER BY ended_at, id`,
         [claims.asid],
       );
       const d = decide(s.progression, history.rows, s.current_difficulty);
@@ -388,8 +456,21 @@ async function ingest(
       }
     }
   }
+  const status = reason ? await sessionStatus() : await closeIfComplete(db, claims.psid);
+  await asUploader();
+  await record(db, reason ? "kept_for_review" : "accepted", reason, extra);
+  return { outcome: reason ? "kept_for_review" : "accepted", session_id: e.session_id, progression, planned_session_status: status, review_reason: reason };
+}
 
-  return { outcome: "accepted", session_id: e.session_id, progression, planned_session_status: await closeIfComplete(db, claims.psid) };
+/** Whether the step's defining settings differ now from what an offline ticket allowed (edited while the device was away). */
+async function stepChanged(db: pg.PoolClient, claims: TicketClaimsV2): Promise<boolean> {
+  const { rows } = await db.query<StepRow>(`SELECT * FROM app.ticket_step($1)`, [claims.asid]);
+  const step = rows[0];
+  if (!step || step.step_type === "video" || step.game_id !== claims.gid) return true;
+  const now = buildParams(step, { preferred_locale: "en", colour_vision_deficiency: false }, 0);
+  const ns = `${step.game_id.replace(/-/g, "_")}.`;
+  const keys = [...STRUCTURAL, ...Object.keys(now).filter((k) => k.startsWith(ns) && k !== `${ns}cvd_mode`)];
+  return keys.some((k) => JSON.stringify((now as Record<string, unknown>)[k] ?? null) !== JSON.stringify(claims.allowed.exact[k] ?? null));
 }
 
 /** The planned session is done once every game has a result and every video a view. Returns its status. */
