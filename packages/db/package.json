@@ -19,6 +19,7 @@
   },
   "exports": {
     ".": "./src/migrate.ts",
-    "./synthetic": "./src/synthetic.ts"
+    "./synthetic": "./src/synthetic.ts",
+    "./brain-regions": "./src/brain-regions.ts"
   }
 }
