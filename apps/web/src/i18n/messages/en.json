@@ -570,5 +570,11 @@
   "regions.any": "Any",
   "regions.selected": "{count} selected",
   "regions.short.left": "Left",
-  "regions.short.right": "Right"
+  "regions.short.right": "Right",
+  "builder.addVideo": "Add a video",
+  "step.video": "Video",
+  "videoPicker.title": "Choose a video",
+  "videoPicker.search": "Search videos",
+  "videoPicker.none": "No videos match these filters.",
+  "videoPicker.ages": "Ages {from}–{to}"
 }

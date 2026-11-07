@@ -21,6 +21,11 @@ url.pathname = `/${name}`;
 process.env.DATABASE_URL = url.toString();
 process.env.AUTH_SECRET ??= `e2e-${randomUUID()}-${randomUUID()}`;
 process.env.CELL = "e2e";
+// Uploaded videos for this run live in their own folder (removed with the database).
+const { mkdtempSync, rmSync } = await import("node:fs");
+const { tmpdir } = await import("node:os");
+const { join } = await import("node:path");
+process.env.FILE_STORE_DIR = mkdtempSync(join(tmpdir(), "emb-e2e-files-"));
 
 const api = fileURLToPath(new URL("../../api/", import.meta.url));
 execFileSync(process.execPath, ["--experimental-strip-types", "scripts/seed-dev.ts"], { cwd: api, env: process.env, stdio: "inherit" });
@@ -33,6 +38,7 @@ async function drop() {
   await c.connect();
   await c.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);
   await c.end();
+  rmSync(process.env.FILE_STORE_DIR!, { recursive: true, force: true });
 }
 for (const sig of ["SIGINT", "SIGTERM"] as const) {
   process.on(sig, () => {

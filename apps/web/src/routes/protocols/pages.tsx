@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "re
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { useIntl } from "react-intl";
 import { ArrowLeft, Copy, FilePlus2, Pencil, Plus, Route as RouteIcon, Trash2 } from "lucide-react";
-import type { StepInput, TemplateDetail, TemplateSummary } from "@emb/contracts";
+import type { StepInput, StepItem, TemplateDetail, TemplateSummary } from "@emb/contracts";
 import { Alert, Button, Card, Chip, ConfirmDialog, EmptyState, MazeLoader, PageHeader, Segmented, SelectField, TextAreaField, TextField } from "@emb/ui";
 import { ApiError } from "../../api/http.ts";
 import { useAssign, useDeleteTemplate, usePatient, useSaveTemplate, useTemplate, useTemplates } from "../../api/queries.ts";
@@ -25,6 +25,12 @@ function useGameNames() {
   return (ids: string[]) => ids.map((id) => (findGame(id) ? localText(findGame(id)!.manifest.name, locale) : id));
 }
 
+/** "Tunnel Rush → ▶ Colour shapes → Block Crasher": every step in order (ADR 0018). */
+export function stepNames(x: { games: string[]; items?: StepItem[] }, names: (ids: string[]) => string[]) {
+  if (!x.items) return names([...new Set(x.games)]).join(" · ");
+  return x.items.map((i) => (i.kind === "video" ? `▶ ${i.title}` : names([i.game_id])[0])).join(" → ");
+}
+
 function TemplateCard({ t: tpl, actions }: { t: TemplateSummary; actions?: ReactNode }) {
   const t = useT();
   const names = useGameNames();
@@ -35,7 +41,7 @@ function TemplateCard({ t: tpl, actions }: { t: TemplateSummary; actions?: React
         <p className="app-muted">
           {t("protocols.plan", { weeks: tpl.weeks, perWeek: tpl.sessions_per_week })} · {t("builder.settingValue", { s: tpl.setting })}
         </p>
-        <p className="tplcard__games">{names([...new Set(tpl.games)]).join(" · ")}</p>
+        <p className="tplcard__games">{stepNames(tpl, names)}</p>
         <p className="app-muted tplcard__meta">
           <Chip>{t("protocols.visibility", { v: tpl.visibility })}</Chip>
           {tpl.owner_name && <span>{t("protocols.by", { name: tpl.owner_name })}</span>}

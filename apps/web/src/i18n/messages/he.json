@@ -570,5 +570,11 @@
   "regions.any": "הכול",
   "regions.selected": "{count} נבחרו",
   "regions.short.left": "שמאל",
-  "regions.short.right": "ימין"
+  "regions.short.right": "ימין",
+  "builder.addVideo": "הוספת סרטון",
+  "step.video": "סרטון",
+  "videoPicker.title": "בחירת סרטון",
+  "videoPicker.search": "חיפוש סרטונים",
+  "videoPicker.none": "אין סרטונים שמתאימים לסינון.",
+  "videoPicker.ages": "גילאי {from}–{to}"
 }

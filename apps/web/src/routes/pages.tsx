@@ -132,7 +132,8 @@ function NextUp() {
   return (
     <ul className="nextup">
       {today.data.map((it) => {
-        const games = [...new Set(it.games)].map((g) => (findGame(g) ? localText(findGame(g)!.manifest.name, locale) : g));
+        const gameName = (g: string) => (findGame(g) ? localText(findGame(g)!.manifest.name, locale) : g);
+        const games = it.items ? it.items.map((i) => (i.kind === "video" ? `▶ ${i.title}` : gameName(i.game_id))) : [...new Set(it.games)].map(gameName);
         return (
           <li key={it.planned_session_id} className="nextup__item">
             <Avatar name={fullName(it.patient)} size={44} />

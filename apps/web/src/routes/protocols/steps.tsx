@@ -7,14 +7,17 @@
 import { useId, useState } from "react";
 import { timerPositionFor, timerShown } from "@emb/session-rules";
 import { useIntl } from "react-intl";
-import { ArrowDown, ArrowUp, ChevronDown, Gamepad2, Pencil, Plus, Trash2 } from "lucide-react";
-import { DEFAULT_PROGRESSION, stepInput, type SessionMode, type StepInput } from "@emb/contracts";
+import { ArrowDown, ArrowUp, ChevronDown, Gamepad2, Pencil, PlayCircle, Plus, Trash2 } from "lucide-react";
+import { DEFAULT_PROGRESSION, isVideoStep, stepInput, type GameStepInput, type SessionMode, type StepInput } from "@emb/contracts";
 import type { GameManifest } from "@emb/game-sdk";
 import { Alert, Button, CheckboxField, Chip, IconButton, Segmented, SelectField } from "@emb/ui";
 import { GAMES, findGame, localText } from "../../games/registry.ts";
 import { useT, usePrefs } from "../../i18n/index.tsx";
+import { useVideo } from "../../api/queries.ts";
+import { formatDuration, VideoSourceChip } from "../admin/videos.tsx";
+import { VideoPicker } from "./VideoPicker.tsx";
 
-export function defaultStep(m: GameManifest): StepInput {
+export function defaultStep(m: GameManifest): GameStepInput {
   const mode = m.recommendedMode ?? m.capabilities.modes[0] ?? "timed_lives";
   const game_params = Object.fromEntries(
     Object.entries(m.paramsSchema.properties)
@@ -44,6 +47,7 @@ export function stepProblems(steps: StepInput[]): Array<{ n: number; code: strin
   steps.forEach((s, i) => {
     const r = stepInput.safeParse(s);
     if (!r.success) for (const issue of r.error.issues) out.push({ n: i + 1, code: issue.message });
+    if (isVideoStep(s)) return;
     const m = findGame(s.game_id)?.manifest;
     if (m && !m.capabilities.modes.includes(s.session_mode)) out.push({ n: i + 1, code: "mode_not_supported" });
   });
@@ -52,7 +56,7 @@ export function stepProblems(steps: StepInput[]): Array<{ n: number; code: strin
 
 export function useStepSummary() {
   const t = useT();
-  return (s: StepInput) =>
+  return (s: GameStepInput) =>
     [
       t("game.mode", { mode: s.session_mode }),
       s.duration_s !== null ? (s.duration_s < 60 ? t("stepEditor.seconds", { n: s.duration_s }) : t("step.minutes", { n: Math.round((s.duration_s / 60) * 10) / 10 })) : null,
@@ -71,7 +75,7 @@ export function StepList({ steps, onChange, editable = true }: { steps: StepInpu
   const { locale } = usePrefs();
   const summary = useStepSummary();
   const [open, setOpen] = useState<number | null>(null);
-  const [picking, setPicking] = useState(false);
+  const [picking, setPicking] = useState<"game" | "video" | null>(null);
   const problems = stepProblems(steps);
 
   const move = (i: number, d: -1 | 1) => {
@@ -96,19 +100,23 @@ export function StepList({ steps, onChange, editable = true }: { steps: StepInpu
       {steps.length === 0 && <p className="app-muted">{t("builder.noSteps")}</p>}
       <ol className="steps__list">
         {steps.map((s, i) => {
-          const m = findGame(s.game_id)?.manifest;
-          const name = m ? localText(m.name, locale) : s.game_id;
+          const m = isVideoStep(s) ? undefined : findGame(s.game_id)?.manifest;
+          const name = isVideoStep(s) ? null : m ? localText(m.name, locale) : s.game_id;
           return (
-            <li key={`${i}-${s.game_id}`} className={open === i ? "step is-open" : "step"}>
+            <li key={`${i}-${isVideoStep(s) ? s.video_id : s.game_id}`} className={open === i ? "step is-open" : "step"}>
               <div className="step__row">
                 <span className="step__num" aria-hidden="true">
                   {i + 1}
                 </span>
-                <div className="step__text">
-                  <p className="step__name">{name}</p>
-                  <p className="app-muted">{summary(s)}</p>
-                  {s.progression && <Chip tone="brand">{t("step.autoProgress")}</Chip>}
-                </div>
+                {isVideoStep(s) ? (
+                  <VideoStepText videoId={s.video_id} />
+                ) : (
+                  <div className="step__text">
+                    <p className="step__name">{name}</p>
+                    <p className="app-muted">{summary(s)}</p>
+                    {s.progression && <Chip tone="brand">{t("step.autoProgress")}</Chip>}
+                  </div>
+                )}
                 {editable && (
                   <div className="step__actions">
                     <IconButton label={t("builder.moveUp", { n: i + 1 })} icon={<ArrowUp size={18} />} disabled={i === 0} onClick={() => move(i, -1)} />
@@ -117,7 +125,7 @@ export function StepList({ steps, onChange, editable = true }: { steps: StepInpu
                       onChange(steps.filter((_, j) => j !== i));
                       setOpen(null);
                     }} />
-                    <Button
+                    {!isVideoStep(s) && <Button
                       variant={open === i ? "primary" : "secondary"}
                       icon={open === i ? <ChevronDown size={18} aria-hidden="true" /> : <Pencil size={18} aria-hidden="true" />}
                       aria-expanded={open === i}
@@ -125,17 +133,27 @@ export function StepList({ steps, onChange, editable = true }: { steps: StepInpu
                     >
                       {open === i ? t("common.done") : t("common.edit")}
                       <span className="emb-vh"> {t("builder.stepN", { n: i + 1 })}</span>
-                    </Button>
+                    </Button>}
                   </div>
                 )}
               </div>
-              {open === i && m && <StepEditor step={s} manifest={m} onChange={(next) => onChange(steps.map((x, j) => (j === i ? next : x)))} />}
+              {open === i && m && !isVideoStep(s) && <StepEditor step={s} manifest={m} onChange={(next) => onChange(steps.map((x, j) => (j === i ? next : x)))} />}
             </li>
           );
         })}
       </ol>
+      {editable && picking === "video" && (
+        <VideoPicker
+          onCancel={() => setPicking(null)}
+          onPick={(v) => {
+            onChange([...steps, { step_type: "video", video_id: v.id }]);
+            setPicking(null);
+          }}
+        />
+      )}
       {editable &&
-        (picking ? (
+        picking !== "video" &&
+        (picking === "game" ? (
           <div className="gamepick" role="group" aria-label={t("gamePicker.title")}>
             <p className="emb-field__label">{t("gamePicker.title")}</p>
             <ul className="plainlist">
@@ -146,7 +164,7 @@ export function StepList({ steps, onChange, editable = true }: { steps: StepInpu
                     className="gamepick__item"
                     onClick={() => {
                       onChange([...steps, defaultStep(gm)]);
-                      setPicking(false);
+                      setPicking(null);
                       setOpen(steps.length);
                     }}
                   >
@@ -159,15 +177,34 @@ export function StepList({ steps, onChange, editable = true }: { steps: StepInpu
                 </li>
               ))}
             </ul>
-            <Button variant="ghost" onClick={() => setPicking(false)}>
+            <Button variant="ghost" onClick={() => setPicking(null)}>
               {t("common.cancel")}
             </Button>
           </div>
         ) : (
-          <Button variant="secondary" icon={<Plus size={18} aria-hidden="true" />} onClick={() => setPicking(true)}>
-            {t("builder.addGame")}
-          </Button>
+          <div className="steps__add">
+            <Button variant="secondary" icon={<Plus size={18} aria-hidden="true" />} onClick={() => setPicking("game")}>
+              {t("builder.addGame")}
+            </Button>
+            <Button variant="secondary" icon={<PlayCircle size={18} aria-hidden="true" />} onClick={() => setPicking("video")}>
+              {t("builder.addVideo")}
+            </Button>
+          </div>
         ))}
+    </div>
+  );
+}
+
+/** A video step's title, length and where it plays from (ADR 0018). */
+function VideoStepText({ videoId }: { videoId: string }) {
+  const t = useT();
+  const { locale } = usePrefs();
+  const v = useVideo(videoId, locale);
+  return (
+    <div className="step__text">
+      <p className="step__name">{v.data?.title ?? t("common.loading")}</p>
+      <p className="app-muted">{[t("step.video"), v.data ? formatDuration(v.data.duration_s) : null].filter(Boolean).join(" · ")}</p>
+      {v.data && <VideoSourceChip video={v.data} />}
     </div>
   );
 }
@@ -177,12 +214,12 @@ const WINDOWS_S = [2, 3, 4, 5, 6, 8, 10, 15, 20, 30];
 const PCTS_UP = [0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1];
 const PCTS_DOWN = [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8];
 
-function StepEditor({ step: s, manifest: m, onChange }: { step: StepInput; manifest: GameManifest; onChange: (s: StepInput) => void }) {
+function StepEditor({ step: s, manifest: m, onChange }: { step: GameStepInput; manifest: GameManifest; onChange: (s: GameStepInput) => void }) {
   const t = useT();
   const intl = useIntl();
   const { locale } = usePrefs();
   const id = useId();
-  const set = <K extends keyof StepInput>(k: K, v: StepInput[K]) => onChange({ ...s, [k]: v });
+  const set = <K extends keyof GameStepInput>(k: K, v: GameStepInput[K]) => onChange({ ...s, [k]: v });
   const pct = (n: number) => intl.formatNumber(n, { style: "percent" });
 
   const setMode = (mode: SessionMode) =>
@@ -283,7 +320,7 @@ function StepEditor({ step: s, manifest: m, onChange }: { step: StepInput; manif
       )}
       <div className="pform__row">
         {m.capabilities.practice && (
-          <SelectField label={t("stepEditor.practice")} value={s.practice} onChange={(e) => set("practice", e.target.value as StepInput["practice"])}>
+          <SelectField label={t("stepEditor.practice")} value={s.practice} onChange={(e) => set("practice", e.target.value as GameStepInput["practice"])}>
             {(["auto", "on", "off"] as const).map((p) => (
               <option key={p} value={p}>
                 {t("stepEditor.practiceValue", { p })}

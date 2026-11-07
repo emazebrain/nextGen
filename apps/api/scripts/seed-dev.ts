@@ -59,6 +59,7 @@ if (existing.rowCount) {
     await signUp(`yarden@${SYNTHETIC_EMAIL_DOMAIN}`, "Yarden Cohen"),
     await signUp(`sapir@${SYNTHETIC_EMAIL_DOMAIN}`, "Sapir Levy"),
     await signUp(`ran@${SYNTHETIC_EMAIL_DOMAIN}`, "Ran Biton"),
+    await signUp(`noga@${SYNTHETIC_EMAIL_DOMAIN}`, "Noga Peleg"),
   ];
 
   const org = uuidv7();
@@ -165,6 +166,7 @@ if (existing.rowCount) {
     }
   }
   await seedHistory(admin, { clinic: telAviv, therapist: yael, shared: extra.slice(1), template: templates[1]! });
+  await seedVideos(admin, contentAdmin);
   await admin.query("COMMIT");
   await pool.end();
   await authDb.end();
@@ -251,4 +253,33 @@ async function seedHistory(
       );
     }
   }
+}
+
+/**
+ * The video library (ADR 0018): three synthetic clips (generated patterns, scripts/make-sample-videos.sh), stored in
+ * FILE_STORE_DIR like an admin upload, tagged by Brodmann area and published.
+ */
+async function seedVideos(db: pg.Client, createdBy: string) {
+  const { localFileStore } = await import("../src/files.ts");
+  const { readFile } = await import("node:fs/promises");
+  const { fileURLToPath } = await import("node:url");
+  const store = localFileStore(process.env.FILE_STORE_DIR ?? ".data/files");
+  const clips = [
+    { file: "colour-shapes.mp4", en: "Colour shapes", he: "צורות צבעוניות", seconds: 10, ages: [5, 12], regions: ["left.frontal.ba44", "left.frontal.ba46"] },
+    { file: "spiral-zoom.mp4", en: "Spiral zoom", he: "זום ספירלה", seconds: 10, ages: [4, 14], regions: ["left.occipital.ba17", "right.occipital.ba17"] },
+    { file: "growing-dots.mp4", en: "Growing dots", he: "נקודות צומחות", seconds: 8, ages: [6, 14], regions: ["right.parietal.ba40", "right.cerebellum.cerebellum"] },
+  ];
+  const ids: Record<string, string> = {};
+  for (const c of clips) {
+    const id = uuidv7();
+    const bytes = await readFile(fileURLToPath(new URL(`../../web/public/demo-videos/${c.file}`, import.meta.url)));
+    const key = `videos/${id}/2-seed.mp4`;
+    const stored = await store.put(key, new Blob([bytes]).stream(), bytes.length + 1);
+    const f = await db.query<{ id: string }>(`INSERT INTO app.file_object (storage_key, sha256, bytes, mime, created_by) VALUES ($1,$2,$3,'video/mp4',$4) RETURNING id`, [key, stored.sha256, stored.bytes, createdBy]);
+    await db.query(`INSERT INTO app.video (id, source, file_id, duration_s, age_min, age_max, status, version, created_by) VALUES ($1,'upload',$2,$3,$4,$5,'published',2,$6)`, [id, f.rows[0]!.id, c.seconds, c.ages[0], c.ages[1], createdBy]);
+    await db.query(`INSERT INTO app.video_i18n (video_id, locale, title) VALUES ($1,'en',$2), ($1,'he',$3)`, [id, c.en, c.he]);
+    await db.query(`INSERT INTO app.video_region (video_id, region_id) SELECT $1, id FROM app.brain_region WHERE path = ANY($2::text[])`, [id, c.regions]);
+    ids[c.file] = id;
+  }
+  return ids;
 }

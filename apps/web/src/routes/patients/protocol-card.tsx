@@ -4,7 +4,9 @@ import { Link } from "react-router";
 import { useIntl } from "react-intl";
 import { Pause, Play, Square } from "lucide-react";
 import { Button, Card, Chip, ConfirmDialog, MazeLoader } from "@emb/ui";
-import { useAssignment, useUpdateAssignment } from "../../api/queries.ts";
+import { useAssignment, useUpdateAssignment, useVideo } from "../../api/queries.ts";
+import { isVideoStep } from "@emb/contracts";
+import { formatDuration } from "../admin/videos.tsx";
 import { findGame, localText } from "../../games/registry.ts";
 import { useT, usePrefs } from "../../i18n/index.tsx";
 import { calendarDate } from "../../lib/format.ts";
@@ -52,8 +54,14 @@ export function ProtocolCard({ patientId, archived, canPlay }: { patientId: stri
       <ol className="psteps">
         {a.steps.map((s) => (
           <li key={s.id}>
-            <span className="step__name">{findGame(s.game_id) ? localText(findGame(s.game_id)!.manifest.name, locale) : s.game_id}</span>
-            <span className="app-muted">{summary({ ...s, difficulty_start: s.current_difficulty })}</span>
+            {isVideoStep(s) ? (
+              <VideoStepName videoId={s.video_id} />
+            ) : (
+              <>
+                <span className="step__name">{findGame(s.game_id) ? localText(findGame(s.game_id)!.manifest.name, locale) : s.game_id}</span>
+                <span className="app-muted">{summary({ ...s, difficulty_start: s.current_difficulty })}</span>
+              </>
+            )}
           </li>
         ))}
       </ol>
@@ -92,5 +100,17 @@ export function ProtocolCard({ patientId, archived, canPlay }: { patientId: stri
         {t("protocol.stop.body")}
       </ConfirmDialog>
     </Card>
+  );
+}
+
+function VideoStepName({ videoId }: { videoId: string }) {
+  const t = useT();
+  const { locale } = usePrefs();
+  const v = useVideo(videoId, locale);
+  return (
+    <>
+      <span className="step__name">▶ {v.data?.title ?? t("common.loading")}</span>
+      <span className="app-muted">{[t("step.video"), v.data ? formatDuration(v.data.duration_s) : null].filter(Boolean).join(" · ")}</span>
+    </>
   );
 }

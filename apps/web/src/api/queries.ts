@@ -10,6 +10,7 @@ import type {
   UpdatePatient,
 } from "@emb/contracts";
 import { ApiError, apiGet, apiSend } from "./http.ts";
+import { usePrefs } from "../i18n/index.tsx";
 import type { BrainRegion, VideoInput, VideoSummary } from "@emb/contracts";
 import type { AssignInput, AssignmentView, GameSessionView, LaunchPackage, ProgressionDecisionView, TemplateDetail, TemplateInput, TemplateSummary, TodayItem } from "@emb/contracts";
 
@@ -137,9 +138,10 @@ export function useRecordConsent(patientId: string) {
 export type { AssignmentView, TemplateDetail, TemplateSummary, TodayItem };
 
 export function useTemplates(clinicId: string | null) {
+  const { locale } = usePrefs(); // video titles in the steps come back in this language
   return useQuery({
-    queryKey: ["templates", clinicId],
-    queryFn: ({ signal }) => apiGet<{ templates: TemplateSummary[] }>(`/v1/templates${clinicId ? `?clinic=${clinicId}` : ""}`, { signal }).then((r) => r.templates),
+    queryKey: ["templates", clinicId, locale],
+    queryFn: ({ signal }) => apiGet<{ templates: TemplateSummary[] }>(`/v1/templates?lang=${locale}${clinicId ? `&clinic=${clinicId}` : ""}`, { signal }).then((r) => r.templates),
     retry,
   });
 }
@@ -207,9 +209,10 @@ export function useUpdateAssignment(patientId: string) {
 }
 
 export function useToday(clinicId: string | null) {
+  const { locale } = usePrefs();
   return useQuery({
-    queryKey: ["today", clinicId],
-    queryFn: ({ signal }) => apiGet<{ items: TodayItem[] }>(`/v1/today${clinicId ? `?clinic=${clinicId}` : ""}`, { signal }).then((r) => r.items),
+    queryKey: ["today", clinicId, locale],
+    queryFn: ({ signal }) => apiGet<{ items: TodayItem[] }>(`/v1/today?lang=${locale}${clinicId ? `&clinic=${clinicId}` : ""}`, { signal }).then((r) => r.items),
     retry,
   });
 }
