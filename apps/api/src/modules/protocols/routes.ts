@@ -316,8 +316,17 @@ export function protocolRoutes(pool: pg.Pool) {
     const date = c.req.query("date");
     if (clinic !== undefined && !UUID.test(clinic)) return c.json({ error: "invalid_clinic" }, 400);
     if (date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return c.json({ error: "invalid_date" }, 400);
-    const items = await run(c, (db) => todayItems(db, clinic ?? null, date ?? null, langOf(c)));
-    return c.json({ items });
+    const { items, review_count } = await run(c, async (db) => ({
+      items: await todayItems(db, clinic ?? null, date ?? null, langOf(c)),
+      // Flagged results waiting for review that the caller may decide on (spec §7.4).
+      review_count: (
+        await db.query<{ n: number }>(
+          `SELECT (SELECT count(*) FROM app.game_session_review r WHERE r.review_reason IS NOT NULL AND r.decision IS NULL AND app.can_treat_patient(r.patient_id))
+                + (SELECT count(*) FROM app.video_view_review r WHERE r.review_reason IS NOT NULL AND r.decision IS NULL AND app.can_treat_patient(r.patient_id)) AS n`,
+        )
+      ).rows[0]!.n,
+    }));
+    return c.json({ items, review_count: Number(review_count) });
   });
 
   return r;

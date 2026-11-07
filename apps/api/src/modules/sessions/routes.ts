@@ -347,6 +347,27 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
     return c.json(result, result.outcome === "duplicate" ? 200 : 201);
   });
 
+  // Reviewing a flagged result or view (spec §7.4): an append-only decision; the latest one counts.
+  for (const [path, column, table] of [["/results/:id/review", "game_session_id", "game_session"], ["/video-views/:id/review", "video_view_id", "video_view"]] as const) {
+    r.post(path, async (c) => {
+      const id = c.req.param("id");
+      if (!UUID.test(id)) return c.json({ error: "not_found" }, 404);
+      const body = (await c.req.json().catch(() => null)) as { decision?: unknown; note?: unknown } | null;
+      const decision = body?.decision;
+      const note = typeof body?.note === "string" ? body.note.slice(0, 1000) : null;
+      const out = await run(c, async (db) => {
+        const target = await db.query<{ ok: boolean }>(`SELECT app.can_treat_patient(patient_id) AS ok FROM app.${table} WHERE id = $1`, [id]);
+        if (!target.rows[0]?.ok) return "not_found" as const;
+        if (decision !== "accept" && decision !== "exclude") return "invalid" as const;
+        await db.query(`INSERT INTO app.result_review (${column}, decision, decided_by, note) VALUES ($1, $2, app.current_user_id(), $3)`, [id, decision, note]);
+        return "ok" as const;
+      });
+      if (out === "not_found") return c.json({ error: "not_found" }, 404);
+      if (out === "invalid") return c.json({ error: "invalid", issues: [{ path: "decision", code: "invalid_value" }] }, 400);
+      return c.json({ decision }, 201);
+    });
+  }
+
   r.get("/patients/:id/sessions", async (c) => {
     const id = c.req.param("id");
     if (!UUID.test(id)) return c.json({ error: "not_found" }, 404);
@@ -356,8 +377,10 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
       const { rows } = await db.query<GameSessionView>(
         `SELECT g.id, g.game_id, g.status, g.session_mode, g.difficulty, g.hemisphere, g.started_at, g.ended_at, g.active_ms,
                 g.accuracy::float8 AS accuracy, g.rt_median_ms, g.trials_total, g.correct, g.errors, g.lives_lost, g.highest_level,
-                g.planned_session_id, ps.seq, g.metrics, COALESCE((g.config_echo->>'monochrome')::boolean, false) AS monochrome
+                g.planned_session_id, ps.seq, g.metrics, COALESCE((g.config_echo->>'monochrome')::boolean, false) AS monochrome,
+                r.counts, CASE WHEN r.review_reason IS NULL THEN NULL ELSE json_build_object('reason', r.review_reason, 'decision', r.decision) END AS review
            FROM app.game_session g LEFT JOIN app.planned_session ps ON ps.id = g.planned_session_id
+           JOIN app.game_session_review r ON r.id = g.id
           WHERE g.patient_id = $1 AND g.is_valid
           ORDER BY g.ended_at DESC LIMIT 500`,
         [id],
@@ -456,8 +479,9 @@ async function ingest(
     // A difficulty the therapist set by hand after this ticket was issued wins over a late result.
     if (s && !s.set_after_ticket) {
       const history = await db.query<{ accuracy: number | null; difficulty: number; valid: boolean }>(
-        `SELECT accuracy::float8 AS accuracy, difficulty, (is_valid AND status <> 'abandoned') AS valid
-           FROM app.game_session WHERE assignment_step_id = $1 AND review_reason IS NULL ORDER BY ended_at, id`,
+        `SELECT g.accuracy::float8 AS accuracy, g.difficulty, (g.is_valid AND g.status <> 'abandoned') AS valid
+           FROM app.game_session g JOIN app.game_session_review r ON r.id = g.id
+          WHERE g.assignment_step_id = $1 AND r.counts ORDER BY g.ended_at, g.id`,
         [claims.asid],
       );
       const d = decide(s.progression, history.rows, s.current_difficulty);

@@ -159,6 +159,9 @@ export interface GameSessionView {
   planned_session_id: string | null;
   seq: number | null;
   metrics: Record<string, unknown>;
+  /** False when a review excluded it, or it was flagged consent_withdrawn and nobody has reviewed it yet. */
+  counts: boolean;
+  review: { reason: string; decision: "accept" | "exclude" | null } | null;
 }
 
 /** An automatic difficulty change, for the progress chart's markers (design doc §5.5). */

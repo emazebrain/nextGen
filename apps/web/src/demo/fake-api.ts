@@ -450,6 +450,8 @@ function row(
   const correct = accuracy === null ? 0 : Math.round(trials * accuracy);
   return {
     id,
+    counts: true,
+    review: null,
     patient_id: patient,
     assignment_step_id: stepId,
     game_id: "catch-me-if-you-can",
