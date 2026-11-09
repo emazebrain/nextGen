@@ -114,7 +114,9 @@ export function videoRoutes(pool: pg.Pool, files: FileStore) {
           WHERE (v.status = 'published' OR ($1 AND app.is_platform_admin()))
             AND ($2::uuid IS NULL OR EXISTS (
                   SELECT 1 FROM app.video_region vr JOIN app.brain_region t ON t.id = vr.region_id, app.brain_region f
-                   WHERE vr.video_id = v.id AND f.id = $2::uuid AND (t.path = f.path OR t.path LIKE f.path || '.%')))
+                   WHERE vr.video_id = v.id AND f.id = $2::uuid
+                     -- a node and everything under it; a sub-lobe also matches its Brodmann areas, and an area its sub-lobe
+                     AND (t.path = f.path OR t.path LIKE f.path || '.%' OR t.sublobe_id = f.id OR t.id = f.sublobe_id)))
             AND ($3::text IS NULL OR EXISTS (SELECT 1 FROM app.video_i18n i WHERE i.video_id = v.id AND (i.title ILIKE $3 OR i.description ILIKE $3)))
             AND ($4::text IS NULL OR EXISTS (
                   SELECT 1 FROM app.video_region vr JOIN app.brain_region t ON t.id = vr.region_id

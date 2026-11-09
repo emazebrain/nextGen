@@ -1,5 +1,5 @@
 /**
- * Brain regions (design doc §7: hemisphere → lobe → Brodmann area). "tag" mode: tick the areas a video works on,
+ * Brain regions (design doc §7: hemisphere → lobe → sub-lobe or Brodmann area). "tag" mode: tick the areas a video works on,
  * one tab per hemisphere. "filter" mode: pick one hemisphere, lobe or area to narrow a list. Real tabs, fieldsets
  * and checkboxes, so it works with a keyboard and a screen reader.
  */
@@ -19,7 +19,9 @@ export function buildRegionTree(regions: BrainRegion[] | undefined): RegionTree 
   const list = regions ?? [];
   const children = new Map<string, BrainRegion[]>();
   for (const r of list) if (r.parent_id) children.set(r.parent_id, [...(children.get(r.parent_id) ?? []), r]);
-  for (const kids of children.values()) kids.sort((a, b) => a.sort - b.sort);
+  // Under a lobe: the table's sub-lobes first, then the Brodmann areas (brain-region filters spec 2026-11-09).
+  const rank = (r: BrainRegion) => (r.kind === "sublobe" ? 0 : 1);
+  for (const kids of children.values()) kids.sort((a, b) => rank(a) - rank(b) || a.sort - b.sort);
   return {
     hemispheres: list.filter((r) => r.kind === "hemisphere").sort((a, b) => a.sort - b.sort),
     lobesOf: (id) => children.get(id) ?? [],
@@ -136,8 +138,9 @@ export function RegionFilter({ tree, value, onChange }: { tree: RegionTree; valu
   const both = value?.kind === "both";
   const node = value?.kind === "node" ? tree.byId.get(value.id) : undefined;
   const hemi = node ? (node.kind === "hemisphere" ? node : tree.byId.get(node.kind === "lobe" ? node.parent_id! : tree.byId.get(node.parent_id!)!.parent_id!)) : undefined;
-  const lobeNode = node?.kind === "lobe" ? node : node?.kind === "area" ? tree.byId.get(node.parent_id!) : undefined;
-  const sel = both ? bothSelection(tree, value.code) : { lobe: lobeNode?.id ?? "", area: node?.kind === "area" ? node.id : "" };
+  const leaf = node?.kind === "area" || node?.kind === "sublobe";
+  const lobeNode = node?.kind === "lobe" ? node : leaf ? tree.byId.get(node.parent_id!) : undefined;
+  const sel = both ? bothSelection(tree, value.code) : { lobe: lobeNode?.id ?? "", area: leaf ? node.id : "" };
   // Lobes and areas to offer: the chosen hemisphere's by id, or the first hemisphere's by code when it's both.
   const lobeSource = both ? tree.hemispheres[0] : hemi;
   const lobes = lobeSource ? tree.lobesOf(lobeSource.id) : [];

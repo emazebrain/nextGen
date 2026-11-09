@@ -1,7 +1,7 @@
 /** Brain-region filters through the API (spec 2026-11-09): the region list, and one filter per game step. */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
-import { ADMIN_URL, addMember, seedClinics, setupApi, staffClient, type Api, type TestEnv } from "./support.ts";
+import { ADMIN_URL, addMember, platformAdmin, seedClinics, setupApi, staffClient, type Api, type TestEnv } from "./support.ts";
 
 const step = (extra: Record<string, unknown> = {}) => ({
   game_id: "catch-me-if-you-can",
@@ -109,5 +109,42 @@ describe.skipIf(!ADMIN_URL)("brain-region filters API", () => {
     });
     expect(res.status).toBe(201);
     expect(res.body.assignment.steps.map((s: { region_id: string | null }) => s.region_id)).toEqual([null, rid("right.temporal.ba22"), rid("left.frontal"), null]);
+  });
+});
+
+describe.skipIf(!ADMIN_URL)("videos with sub-lobes", () => {
+  let env: TestEnv;
+  let admin: Api;
+  const region = new Map<string, string>();
+  const rid = (p: string) => region.get(p)!;
+  const add = async (paths: string[]) =>
+    (await admin("/v1/admin/videos", { method: "POST", body: { source: "youtube", youtube_url: "https://youtu.be/dQw4w9WgXcQ", titles: { en: `v ${paths.join(" ")}` }, region_ids: paths.map(rid), age_min: null, age_max: null, status: "published" } })).body.video.id as string;
+  const found = async (path: string) => ((await admin(`/v1/videos?region=${rid(path)}`)).body.videos as Array<{ id: string }>).map((v) => v.id);
+
+  beforeAll(async () => {
+    env = await setupApi();
+    admin = (await platformAdmin(env)).api;
+    for (const r of (await env.db.query<{ id: string; path: string }>(`SELECT id, path FROM app.brain_region`)).rows) region.set(r.path, r.id);
+  });
+  afterAll(async () => env?.close());
+
+  it("admins can tag a sub-lobe, and a lobe filter still finds everything under it", async () => {
+    const v = await add(["left.temporal.superior_temporal"]);
+    const got = (await admin(`/v1/videos/${v}`)).body.video.regions.map((r: { path: string }) => r.path);
+    expect(got).toEqual(["left.temporal.superior_temporal"]);
+    expect(await found("left.temporal")).toContain(v);
+    expect(await found("left")).toContain(v);
+  });
+
+  it("a sub-lobe filter finds videos tagged with its Brodmann areas", async () => {
+    const v = await add(["right.temporal.ba22"]);
+    expect(await found("right.temporal.superior_temporal")).toContain(v);
+    expect(await found("right.temporal.middle_temporal")).not.toContain(v);
+  });
+
+  it("a Brodmann filter finds videos tagged with its sub-lobe", async () => {
+    const v = await add(["right.frontal.dlpfc"]);
+    expect(await found("right.frontal.ba46")).toContain(v);
+    expect(await found("right.frontal.ba44")).not.toContain(v);
   });
 });
