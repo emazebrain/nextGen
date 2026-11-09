@@ -140,3 +140,22 @@ describe("Progress tab", () => {
     expect(document.querySelector('[aria-live="polite"].emb-vh')).toHaveTextContent(/Session 1, .*Sets the baseline/);
   });
 });
+
+describe("Progress history and brain regions", () => {
+  it("each session shows its region label", async () => {
+    const { demoRegions } = await import("../src/demo/regions.ts");
+    const withRegion = { ...session(2, 1, 2, 0.8, 9), hemisphere: "right", region: { path: "right.temporal.ba21", sublobe: "right.temporal.middle_temporal", drawn: false, revision: 1 } };
+    const drawn = { ...session(1, 2, 2, 0.7, 9), hemisphere: "right", region: { path: "right.frontal", sublobe: "right.frontal.dlpfc", drawn: true, revision: 1 } };
+    mockApi([withRegion, drawn]);
+    const base = globalThis.fetch;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, "http://localhost");
+      if (url.pathname === "/v1/brain-regions") return new Response(JSON.stringify({ regions: demoRegions("en") }), { status: 200, headers: { "content-type": "application/json" } });
+      return base(input, init);
+    });
+    renderProgress();
+    const history = await screen.findByRole("list", { name: "Every game played, newest first" });
+    expect(await within(history).findByText("Right · BA21")).toBeInTheDocument();
+    expect(within(history).getByText("Right · Frontal lobe (DLPFC (dorsolateral prefrontal))")).toBeInTheDocument();
+  });
+});

@@ -19,6 +19,7 @@ import { iso } from "../../lib/format.ts";
 import { LoadError } from "../shared.tsx";
 import { usePatientCtx } from "./detail.tsx";
 import { TrendChart } from "./TrendChart.tsx";
+import { regionLabel, useRegionCatalog } from "../protocols/StepRegion.tsx";
 
 const GAME_INFO: GameInfo[] = GAMES.map((g) => ({ id: g.manifest.id, metrics: g.manifest.metrics }));
 const HISTORY_PAGE = 20;
@@ -261,6 +262,15 @@ export function ReviewCell({ session, patientId }: { session: GameSessionView; p
 function History({ sessions, gameName, date, patientId }: { sessions: GameSessionView[]; gameName: (id: string) => string; date: (s: string) => string; patientId: string }) {
   const t = useT();
   const intl = useIntl();
+  const { locale } = usePrefs();
+  const cat = useRegionCatalog(locale);
+  const short = (h: "left" | "right") => t(h === "left" ? "regions.short.left" : "regions.short.right");
+  // The brain-region filter a session ran with (spec 2026-11-09); a lobe also names the sub-lobe that session drew.
+  const region = (s: GameSessionView) => {
+    if (!s.region || !cat) return null;
+    const label = regionLabel(cat, s.region.path, short) ?? s.region.path;
+    return s.region.drawn ? `${label} (${cat.byPath.get(s.region.sublobe)?.label ?? s.region.sublobe})` : label;
+  };
   const time = (ms: number) => {
     const m = Math.floor(ms / 60000);
     const s = Math.round((ms % 60000) / 1000);
@@ -271,6 +281,7 @@ function History({ sessions, gameName, date, patientId }: { sessions: GameSessio
     { id: "game", header: t("progress.col.game"), cell: (s) => gameName(s.game_id) },
     { id: "difficulty", header: t("progress.col.difficulty"), numeric: true, cell: (s) => s.difficulty },
     { id: "mode", header: t("progress.col.mode"), hideOnCard: true, cell: (s) => t("game.mode", { mode: s.session_mode }) },
+    ...(sessions.some((s) => s.region) ? [{ id: "region", header: t("progress.col.region"), cell: (s: GameSessionView) => region(s) }] : []),
     { id: "result", header: t("progress.col.result"), cell: (s) => t("result.status", { status: s.status }) },
     { id: "accuracy", header: t("result.accuracy"), numeric: true, cell: (s) => (s.accuracy !== null ? intl.formatNumber(s.accuracy, { style: "percent" }) : "—") },
     { id: "rt", header: t("result.rt"), numeric: true, hideOnCard: true, cell: (s) => (s.rt_median_ms !== null ? t("result.ms", { n: s.rt_median_ms }) : "—") },

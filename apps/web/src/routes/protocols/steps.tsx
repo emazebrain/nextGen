@@ -16,6 +16,7 @@ import { useT, usePrefs } from "../../i18n/index.tsx";
 import { useVideo } from "../../api/queries.ts";
 import { formatDuration, VideoSourceChip } from "../admin/videos.tsx";
 import { VideoPicker } from "./VideoPicker.tsx";
+import { regionLabel, StepRegion, useRegionCatalog } from "./StepRegion.tsx";
 
 export function defaultStep(m: GameManifest): GameStepInput {
   const mode = m.recommendedMode ?? m.capabilities.modes[0] ?? "timed_lives";
@@ -56,8 +57,12 @@ export function stepProblems(steps: StepInput[]): Array<{ n: number; code: strin
 
 export function useStepSummary() {
   const t = useT();
+  const { locale } = usePrefs();
+  const cat = useRegionCatalog(locale);
+  const short = (h: "left" | "right") => t(h === "left" ? "regions.short.left" : "regions.short.right");
   return (s: GameStepInput) =>
     [
+      s.region_id && cat?.byId.get(s.region_id) ? t("step.region", { label: regionLabel(cat, cat.byId.get(s.region_id)!.path, short) ?? "" }) : null,
       t("game.mode", { mode: s.session_mode }),
       s.duration_s !== null ? (s.duration_s < 60 ? t("stepEditor.seconds", { n: s.duration_s }) : t("step.minutes", { n: Math.round((s.duration_s / 60) * 10) / 10 })) : null,
       s.lives_auto ? t("step.heartsAuto") : s.lives !== null ? t("step.hearts", { n: s.lives }) : null,
@@ -219,7 +224,7 @@ const WINDOWS_S = [2, 3, 4, 5, 6, 8, 10, 15, 20, 30];
 const PCTS_UP = [0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1];
 const PCTS_DOWN = [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8];
 
-function StepEditor({ step: s, manifest: m, onChange }: { step: GameStepInput; manifest: GameManifest; onChange: (s: GameStepInput) => void }) {
+export function StepEditor({ step: s, manifest: m, onChange }: { step: GameStepInput; manifest: GameManifest; onChange: (s: GameStepInput) => void }) {
   const t = useT();
   const intl = useIntl();
   const { locale } = usePrefs();
@@ -237,7 +242,8 @@ function StepEditor({ step: s, manifest: m, onChange }: { step: GameStepInput; m
     });
   // The timer's corner and look follow the hemisphere (ADR 0008); the therapist only chooses whether it shows.
   const showTimer = timerShown(s.timer_position);
-  const setHemisphere = (h: "left" | "right") => onChange({ ...s, hemisphere: h, timer_position: timerPositionFor(h, showTimer) });
+  // A brain-region filter sets the game's own background settings (spec 2026-11-09 §5): shown, not editable.
+  const lockedByRegion = new Set(s.region_id && m.regionUse?.background ? [m.regionUse.background.temperature, m.regionUse.background.type] : []);
 
   const tw = m.capabilities.trialWindow;
   const windows = tw ? WINDOWS_S.filter((x) => x * 1000 >= tw.minMs && x * 1000 <= tw.maxMs) : [];
@@ -292,17 +298,7 @@ function StepEditor({ step: s, manifest: m, onChange }: { step: GameStepInput; m
         onChange={(v) => set("difficulty_start", Number(v))}
         options={["1", "2", "3", "4", "5"].map((d) => ({ value: d, label: d }))}
       />
-      <Segmented<"left" | "right">
-        legend={t("stepEditor.hemisphere")}
-        name={`${id}-hemi`}
-        value={s.hemisphere}
-        onChange={setHemisphere}
-        options={[
-          { value: "left", label: <span className="swatchlabel"><span className="swatch swatch--warm" aria-hidden="true" />{t("stepEditor.hemiLeft")}</span> },
-          { value: "right", label: <span className="swatchlabel"><span className="swatch swatch--cold" aria-hidden="true" />{t("stepEditor.hemiRight")}</span> },
-        ]}
-      />
-      {m.hemisphereNote && <p className="emb-field__hint">{localText(m.hemisphereNote[s.hemisphere], locale)}</p>}
+      <StepRegion step={s} manifest={m} onChange={onChange} />
       {m.capabilities.monochrome && (
         <CheckboxField
           label={t("stepEditor.monochrome")}
@@ -355,8 +351,16 @@ function StepEditor({ step: s, manifest: m, onChange }: { step: GameStepInput; m
             // A setting can depend on another (e.g. movement only for a textured background).
             const when = def["x-ui"]?.visibleWhen;
             const valueOf = (k: string) => s.game_params[k] ?? (m.paramsSchema.properties[k]?.default as boolean | number | string | undefined);
-            if (when && Object.entries(when).some(([k, v]) => valueOf(k) !== v)) return null;
+            // A setting that depends on one the brain region sets stays visible: the row may choose either value.
+            if (when && Object.entries(when).some(([k, v]) => !lockedByRegion.has(k) && valueOf(k) !== v)) return null;
             const label = def["x-ui"] ? localText(def["x-ui"].label, locale) : key;
+            if (lockedByRegion.has(key))
+              return (
+                <div key={key} className="stepedit__group">
+                  <p className="emb-field__label">{label}</p>
+                  <p className="emb-field__hint">{t("stepRegion.lockedByRegion")}</p>
+                </div>
+              );
             const help = def["x-ui"]?.help ? localText(def["x-ui"].help, locale) : undefined;
             const value = s.game_params[key] ?? (def.default as boolean | number | string | undefined);
             if (def.type === "boolean") {

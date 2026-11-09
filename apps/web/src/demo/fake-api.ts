@@ -15,8 +15,8 @@
  */
 import { syntheticGuardian, syntheticPatients } from "@emb/db/synthetic";
 import { decide, type Rule } from "@emb/progression";
-import { isVideoStep, scheduleDates } from "@emb/contracts";
-import { AREAS, HEMISPHERES, LOBES } from "@emb/db/brain-regions";
+import { isVideoStep, regionCatalog, resolveRegion, scheduleDates, seededIndex } from "@emb/contracts";
+import { demoRegions } from "./regions.ts";
 import { timerPositionFor, timerShown } from "@emb/session-rules";
 import type {
   AssignmentView,
@@ -537,14 +537,24 @@ function params(s: GameAssignmentStep, p: Patient) {
   const ns = s.game_id.replace(/-/g, "_");
   const own: Record<string, unknown> = { ...s.game_params };
   if (p.colour_vision_deficiency && findGame(s.game_id)?.manifest.paramsSchema.properties.cvd_mode) own.cvd_mode = true;
+  const seed = Math.floor(Math.random() * 2 ** 31);
+  // The brain-region filter (spec 2026-11-09): the table's row decides the hemisphere and the game's background.
+  const resolved = s.region_id ? resolveRegion(REGION_CATALOG, s.region_id, seed) : null;
+  const hemisphere = resolved?.hemisphere ?? s.hemisphere;
+  const bg = resolved ? findGame(s.game_id)?.manifest.regionUse?.background : undefined;
+  if (resolved && bg) {
+    own[bg.temperature] = resolved.param.bg_temperature;
+    own[bg.type] = resolved.param.bg_types[seededIndex(seed, "bg", resolved.param.bg_types.length)];
+  }
   return {
     session_mode: s.session_mode,
     ...(s.duration_s !== null ? { duration_s: s.duration_s } : {}),
     ...(s.lives_auto ? { lives: "auto" } : s.lives !== null ? { lives: s.lives } : {}),
     difficulty: s.current_difficulty,
     start_level: "from_difficulty",
-    hemisphere: s.hemisphere,
-    timer_position: timerPositionFor(s.hemisphere, timerShown(s.timer_position)),
+    hemisphere,
+    timer_position: timerPositionFor(hemisphere, timerShown(s.timer_position)),
+    ...(resolved ? { region: resolved.param } : {}),
     monochrome: s.monochrome === true && findGame(s.game_id)?.manifest.capabilities.monochrome === true,
     trial_window_ms: s.trial_window_ms,
     practice: s.practice === "auto" ? (s.sessions_completed === 0 ? "on" : "off") : s.practice,
@@ -555,7 +565,7 @@ function params(s: GameAssignmentStep, p: Patient) {
     high_contrast: false,
     show_score: true,
     context: "clinic",
-    seed: Math.floor(Math.random() * 2 ** 31),
+    seed,
     input_assist: "none",
     speed_scale: 1,
     ...Object.fromEntries(Object.entries(own).map(([k, v]) => [`${ns}.${k}`, v])),
@@ -839,7 +849,14 @@ async function handle(path: string, method: string, q: URLSearchParams, body: Re
     const code = q.get("code");
     const list = db.videos
       .filter((v) => v.status === "published" || q.get("all") === "1")
-      .filter((v) => !region || v.regions.some((r) => r.path === region.path || r.path.startsWith(`${region.path}.`)))
+      .filter((v) =>
+        !region ||
+        v.regions.some((r) => {
+          // A node and everything under it; a sub-lobe also matches its Brodmann areas, and an area its sub-lobe.
+          const t = REGION_CATALOG.byId.get(r.id);
+          return r.path === region.path || r.path.startsWith(`${region.path}.`) || t?.sublobe_id === region.id || r.id === region.sublobe_id;
+        }),
+      )
       .filter((v) => !code || v.regions.some((r) => r.code === code || r.path.split(".")[1] === code))
       .filter((v) => !words || Object.values(v.titles).some((t) => t?.toLowerCase().includes(words)))
       .map((v) => localized(v, lang))
@@ -961,6 +978,7 @@ async function handle(path: string, method: string, q: URLSearchParams, body: Re
       ...row(claims.pid, st.id, ps.id, ps.seq, env.status as GameSessionView["status"], env.mode as GameSessionView["session_mode"], Number(env.params.difficulty ?? st.current_difficulty), ended, Number(env.active_ms ?? 0), env.std.accuracy ?? null, env.std.rt_median_ms !== null && env.std.rt_median_ms !== undefined ? Math.round(env.std.rt_median_ms) : null, env.metrics, sid),
       hemisphere: (env.params.hemisphere as "left" | "right") ?? st.hemisphere,
       monochrome: env.params.monochrome === true,
+      region: env.params.region ? (({ path, sublobe, drawn, revision }) => ({ path, sublobe, drawn, revision }))(env.params.region as { path: string; sublobe: string; drawn: boolean; revision: number }) : null,
       trials_total: Number(env.std.trials_total ?? 0),
       correct: Number(env.std.correct ?? 0),
       errors: Number(env.std.errors ?? 0),
@@ -1005,25 +1023,11 @@ export function installDemoApi() {
 
 // ------------------------------------------------------------------ video library (ADR 0018)
 
-/** The brain-region tree with stable demo ids (the real API uses UUIDv7 rows from migration 0010). */
-const REGION_NODES: BrainRegion[] = (() => {
-  const out: BrainRegion[] = [];
-  let n = 0;
-  const id = () => `0192f3a0-0000-7000-8000-${(++n).toString(16).padStart(12, "0")}`;
-  HEMISPHERES.forEach((h, hi) => {
-    const hid = id();
-    out.push({ id: hid, parent_id: null, kind: "hemisphere", code: h.code, path: h.code, label: h.en, sort: hi + 1, sublobe_id: null, setting: null });
-    LOBES.forEach((l, li) => {
-      const lid = id();
-      out.push({ id: lid, parent_id: hid, kind: "lobe", code: l.code, path: `${h.code}.${l.code}`, label: l.en, sort: li + 1, sublobe_id: null, setting: null });
-      AREAS.filter((a) => a.lobe === l.code).forEach((a, ai) => out.push({ id: id(), parent_id: lid, kind: "area", code: a.code, path: `${h.code}.${l.code}.${a.code}`, label: a.en, sort: ai + 1, sublobe_id: null, setting: null }));
-    });
-  });
-  return out;
-})();
-const NAMES = new Map([...HEMISPHERES, ...LOBES, ...AREAS].map((x) => [x.en, x.he]));
+/** The brain-region tree with stable demo ids, the table's sub-lobes and rows included (migrations 0010 and 0018). */
+const REGION_NODES: BrainRegion[] = demoRegions("en");
+const REGION_CATALOG = regionCatalog(REGION_NODES);
 function regionsIn(lang: string): BrainRegion[] {
-  return REGION_NODES.map((r) => (lang === "he" ? { ...r, label: NAMES.get(r.label) ?? r.label } : r));
+  return lang === "en" ? REGION_NODES : demoRegions(lang);
 }
 const regionRef = (path: string) => {
   const r = REGION_NODES.find((x) => x.path === path)!;
@@ -1053,7 +1057,7 @@ function seedVideos(): Db["videos"] {
   return [
     clip("colour-shapes.mp4", "Colour shapes", "צורות צבעוניות", 10, [5, 12], ["left.frontal.ba44", "left.frontal.ba46"]),
     clip("spiral-zoom.mp4", "Spiral zoom", "זום ספירלה", 10, [4, 14], ["left.occipital.ba17", "right.occipital.ba17"]),
-    clip("growing-dots.mp4", "Growing dots", "נקודות צומחות", 8, [6, 14], ["right.parietal.ba40", "right.cerebellum.cerebellum"]),
+    clip("growing-dots.mp4", "Growing dots", "נקודות צומחות", 8, [6, 14], ["right.parietal.ba40", "right.subcortical.cerebellum"]),
   ];
 }
 
