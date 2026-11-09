@@ -218,15 +218,24 @@ test("a second therapist on the same tablet can't see the first one's patients b
   await context.close();
 });
 
-test("play from the network: offline, the pre-flight names the video that isn't here and the session runs without it", async ({ browser }) => {
+test("signed out, then offline: the space is still there; with play from the network the pre-flight names the missing video and the session runs without it", async ({ browser }) => {
   test.setTimeout(180_000);
   const context = await browser.newContext();
   const page = await context.newPage();
   await enrol(page, "dvir@synthetic.test");
   await setUpOffline(page, "dvir-tablet-1");
   await axe(page, "today after setup");
+  await updateNow(page);
   await readyForOffline(page);
-  await goOfflineAndUnlock(context, page, null, "dvir-tablet-1");
+  // Signing out keeps his space on the tablet (product owner, 2026-11-09): offline the next morning, he can still work.
+  await page.goto("/settings");
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Sign in" })).toBeVisible();
+  await context.setOffline(true);
+  await page.goto("/today");
+  await expect(page.getByRole("heading", { level: 1, name: "No connection" })).toBeVisible();
+  await page.getByLabel("Offline password").fill("dvir-tablet-1");
+  await page.getByRole("button", { name: "Unlock" }).click();
   const row = page.getByRole("region", { name: "Next up" }).getByRole("listitem").filter({ hasText: "Nir Gal" });
   await row.getByRole("link", { name: /Start session with .*Nir Gal/ }).click();
   await expect(page.getByText("One step isn't on this device:")).toBeVisible();

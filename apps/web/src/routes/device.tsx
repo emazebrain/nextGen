@@ -9,18 +9,18 @@ import { useIntl } from "react-intl";
 import { CloudDownload, Trash2 } from "lucide-react";
 import type { LibraryManifest } from "@emb/contracts";
 import { Alert, Button, Card, Chip, ConfirmDialog, PageHeader } from "@emb/ui";
-import { apiGet, apiSend } from "../api/http.ts";
+import { apiGet } from "../api/http.ts";
 import { useMe } from "../api/queries.ts";
 import { useT } from "../i18n/index.tsx";
 import { useClinic } from "../lib/clinic.tsx";
 import { useTitle } from "../lib/title.ts";
 import { getContentMode, removeDownloadedVideos, setContentMode, storedSummary, type ContentMode } from "../device/content.ts";
-import { getMeta, setMeta } from "../device/db.ts";
+import { setMeta } from "../device/db.ts";
 import { syncDeviceVideos } from "../device/bundle.ts";
 import { useInstall } from "../device/install.ts";
 import { useRefreshState } from "../device/refresh.tsx";
 import { useDevice } from "../device/session.tsx";
-import { listSpaces, removeSpace, type SpaceInfo } from "../device/spaces.ts";
+import { listSpaces, type SpaceInfo } from "../device/spaces.ts";
 import { retryNeedsHelp, useOutboxStatus } from "../session/outbox.ts";
 
 export function DevicePage() {
@@ -82,15 +82,10 @@ export function DevicePage() {
   const myId = me.data?.user.id ?? device.space?.info.user_id ?? null;
 
   const removeOne = async (s: SpaceInfo) => {
-    const id = device.deviceId ?? (await getMeta<string>("device_id"));
-    if (s.user_id === myId && device.space?.id === s.id) await device.signOut();
-    else {
-      if (id) await apiSend("DELETE", `/v1/devices/${id}/spaces/${s.id}`).catch(() => undefined);
-      await removeSpace(s.id);
-      await device.refreshSpaces();
-    }
+    await device.removeSpaceData(s);
     setSpaces(await listSpaces());
   };
+  const waitingFor = (s: SpaceInfo) => outbox.byTherapist[s.user_id] ?? 0;
   const canRemove = (s: SpaceInfo) => s.user_id === myId || (isManager && s.clinic_id === clinicId);
   const own = spaces.some((s) => s.user_id === myId);
 
@@ -182,10 +177,11 @@ export function DevicePage() {
                   <bdi>{s.display_name}</bdi>
                   <span className="app-muted device__hint">
                     {s.clinic_name} · {t("offline.lastOnline", { date: intl.formatDate(s.last_online_at, { day: "numeric", month: "short" }) })}
+                    {waitingFor(s) > 0 && ` · ${t("device.resultsWaiting", { count: waitingFor(s) })}`}
                   </span>
                 </span>
                 {canRemove(s) && (
-                  <Button variant="ghost" aria-label={t("device.removeSpaceOf", { name: s.display_name })} onClick={() => setAsking({ space: s })}>
+                  <Button variant="ghost" aria-label={t("device.removeSpaceOf", { name: s.display_name })} disabled={waitingFor(s) > 0} onClick={() => setAsking({ space: s })}>
                     {t("device.remove")}
                   </Button>
                 )}

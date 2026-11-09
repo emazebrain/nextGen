@@ -655,7 +655,7 @@
   "device.remove": "Remove",
   "device.removeSpaceOf": "Remove {name}",
   "device.removeSpace.title": "Remove {name} from this device?",
-  "device.removeSpace.body": "Their saved patients and protocols are deleted from this device. Results waiting to be sent are kept and sent as usual.",
+  "device.removeSpace.body": "Their saved patients and protocols are deleted from this device. This is possible only once all their results have reached the server.",
   "device.install": "Install the app",
   "device.installed": "Installed",
   "device.installButton": "Install eMazeBrain",
@@ -674,5 +674,6 @@
   "sync.applyUpdate": "Restart to update",
   "run.notStored": "Some results couldn't be saved on this device. Keep this screen open and use Try again until they're sent.",
   "run.preflight.expired": "This session's offline pass has run out (no online update for over a month). You can still play: the results will be kept and flagged for review.",
-  "run.preflight.startAnyway": "Start anyway"
+  "run.preflight.startAnyway": "Start anyway",
+  "device.resultsWaiting": "{count, plural, one {# result waiting to be sent} other {# results waiting to be sent}}"
 }

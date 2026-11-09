@@ -124,6 +124,17 @@ describe("sealed outbox", () => {
     expect(r).toMatchObject({ stored: false, result: { state: "saved" } });
   });
 
+  it("each waiting result is labelled with its therapist (an account id, never patient data) until the server has it", async () => {
+    const b64 = (o: unknown) => btoa(JSON.stringify(o)).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
+    const forTamar = `${b64({ alg: "EdDSA" })}.${b64({ v: 2, sub: "u-tamar", exp: 9e9 })}.sig`;
+    configureOutbox({ publicKey: pair.publicKey, privateKey: null });
+    await enqueue(forTamar, envelope("01900000-0000-7000-8000-00000000000b"));
+    await enqueueView({ ...view("01900000-0000-7000-8000-00000000000c"), ticket: forTamar });
+    const raw = (await (await openDB("emb.device.v1")).getAll("outbox")) as Array<{ therapist_id: string | null }>;
+    expect(raw.map((r) => r.therapist_id)).toEqual(["u-tamar", "u-tamar"]);
+    expect((await outboxStatus()).byTherapist).toEqual({ "u-tamar": 2 });
+  });
+
   it("a 401 keeps the outbox and asks for sign-in", async () => {
     configureOutbox({ publicKey: pair.publicKey, privateKey: pair.privateKey });
     vi.stubGlobal("fetch", vi.fn(async () => reply(401, { error: "unauthenticated" })));
@@ -172,8 +183,9 @@ describe("sealed outbox", () => {
     localStorage.setItem("emb.outbox.v1", JSON.stringify([{ ticket: "OLD", envelope: envelope("01900000-0000-7000-8000-000000000006"), queued_at: 1, tries: 0 }]));
     localStorage.setItem("emb.outbox.views.v1", JSON.stringify([view("01900000-0000-7000-8000-000000000007")]));
     configureOutbox({ publicKey: pair.publicKey, privateKey: pair.privateKey });
-    await vi.waitFor(async () => expect((await outboxStatus()).waiting).toBe(2));
-    expect(localStorage.getItem("emb.outbox.v1")).toBeNull();
+    // The status counts both queues, so wait for the move itself: the old keys gone, both items in the sealed outbox.
+    await vi.waitFor(() => expect(localStorage.getItem("emb.outbox.v1")).toBeNull());
+    expect((await outboxStatus()).waiting).toBe(2);
     expect(localStorage.getItem("emb.outbox.views.v1")).toBeNull();
     configureOutbox({ publicKey: pair.publicKey, privateKey: pair.privateKey });
     expect((await outboxStatus()).waiting).toBe(2);

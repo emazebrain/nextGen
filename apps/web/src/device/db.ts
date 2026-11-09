@@ -25,6 +25,11 @@ export interface OutboxRecord {
   kind: "result" | "view";
   created_at: string;
   sealed: SealedForDevice;
+  /**
+   * Whose result it is: the therapist's account id from the ticket (no patient data). It stays on the device under
+   * that therapist until the server has stored it, whatever happens to their space (product owner, 2026-11-09).
+   */
+  therapist_id: string | null;
   /** set when the server refused it in a way only a person can resolve (a reused id) */
   needs_help?: boolean;
 }

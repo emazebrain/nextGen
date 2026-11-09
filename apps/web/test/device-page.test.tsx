@@ -99,6 +99,29 @@ describe("device page", () => {
   });
 });
 
+describe("removing data from the device", () => {
+  beforeEach(async () => {
+    for (const s of await listSpaces()) await removeSpace(s.id);
+    const db = await deviceDb();
+    await db.clear("meta");
+    await db.clear("outbox");
+    await setMeta("device_id", "dev-1");
+    await createSpace(space("s-me", "u-me", "Tamar Golan"), { password: "tablet42!", secret: secret(1), iterations: 1000 });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("a therapist's data can't be removed while their results wait to be sent", async () => {
+    const db = await deviceDb();
+    await db.put("outbox", { id: "r1", kind: "result", created_at: new Date().toISOString(), therapist_id: "u-me", sealed: { iv: "", data: "", epk: "" } });
+    await db.put("outbox", { id: "r2", kind: "view", created_at: new Date().toISOString(), therapist_id: "u-me", sealed: { iv: "", data: "", epk: "" } });
+    api({ "/v1/offline/library": { videos: [] }, "/v1/devices/dev-1/spaces": [] });
+    renderPage("therapist");
+    const list = await screen.findByRole("list", { name: "Therapists on this device" });
+    await waitFor(() => expect(list.textContent).toContain("2 results waiting to be sent"));
+    expect(within(list).getByRole("button", { name: "Remove Tamar Golan" })).toBeDisabled();
+  });
+});
+
 describe("result review", () => {
   afterEach(() => vi.unstubAllGlobals());
 

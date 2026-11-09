@@ -147,9 +147,14 @@ wrapper could re-implement.
 - **A space is per therapist per clinic** (memberships are clinic-scoped). The space list shows the clinic name when a
   therapist has spaces for two clinics on one device.
 - **Lifetime:** a space can be unlocked offline for **30 days after its last online sign-in**; after that it stays
-  locked until the therapist signs in online. Signing out removes the space (the shared outbox is unaffected). A
-  clinic manager signed in online on the device can remove spaces **of their own clinic**. When the server reports that
-  a membership has ended, that space is removed at the next online sign-in of anyone on the device.
+  locked until the therapist signs in online. **Signing out locks the space and keeps it on the device** (product
+  owner, 2026-11-09: "offline data should always be stored on the device with the relevant therapist until it was sent
+  to the server; once it is on the server and not needed locally, it can be deleted"). Every waiting result or view is
+  labelled with its therapist's account id (no patient data) and leaves the device only when the server has stored it.
+  A space (saved copies of server data) can be removed by its therapist or a clinic manager of its clinic only while
+  none of that therapist's results are waiting; the Device page shows how many wait per therapist. When the server
+  reports that a membership has ended, that space is removed at the next online sign-in of anyone on the device; its
+  therapist's waiting results stay and are sent as usual.
 - **Wrong passwords:** 5 wrong offline passwords lock the space for 1 minute, doubling after each further 5. This is a
   usability guard; protection against a copied disk comes from the password length and passkeys, not the lockout.
 - **Refresh:** whenever a therapist is signed in online, their space refreshes in the background: on sign-in, every

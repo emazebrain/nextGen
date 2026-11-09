@@ -35,8 +35,7 @@ key. The key is wrapped by the offline password (8+ characters, PBKDF2-SHA-256 6
 PRF output where the platform has it, and by a server space secret returned only to its owner online. Passwords must
 be 8+ characters and not digits only (a number code falls to a copied disk in hours). Offline unlock
 lasts 30 days after the last online sign-in; 5 wrong passwords lock for a minute, doubling (a usability guard; the
-real protection against a copied disk is the password strength). Signing out ends and removes the space; a manager
-can remove spaces of their clinic. The kid-mode PIN lives in the space. Server secrets are stored encrypted with
+real protection against a copied disk is the password strength). Signing out locks the space and keeps it (product owner, 2026-11-09); a space can be removed, by its therapist or a manager of its clinic, only while none of that therapist's results wait. Waiting entries carry the therapist's account id and leave the device only once the server has stored them. The kid-mode PIN lives in the space. Server secrets are stored encrypted with
 `DEVICE_SECRET_KEY` (not hashed: they must be returned).
 
 **Sealed outbox; anyone can send.** Results and views go to one device outbox sealed to an ECDH P-256 public key, so

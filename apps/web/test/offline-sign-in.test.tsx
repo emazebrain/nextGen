@@ -79,7 +79,7 @@ describe("offline sign-in", () => {
     expect(screen.queryByLabelText("Offline password")).toBeNull();
   });
 
-  it("signing out removes only your own space", async () => {
+  it("signing out locks your space and keeps it, and everyone else's, on the device", async () => {
     await createSpace(space("a", "Tamar Golan"), { password: "tablet42!", secret: secret(1), iterations: 1000 });
     await createSpace(space("b", "Oren Katz"), { password: "oren-pass1", secret: secret(2), iterations: 1000 });
     renderOffline();
@@ -87,6 +87,7 @@ describe("offline sign-in", () => {
     await userEvent.type(screen.getByLabelText("Offline password"), "tablet42!");
     await userEvent.click(screen.getByRole("button", { name: "Unlock" }));
     await userEvent.click(await screen.findByRole("button", { name: "Sign out here" }));
-    await waitFor(async () => expect((await listSpaces()).map((s) => s.display_name)).toEqual(["Oren Katz"]));
+    expect(await screen.findByText("Opened: none")).toBeTruthy();
+    expect((await listSpaces()).map((s) => s.display_name)).toEqual(["Oren Katz", "Tamar Golan"]);
   });
 });

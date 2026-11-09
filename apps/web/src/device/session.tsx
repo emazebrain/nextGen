@@ -14,7 +14,7 @@ import { encoding, generateOutboxKeyPair, unwrapOutboxKey, wrapOutboxPrivate, ty
 import { getMeta, setMeta } from "./db.ts";
 import { getPrf } from "./passkey.ts";
 import { setPinStorage } from "../session/kidmode.ts";
-import { configureOutbox, flush } from "../session/outbox.ts";
+import { configureOutbox, flush, outboxStatus } from "../session/outbox.ts";
 import {
   createSpace, listSpaces, removeSpace, unlockWithPassword, unlockWithPrf, unlockWithSecret,
   type OpenSpace, type SpaceInfo, type UnlockResult,
@@ -46,8 +46,13 @@ export interface DeviceState {
   skipSetup(userId: string): Promise<void>;
   openOffline(id: string, cred: { password: string } | { prf: true }): Promise<UnlockResult>;
   lock(): void;
-  /** Explicit sign-out: ends and removes this therapist's own space (nothing else on the device). */
+  /**
+   * Sign-out: locks this therapist's space and keeps it on the device (product owner, 2026-11-09): their saved data
+   * stays for offline work, and their waiting results stay until the server has them.
+   */
   signOut(): Promise<void>;
+  /** Deletes a space from the device (and ends it on the server). Refused while that therapist's results wait. */
+  removeSpaceData(info: SpaceInfo): Promise<"removed" | "results_waiting">;
 }
 
 const Ctx = createContext<DeviceState | null>(null);
@@ -226,18 +231,32 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
   }, [space]);
 
   const signOut = useCallback(async () => {
-    if (space) {
-      const id = await getMeta<string>("device_id");
-      if (id) await apiSend("DELETE", `/v1/devices/${id}/spaces/${space.id}`).catch(() => undefined);
-      space.lock();
-      await removeSpace(space.id);
-    }
+    space?.lock();
     setSpace(null);
     setOfflineMe(null);
     setOutbox((o) => ({ ...o, key: null }));
     await attachPin(null);
     await refreshSpaces();
   }, [space, refreshSpaces]);
+
+  const removeSpaceData = useCallback(
+    async (info: SpaceInfo): Promise<"removed" | "results_waiting"> => {
+      // Nothing a therapist recorded leaves the device before the server has it.
+      if (((await outboxStatus()).byTherapist[info.user_id] ?? 0) > 0) return "results_waiting";
+      const id = await getMeta<string>("device_id");
+      if (id) await apiSend("DELETE", `/v1/devices/${id}/spaces/${info.id}`).catch(() => undefined);
+      if (space?.id === info.id) {
+        space.lock();
+        setSpace(null);
+        setOfflineMe(null);
+        await attachPin(null);
+      }
+      await removeSpace(info.id);
+      await refreshSpaces();
+      return "removed";
+    },
+    [space, refreshSpaces],
+  );
 
   // The outbox follows the device keys: sealed writes once set up, sending once someone is signed in online.
   useEffect(() => {
@@ -248,9 +267,9 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
   const value = useMemo<DeviceState>(
     () => ({
       ready, deviceId, online, spaces, space, offlineMe, outboxPublicKey: outbox.publicKey, outboxKey: outbox.key,
-      refreshSpaces, openOnline, setupOffline, skipSetup, openOffline, lock, signOut,
+      refreshSpaces, openOnline, setupOffline, skipSetup, openOffline, lock, signOut, removeSpaceData,
     }),
-    [ready, deviceId, online, spaces, space, offlineMe, outbox, refreshSpaces, openOnline, setupOffline, skipSetup, openOffline, lock, signOut],
+    [ready, deviceId, online, spaces, space, offlineMe, outbox, refreshSpaces, openOnline, setupOffline, skipSetup, openOffline, lock, signOut, removeSpaceData],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

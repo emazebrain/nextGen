@@ -107,10 +107,22 @@ function writeLocalViews(items: LocalView[]) {
   emit();
 }
 
+/** The therapist a ticket names (its `sub`), read from the payload; the server checks the signature. */
+function therapistOf(ticket: string | undefined): string | null {
+  if (!ticket) return null;
+  try {
+    const sub = (JSON.parse(atob(ticket.split(".")[1]!.replace(/-/g, "+").replace(/_/g, "/"))) as { sub?: unknown }).sub;
+    return typeof sub === "string" ? sub : null;
+  } catch {
+    return null;
+  }
+}
+
 async function putSealed(publicKey: string, id: string, p: Payload, createdAt = new Date().toISOString()) {
   const db = await deviceDb();
   if (await db.get("outbox", id)) return;
-  const record: OutboxRecord = { id, kind: p.kind, created_at: createdAt, sealed: await sealToPublic(publicKey, p) };
+  const therapist_id = therapistOf(p.kind === "result" ? p.ticket : p.view.ticket);
+  const record: OutboxRecord = { id, kind: p.kind, created_at: createdAt, therapist_id, sealed: await sealToPublic(publicKey, p) };
   await db.put("outbox", record);
   emit();
 }
@@ -254,17 +266,32 @@ export function flush(): Promise<void> {
 
 export interface OutboxStatus {
   waiting: number;
+  /** Waiting entries per therapist account id ("" when the entry names none). */
+  byTherapist: Record<string, number>;
   needsHelp: number;
   needsSignIn: boolean;
 }
 
+/** Everything waiting on this device: the sealed outbox (whether or not its key is loaded) and the local one. */
 export async function outboxStatus(): Promise<OutboxStatus> {
-  if (cfg) {
-    const all = await (await deviceDb()).getAll("outbox");
-    return { waiting: all.length, needsHelp: all.filter((r) => r.needs_help).length, needsSignIn };
-  }
+  const sealed = typeof indexedDB === "undefined" ? [] : await (await deviceDb()).getAll("outbox");
   const items = [...readLocal(), ...readLocalViews()];
-  return { waiting: items.length, needsHelp: items.filter((i) => i.last_error === "needs_help").length, needsSignIn };
+  const byTherapist: Record<string, number> = {};
+  for (const r of sealed) byTherapist[r.therapist_id ?? ""] = (byTherapist[r.therapist_id ?? ""] ?? 0) + 1;
+  for (const i of readLocal()) {
+    const t = therapistOf(i.ticket) ?? "";
+    byTherapist[t] = (byTherapist[t] ?? 0) + 1;
+  }
+  for (const v of readLocalViews()) {
+    const t = therapistOf(v.ticket) ?? "";
+    byTherapist[t] = (byTherapist[t] ?? 0) + 1;
+  }
+  return {
+    waiting: sealed.length + items.length,
+    byTherapist,
+    needsHelp: sealed.filter((r) => r.needs_help).length + items.filter((i) => i.last_error === "needs_help").length,
+    needsSignIn,
+  };
 }
 
 /** Kept for older screens and tests: what's waiting in this browser's local outbox. */
@@ -276,7 +303,7 @@ export function pendingViews(): VideoViewInput[] {
 }
 
 export function useOutboxStatus(): OutboxStatus {
-  const [s, setS] = useState<OutboxStatus>({ waiting: 0, needsHelp: 0, needsSignIn: false });
+  const [s, setS] = useState<OutboxStatus>({ waiting: 0, byTherapist: {}, needsHelp: 0, needsSignIn: false });
   useEffect(() => {
     let live = true;
     const update = () => void outboxStatus().then((x) => live && setS(x));

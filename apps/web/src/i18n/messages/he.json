@@ -655,7 +655,7 @@
   "device.remove": "הסרה",
   "device.removeSpaceOf": "הסרת {name}",
   "device.removeSpace.title": "להסיר את {name} מהמכשיר?",
-  "device.removeSpace.body": "המטופלים והפרוטוקולים השמורים שלו יימחקו מהמכשיר. תוצאות שממתינות לשליחה יישמרו ויישלחו כרגיל.",
+  "device.removeSpace.body": "המטופלים והפרוטוקולים השמורים שלו יימחקו מהמכשיר. אפשר לעשות זאת רק אחרי שכל התוצאות שלו הגיעו לשרת.",
   "device.install": "התקנת האפליקציה",
   "device.installed": "מותקנת",
   "device.installButton": "להתקין את eMazeBrain",
@@ -674,5 +674,6 @@
   "sync.applyUpdate": "להפעיל מחדש ולעדכן",
   "run.notStored": "חלק מהתוצאות לא נשמרו במכשיר. כדאי להשאיר את המסך פתוח וללחוץ על \"לנסות שוב\" עד שיישלחו.",
   "run.preflight.expired": "תוקף האישור לעבודה ללא חיבור פג (לא היה עדכון עם חיבור יותר מחודש). עדיין אפשר לשחק: התוצאות יישמרו ויסומנו לבדיקה.",
-  "run.preflight.startAnyway": "להתחיל בכל זאת"
+  "run.preflight.startAnyway": "להתחיל בכל זאת",
+  "device.resultsWaiting": "{count, plural, one {תוצאה אחת ממתינה לשליחה} other {# תוצאות ממתינות לשליחה}}"
 }
