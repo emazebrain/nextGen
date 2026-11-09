@@ -60,6 +60,8 @@ if (existing.rowCount) {
     await signUp(`sapir@${SYNTHETIC_EMAIL_DOMAIN}`, "Sapir Levy"),
     await signUp(`ran@${SYNTHETIC_EMAIL_DOMAIN}`, "Ran Biton"),
     await signUp(`noga@${SYNTHETIC_EMAIL_DOMAIN}`, "Noga Peleg"),
+    // Brain-region filters (spec 2026-11-09): builds a step filtered to a region.
+    await signUp(`hila@${SYNTHETIC_EMAIL_DOMAIN}`, "Hila Sela"),
     // Offline devices (ADR 0019): therapists who share one tablet in the e2e tests.
     await signUp(`tamar@${SYNTHETIC_EMAIL_DOMAIN}`, "Tamar Golan"),
     await signUp(`gali@${SYNTHETIC_EMAIL_DOMAIN}`, "Gali Ron"),

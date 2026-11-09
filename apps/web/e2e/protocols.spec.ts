@@ -33,13 +33,13 @@ test("Tal builds a template from the library and assigns it", async ({ page }) =
   // The timer corner and look follow the hemisphere, opposite side (ADR 0008).
   await expect(page.getByText(/Top right corner: a warm digital clock/)).toBeVisible();
   await expect(page.getByText("From stage 2, the larger grid appears on the right of the screen and the smaller grid on the left.")).toBeVisible();
-  await page.getByRole("radio", { name: "Right, cold palette" }).check();
+  await page.getByLabel("Side").selectOption({ label: "Right hemisphere" });
   await expect(page.getByText(/Top left corner: a cold bar that empties/)).toBeVisible();
   await expect(page.getByText("From stage 2, the larger grid appears on the left of the screen and the smaller grid on the right.")).toBeVisible();
   await page.getByRole("radio", { name: "Hide" }).check();
   await expect(page.getByText("The child won't see the time. The session still ends when time is up.")).toBeVisible();
   await page.getByRole("radio", { name: "Show" }).check();
-  await page.getByRole("radio", { name: "Left, warm palette" }).check();
+  await page.getByLabel("Side").selectOption({ label: "Left hemisphere" });
   await shot(page, "41a-builder-timer");
   // Black and white, and the background settings (ADR 0009). Movement only shows for a textured background.
   await expect(page.getByLabel("Black and white")).not.toBeChecked();
@@ -106,4 +106,41 @@ test("Tal builds a template from the library and assigns it", async ({ page }) =
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Today" }).click();
   await expect(page.getByRole("region", { name: "Next up" }).getByRole("listitem")).toHaveCount(5);
   await expect(page.getByRole("region", { name: "Next up" }).getByText(name)).toBeVisible();
+});
+
+test("Hila filters a step to a brain region; the table's row decides its look", async ({ page }) => {
+  await enrol(page, "hila@synthetic.test");
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Protocols" }).click();
+  await page.getByRole("region", { name: "eMazeBrain templates" }).getByRole("link", { name: "Duplicate: Visual attention starter" }).click();
+  await page.getByLabel("Name").fill("Superior temporal, right");
+  await page.getByRole("button", { name: "Edit Step 1" }).click();
+
+  const region = page.getByRole("group", { name: "Brain region" });
+  await region.getByLabel("Side").selectOption({ label: "Right hemisphere" });
+  await region.getByLabel("Lobe", { exact: true }).selectOption({ label: "Temporal lobe" });
+  await expect(region.getByText("Each session uses one of: Superior temporal, Middle temporal, Inferior temporal")).toBeVisible();
+  await region.getByLabel("Sub-lobe").selectOption({ label: "Superior temporal" });
+  await expect(region.getByText(/This game uses: the right hemisphere's look and background: cold, solid/)).toBeVisible();
+  await expect(region.getByText("Draft settings, pending clinical review")).toBeVisible();
+  // The row sets Catch Me's background, so its own background controls are not editable.
+  await expect(page.getByRole("group", { name: "Game settings" }).getByText("Set by the brain region").first()).toBeVisible();
+  await axe(page, "builder with brain region");
+  await shot(page, "41b-builder-brain-region");
+
+  // Left cerebellum is crossed in the table: it runs with the right hemisphere's look.
+  await region.getByLabel("Side").selectOption({ label: "Left hemisphere" });
+  await region.getByLabel("Lobe", { exact: true }).selectOption({ label: "Subcortical" });
+  await region.getByLabel("Sub-lobe").selectOption({ label: "Cerebellum" });
+  await expect(region.getByText(/Runs with the right hemisphere's look and placement/)).toBeVisible();
+  await region.getByLabel("Side").selectOption({ label: "Right hemisphere" });
+  await region.getByLabel("Lobe", { exact: true }).selectOption({ label: "Temporal lobe" });
+  await region.getByLabel("Sub-lobe").selectOption({ label: "Superior temporal" });
+  await page.getByRole("button", { name: "Done Step 1" }).click();
+  await expect(page.locator(".step").first()).toContainText("Region: Right · Superior temporal");
+
+  const saved = page.waitForResponse((r) => r.url().includes("/v1/templates") && r.request().method() === "POST");
+  await page.getByRole("button", { name: "Save template" }).click();
+  const body = await (await saved).json();
+  expect(body.template.steps[0]).toMatchObject({ hemisphere: "right", region_id: expect.any(String) });
+  await expect(page.getByText("Template saved.")).toBeVisible();
 });
