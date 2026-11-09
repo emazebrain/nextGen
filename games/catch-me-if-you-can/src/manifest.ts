@@ -25,6 +25,8 @@ export const manifest: GameManifest = {
     rng: "seeded",
     monochrome: true,
   },
+  // A brain-region filter sets the background colour and type from the table's row (spec 2026-11-09).
+  regionUse: { background: { temperature: "bg_temperature", type: "background" } },
   hemisphereNote: {
     left: {
       en: "From stage 2, the larger grid appears on the right of the screen and the smaller grid on the left.",

@@ -21,6 +21,7 @@ import { withUser, type Env } from "../../context.ts";
 import type { TicketSigner } from "../../tickets.ts";
 import { loadPatient, UUID } from "../patients/routes.ts";
 import { listTemplates, loadAssignment, todayItems } from "../protocols/routes.ts";
+import { loadRegionCatalog } from "../../regions.ts";
 import { allowedParamsFor, buildParams, loadLaunchRows, OFFLINE_TICKET_TTL_S } from "../sessions/routes.ts";
 import { pick } from "../videos/routes.ts";
 
@@ -98,6 +99,8 @@ export function offlineRoutes(pool: pg.Pool, tickets: TicketSigner) {
       const videos = new Map<string, OfflineVideoRef>();
       // Each game step's recent counted results (shared by all its packages): the device's progression input.
       const histories = new Map<string, PackageGameStep["history"]>();
+      // The brain-region tree and the table's rows (spec 2026-11-09), read once for every package.
+      const regions = await loadRegionCatalog(db);
       const historyOf = async (stepId: string) => {
         if (!histories.has(stepId)) {
           const h = await db.query<PackageGameStep["history"][number]>(
@@ -141,7 +144,7 @@ export function offlineRoutes(pool: pg.Pool, tickets: TicketSigner) {
                 done: s.done,
               };
             }
-            const base = buildParams(s, row, randomInt(1, 2 ** 31));
+            const base = buildParams(s, row, randomInt(1, 2 ** 31), regions);
             const allowed = allowedParamsFor(base, { min: 1, max: 5 });
             const ticket = tickets.signV2({ jti: randomUUID(), psid: id, asid: s.id, pid: row.patient_id, gid: s.game_id, sub: user.id, dev: device, allowed }, OFFLINE_TICKET_TTL_S);
             return {

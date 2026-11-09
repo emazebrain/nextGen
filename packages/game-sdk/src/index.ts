@@ -67,6 +67,11 @@ export interface GameManifest {
    * e.g. which side the larger board appears on.
    */
   hemisphereNote?: { left: LocalText; right: LocalText };
+  /**
+   * What a brain-region filter changes in this game, besides the hemisphere (spec 2026-11-09). `background` names the
+   * game's own background parameters; the host fills them from the row at launch. The rest are read from `region`.
+   */
+  regionUse?: { background?: { temperature: string; type: string }; direction?: true; targetLocation?: true; rotation?: true; movement?: true };
   recommendedMode?: SessionMode;
   recommendedDurationS?: number;
   lifeLossEvents: Array<{ id: string; label: LocalText }>;
@@ -108,6 +113,31 @@ export interface PlatformParams {
   seed: number;
   input_assist: "none" | "large_hit" | "dwell_800ms" | "switch_scan";
   speed_scale: number; // 0.5–1.0
+  /**
+   * The step's brain-region filter, resolved by the host at launch (brain-region filters spec 2026-11-09). Absent when
+   * the step has none (side only). `hemisphere` above already follows the row: cold → right, warm → left.
+   */
+  region?: RegionParam;
+}
+
+export type RegionDirection = "ltr" | "rtl" | "ttb" | "btt" | "tldbr" | "brdtl" | "trdbl" | "bldtr";
+export type RegionCompass = "N" | "NE" | "E" | "SE" | "S" | "SW" | "W" | "NW";
+/** One row of the product owner's brain-region table, for the chosen filter. Where a list has several options, the game chooses with the seed. */
+export interface RegionParam {
+  /** The chosen node: a lobe, a sub-lobe or a Brodmann area, e.g. "right.temporal.superior_temporal". */
+  path: string;
+  /** The sub-lobe whose row applies. */
+  sublobe: string;
+  /** True when a lobe was chosen and this launch's sub-lobe was drawn from it. */
+  drawn: boolean;
+  bg_temperature: "warm" | "cold";
+  bg_types: ("solid" | "textured")[];
+  motion: { movement_types: number[]; directions: RegionDirection[] }[];
+  /** Where most objects are placed. */
+  target_locations: RegionCompass[];
+  rotation: "cw" | "ccw";
+  clinical_status: "draft" | "approved";
+  revision: number;
 }
 
 export type TrialOutcome = "correct" | "error" | "timeout" | "omission" | "commission";

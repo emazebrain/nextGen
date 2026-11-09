@@ -33,6 +33,8 @@ import { parseBody } from "../../validate.ts";
 import { UUID } from "../patients/routes.ts";
 import { pick } from "../videos/routes.ts";
 import { timerPositionFor, timerShown } from "@emb/session-rules";
+import { resolveRegion, seededIndex, type RegionCatalog } from "../../../../../packages/contracts/src/index.ts";
+import { loadRegionCatalog } from "../../regions.ts";
 
 const CLINIC_TICKET_TTL_S = 24 * 3600;
 /** Offline package tickets live 30 days (design doc §8.2; offline devices spec §7.4). */
@@ -41,7 +43,7 @@ export const OFFLINE_TICKET_TTL_S = 30 * 24 * 3600;
 /** Offline tickets leave these to the device: difficulty within a range, and the free per-session values. */
 const DEVICE_CHOSEN = new Set(["difficulty", "seed", "practice", "instructions"]);
 /** The settings that define a step; if any differs now from what the ticket allowed, the step changed. */
-const STRUCTURAL = ["session_mode", "duration_s", "lives", "hemisphere", "timer_position", "monochrome", "trial_window_ms"];
+const STRUCTURAL = ["session_mode", "duration_s", "lives", "hemisphere", "timer_position", "monochrome", "trial_window_ms", "region"];
 
 export function allowedParamsFor(params: Record<string, unknown>, difficulty: { min: number; max: number }): AllowedParams {
   return { exact: Object.fromEntries(Object.entries(params).filter(([k]) => !DEVICE_CHOSEN.has(k))), difficulty };
@@ -65,24 +67,38 @@ export interface StepRow {
   practice: "auto" | "on" | "off";
   trial_window_ms: number | null;
   game_params: Record<string, unknown>;
+  /** Brain-region filter (spec 2026-11-09); null = side only. */
+  region_id?: string | null;
   sessions_completed: number;
   progression?: Rule | null;
 }
 
-/** Platform parameters (§8.2) for one step, plus the game's own settings namespaced by game id. */
-export function buildParams(step: StepRow, patient: { preferred_locale: string; colour_vision_deficiency: boolean }, seed: number) {
+/**
+ * Platform parameters (§8.2) for one step, plus the game's own settings namespaced by game id.
+ * With a brain-region filter (spec 2026-11-09) the table's row decides: `region` carries it, the hemisphere follows the
+ * row (cold → right, warm → left), and games that declare `regionUse.background` get their background from it.
+ */
+export function buildParams(step: StepRow, patient: { preferred_locale: string; colour_vision_deficiency: boolean }, seed: number, regions?: RegionCatalog) {
   const ns = step.game_id.replace(/-/g, "_");
   const own: Record<string, unknown> = { ...step.game_params };
   if (patient.colour_vision_deficiency && GAME_MANIFESTS[step.game_id]?.paramsSchema.properties.cvd_mode) own.cvd_mode = true; // from the patient record (§8.1)
+  const resolved = step.region_id && regions ? resolveRegion(regions, step.region_id, seed) : null;
+  const hemisphere = resolved?.hemisphere ?? step.hemisphere;
+  const bg = resolved ? GAME_MANIFESTS[step.game_id]?.regionUse?.background : undefined;
+  if (resolved && bg) {
+    own[bg.temperature] = resolved.param.bg_temperature;
+    own[bg.type] = resolved.param.bg_types[seededIndex(seed, "bg", resolved.param.bg_types.length)];
+  }
   return {
     session_mode: step.session_mode,
     ...(step.duration_s !== null ? { duration_s: step.duration_s } : {}),
     ...(step.lives_auto ? { lives: "auto" as const } : step.lives !== null ? { lives: step.lives } : {}),
     difficulty: step.current_difficulty,
     start_level: "from_difficulty",
-    hemisphere: step.hemisphere,
+    hemisphere,
     // Older steps may hold the v1 same-side value: the corner always follows the hemisphere (ADR 0008).
-    timer_position: timerPositionFor(step.hemisphere, timerShown(step.timer_position)),
+    timer_position: timerPositionFor(hemisphere, timerShown(step.timer_position)),
+    ...(resolved ? { region: resolved.param } : {}),
     // Black and white only for games that support it (ADR 0009).
     monochrome: step.monochrome === true && GAME_MANIFESTS[step.game_id]?.capabilities.monochrome === true,
     trial_window_ms: step.trial_window_ms,
@@ -131,7 +147,7 @@ export async function loadLaunchRows(db: pg.PoolClient, id: string): Promise<Lau
   if (row.status !== "planned" && row.status !== "in_progress") return { error: "session_closed" as const };
   const steps = await db.query<StepRow & { done: boolean }>(
     `SELECT s.id, s.ordinal, s.step_type, s.video_id, s.game_id, s.session_mode, s.duration_s, s.lives, s.lives_auto, s.current_difficulty, s.hemisphere, s.timer_position, s.monochrome, s.practice, s.trial_window_ms,
-            s.game_params, s.sessions_completed, s.progression,
+            s.game_params, s.sessions_completed, s.progression, s.region_id,
             CASE WHEN s.step_type = 'video'
                  THEN EXISTS (SELECT 1 FROM app.video_view w WHERE w.planned_session_id = $2 AND w.assignment_step_id = s.id)
                  ELSE EXISTS (SELECT 1 FROM app.game_session g WHERE g.planned_session_id = $2 AND g.assignment_step_id = s.id) END AS done
@@ -172,6 +188,7 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
           ? asked
           : undefined;
       const { row, steps, videos } = loaded;
+      const regions = steps.some((s) => s.region_id) ? await loadRegionCatalog(db) : undefined;
       await db.query(`UPDATE app.planned_session SET status = 'in_progress' WHERE id = $1 AND status = 'planned'`, [id]);
       const pkg: LaunchPackage = {
         planned_session_id: id,
@@ -200,7 +217,7 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
               done: s.done,
             };
           }
-          const params = buildParams(s, row, randomInt(1, 2 ** 31));
+          const params = buildParams(s, row, randomInt(1, 2 ** 31), regions);
           const ticket = tickets.sign({ jti: crypto.randomUUID(), psid: id, asid: s.id, pid: row.patient_id, gid: s.game_id, ph: paramsHash(params), sub: me, ...(dev ? { dev } : {}) }, CLINIC_TICKET_TTL_S);
           return { kind: "game", assignment_step_id: s.id, ordinal: s.ordinal, game_id: s.game_id, params, ticket, done: s.done };
         }),
@@ -394,6 +411,8 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
         `SELECT g.id, g.game_id, g.status, g.session_mode, g.difficulty, g.hemisphere, g.started_at, g.ended_at, g.active_ms,
                 g.accuracy::float8 AS accuracy, g.rt_median_ms, g.trials_total, g.correct, g.errors, g.lives_lost, g.highest_level,
                 g.planned_session_id, ps.seq, g.metrics, COALESCE((g.config_echo->>'monochrome')::boolean, false) AS monochrome,
+                CASE WHEN g.config_echo ? 'region' THEN jsonb_build_object('path', g.config_echo->'region'->'path', 'sublobe', g.config_echo->'region'->'sublobe',
+                  'drawn', g.config_echo->'region'->'drawn', 'revision', g.config_echo->'region'->'revision') END AS region,
                 r.counts, CASE WHEN r.review_reason IS NULL THEN NULL ELSE json_build_object('reason', r.review_reason, 'decision', r.decision) END AS review
            FROM app.game_session g LEFT JOIN app.planned_session ps ON ps.id = g.planned_session_id
            JOIN app.game_session_review r ON r.id = g.id
@@ -525,8 +544,21 @@ async function stepChanged(db: pg.PoolClient, claims: TicketClaimsV2): Promise<b
   if (!step || step.step_type === "video" || step.game_id !== claims.gid) return true;
   const now = buildParams(step, { preferred_locale: "en", colour_vision_deficiency: false }, 0);
   const ns = `${step.game_id.replace(/-/g, "_")}.`;
-  const keys = [...STRUCTURAL, ...Object.keys(now).filter((k) => k.startsWith(ns) && k !== `${ns}cvd_mode`)];
-  return keys.some((k) => JSON.stringify((now as Record<string, unknown>)[k] ?? null) !== JSON.stringify(claims.allowed.exact[k] ?? null));
+  const exact = claims.allowed.exact;
+  const was = (exact.region as { path?: string } | undefined)?.path ?? null;
+  if (!step.region_id && was === null) {
+    const keys = [...STRUCTURAL, ...Object.keys(now).filter((k) => k.startsWith(ns) && k !== `${ns}cvd_mode`)];
+    return keys.some((k) => JSON.stringify((now as Record<string, unknown>)[k] ?? null) !== JSON.stringify(exact[k] ?? null));
+  }
+  // A filtered step (spec 2026-11-09 §6): compare the filter the therapist chose, not what it resolved to. The hemisphere,
+  // timer corner, drawn sub-lobe, row revision and the row-driven background legitimately differ between packages.
+  const nowPath = step.region_id ? ((await loadRegionCatalog(db)).byId.get(step.region_id)?.path ?? step.region_id) : null;
+  if (nowPath !== was) return true;
+  if (timerShown(step.timer_position) !== (exact.timer_position !== "hidden")) return true;
+  const bg = GAME_MANIFESTS[step.game_id]?.regionUse?.background;
+  const fromRow = new Set(bg ? [`${ns}${bg.temperature}`, `${ns}${bg.type}`] : []);
+  const keys = [...STRUCTURAL.filter((k) => k !== "hemisphere" && k !== "timer_position" && k !== "region"), ...Object.keys(now).filter((k) => k.startsWith(ns) && k !== `${ns}cvd_mode` && !fromRow.has(k))];
+  return keys.some((k) => JSON.stringify((now as Record<string, unknown>)[k] ?? null) !== JSON.stringify(exact[k] ?? null));
 }
 
 /** The planned session is done once every game has a result and every video a view. Returns its status. */

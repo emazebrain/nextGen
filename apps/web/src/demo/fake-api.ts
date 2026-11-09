@@ -452,6 +452,7 @@ function row(
     id,
     counts: true,
     review: null,
+    region: null,
     patient_id: patient,
     assignment_step_id: stepId,
     game_id: "catch-me-if-you-can",

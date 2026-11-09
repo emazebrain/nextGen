@@ -148,6 +148,8 @@ export interface GameSessionView {
   hemisphere: "left" | "right";
   /** Played in black and white (ADR 0009); older sessions count as colour. */
   monochrome: boolean;
+  /** The brain-region filter it ran with (spec 2026-11-09), from its launch params; null = side only. */
+  region: { path: string; sublobe: string; drawn: boolean; revision: number } | null;
   started_at: string | null;
   ended_at: string;
   active_ms: number;
