@@ -3,6 +3,7 @@
  * platform admins add videos (YouTube links or uploaded files), tag them by region and publish them. Writes are
  * guarded by RLS (only platform admins), and checked up front so an upload is refused before any byte is stored.
  */
+import { loadRegions } from "../../regions.ts";
 import { Hono, type Context } from "hono";
 import type pg from "pg";
 import { randomUUID } from "node:crypto";
@@ -93,12 +94,7 @@ export function videoRoutes(pool: pg.Pool, files: FileStore) {
 
   r.get("/brain-regions", async (c) => {
     const lang = langOf(c);
-    const regions = await run(c, async (db) => {
-      const { rows } = await db.query<Omit<BrainRegion, "label"> & { labels: Record<string, string> }>(
-        `SELECT id, parent_id, kind, code, path, labels, sort FROM app.brain_region ORDER BY path`,
-      );
-      return rows.map(({ labels, ...rest }) => ({ ...rest, label: pick(labels, lang) ?? rest.code }));
-    });
+    const regions = await run(c, (db) => loadRegions(db, lang));
     return c.json({ regions });
   });
 

@@ -43,6 +43,11 @@ export const gameStepInput = z
     monochrome: z.boolean().default(false),
     /** lives = auto: the game's per-board heart budget instead of a session count (Peek Peek, ADR 0012). `lives` is then null. */
     lives_auto: z.boolean().default(false),
+    /**
+     * One brain-region filter (spec 2026-11-09): a lobe, sub-lobe or Brodmann area. null = side only (hemisphere).
+     * Omitted (older apps) = keep the step's current region when the server can tell which step it is.
+     */
+    region_id: z.string().uuid().nullable().optional(),
   })
   .superRefine((s, ctx) => {
     // Only the fields the mode uses are set (§8.1), so a step can never be "timed" without a time limit.

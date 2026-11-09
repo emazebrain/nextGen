@@ -53,3 +53,14 @@ describe("canonicalJson", () => {
     expect(canonicalJson({ b: 1, a: { d: [2, { z: 1, y: 2 }], c: undefined } })).toBe('{"a":{"d":[2,{"y":2,"z":1}]},"b":1}');
   });
 });
+
+describe("region_id on game steps (brain-region filters)", () => {
+  it("region_id may be omitted, null or a uuid", async () => {
+    const { gameStepInput } = await import("../src/index.ts");
+    const base = { game_id: "tunnel-rush", session_mode: "timed", duration_s: 300, lives: null, difficulty_start: 3, hemisphere: "left", timer_position: "left", practice: "auto", trial_window_ms: null, game_params: {}, progression: null };
+    expect(gameStepInput.parse(base).region_id).toBeUndefined();
+    expect(gameStepInput.parse({ ...base, region_id: null }).region_id).toBeNull();
+    expect(gameStepInput.parse({ ...base, region_id: "0192f3a4-5b6c-7d8e-9f01-23456789abcd" }).region_id).toBe("0192f3a4-5b6c-7d8e-9f01-23456789abcd");
+    expect(gameStepInput.safeParse({ ...base, region_id: "frontal" }).success).toBe(false);
+  });
+});
