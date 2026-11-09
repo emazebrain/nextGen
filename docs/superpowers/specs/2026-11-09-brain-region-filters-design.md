@@ -3,7 +3,7 @@
 - Date: 2026-11-09
 - Status: Draft for the product owner's approval
 - Product owner: Barak
-- Source table: the product owner's "brain region settings" sheet (2026-11-09), with a Brodmann column added by us
+- Source table (now at `packages/db/src/region-settings.csv`): the product owner's "brain region settings" sheet (2026-11-09), with a Brodmann column added by us
   (draft, pending the clinical advisor). Shared for clinical review in the Claude Doc "New picture-line memory game:
   brief for clinical review".
 - Design doc: §7 (`brain_region`), §8.2 (platform parameters), §8.4 (games), ADR 0009 (backgrounds), ADR 0011
