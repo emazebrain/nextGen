@@ -36,6 +36,12 @@ also reaches every existing game: at minimum its side, and its background where 
 - The table lives in the database, loaded from the sheet, with no editing screen yet (option 2). We apply the clinical
   advisor's corrections as reviewed updates. An editing screen with versions can come later.
 - Parked for later discussion: starting from a filter and then seeing the games that suit it.
+- **The table is the absolute truth.** A filter can stop at any level:
+  - side only → the game behaves as today for that hemisphere;
+  - side + lobe, side + lobe + sub-lobe, or a Brodmann area → the table's row decides the configuration.
+- **Side + lobe with no sub-lobe:** each session picks one of that lobe's sub-lobes and uses its row exactly; the pick
+  is recorded with the result (option 1 of three offered).
+- **Crossed rows (the cerebellum):** the row decides, including everything a game ties to the hemisphere (see §4).
 
 ## Goals
 
@@ -150,10 +156,11 @@ One row per sub-lobe (20 rows: 10 sub-lobes × 2 sides).
 ### 3. Game steps carry one filter
 
 - New nullable column `region_id` on `template_step` and `assignment_step` (→ `brain_region`). Allowed nodes: a
-  sub-lobe, or an area with a `sublobe_id`. Checked in the API and by a trigger. Video steps keep it NULL.
-- NULL = today's behaviour: the therapist chooses the hemisphere directly. Every existing step stays NULL.
-- When set, the API sets `hemisphere` to the region's side and refuses a different hemisphere. The side is therefore
-  never stored twice in disagreement.
+  lobe that has at least one sub-lobe with a settings row, a sub-lobe, or an area with a `sublobe_id`. Checked in the
+  API and by a trigger. Video steps keep it NULL.
+- NULL = side only, today's behaviour: the step's `hemisphere` is the chosen side. Every existing step stays NULL.
+- When set, the API sets the step's `hemisphere` column to the region's side (its path's first segment) and refuses a
+  different one. That column keeps meaning "the side chosen". What the game runs as is decided per launch (§4).
 - Copying a protocol to a patient (`assignment_step`) copies `region_id`, as it copies every other setting.
 
 ### 4. What a game receives
@@ -162,8 +169,9 @@ A new optional platform parameter, resolved by the API at launch:
 
 ```ts
 interface RegionParam {
-  path: string;            // the chosen node, e.g. "right.temporal.ba22" or "right.temporal.superior_temporal"
+  path: string;            // the chosen node: a lobe ("right.frontal"), a sub-lobe or an area ("right.temporal.ba22")
   sublobe: string;         // the sub-lobe whose row applies, e.g. "right.temporal.superior_temporal"
+  drawn: boolean;          // true when `path` is a lobe and this session's sub-lobe was picked from it
   revision: number;        // region_setting.revision used
   clinical_status: "draft" | "approved";
   bg_temperature: "warm" | "cold";
@@ -175,7 +183,17 @@ interface RegionParam {
 // PlatformParams gains: region?: RegionParam
 ```
 
-- Games read it only through `@emb/game-sdk` types (invariant 6). Absent when the step has no filter.
+- Games read it only through `@emb/game-sdk` types (invariant 6). Absent when the step has no filter (side only).
+- **Which row applies.** A sub-lobe → its row. An area → its sub-lobe's row. A lobe → the API picks one of the lobe's
+  sub-lobes that has a row, uniformly, from the launch's seed (so the same seed always gives the same pick), and sets
+  `drawn: true`. Each offline package has its own seed, so a run of packages covers the lobe's sub-lobes.
+- **The row decides the hemisphere the game runs as.** In the table, `bg_temperature` always matches the pattern:
+  every cold row has the right side's pattern (target west, clockwise) and every warm row the left side's (east,
+  counter-clockwise), the crossed cerebellum included. So when a row applies, the launch's `hemisphere` platform
+  parameter = `right` for a cold row and `left` for a warm row. Everything a game ties to the hemisphere (palette,
+  placement lean, timer corner, tile style, rewards: ADR 0008–0012) then follows the row. A test checks the table
+  keeps this property (cold ⇔ west-side targets ⇔ CW; warm ⇔ east-side targets ⇔ CCW), so a correction that breaks
+  it is caught and brought back to the product owner instead of shipping a contradictory row.
 - A game declares what it uses in its manifest: `regionUse?: { background?: true; direction?: true;
   targetLocation?: true; rotation?: true; movement?: true }`. The protocol builder reads it to say what the filter
   changes for that game.
@@ -184,8 +202,8 @@ interface RegionParam {
 
 ### 5. Existing games
 
-- All games: the filter's side becomes the hemisphere, so everything ADR 0009/0011/0012 ties to the hemisphere works
-  as now.
+- All games: they receive the hemisphere decided in §4 (the side for side-only steps; the row's for the rest), so
+  everything ADR 0008–0012 ties to the hemisphere works as now, driven by the table.
 - Catch Me If You Can (the only game with background settings today) declares `regionUse.background`. With a filter:
   `bg_temperature` comes from the row instead of the step's own setting; the background type is drawn once per
   session from `bg_types` with the seed (matching ADR 0009's once-per-session colour draw). Its `bg_motion` setting
@@ -207,6 +225,11 @@ interface RegionParam {
   module) compares the step's `region_id` and hemisphere, not the resolved settings, `revision` or `clinical_status`.
   Results from packages issued before a correction are accepted normally; their `region` snapshot shows the revision
   they ran with.
+- `game_session.hemisphere` stores the hemisphere the game ran as (§4), so progress baselines (per game × difficulty
+  × hemisphere × black-and-white) group sessions by what the child actually saw. For a left-cerebellum step that is
+  `right`.
+- The offline "step changed" check compares the step's `region_id` and its stored side, never the per-launch
+  hemisphere or the drawn sub-lobe, which legitimately vary between packages of the same step.
 - `game_session` gains `region_id` (nullable) and `region` (jsonb snapshot of the parameter as launched). Ingest
   stores what the device reports in `config_echo`; a result whose `region` differs from its ticket's is kept and
   flagged `params_outside_ticket`, as today. Never dropped (invariant 8).
@@ -217,15 +240,19 @@ interface RegionParam {
 On a game step, after the game is chosen, a **Brain region** control replaces the Hemisphere control:
 
 ```
-Brain region   ( ) None — choose hemisphere   [Left ▾]
-               (•) By region       Side [Right ▾]  Lobe [Temporal ▾]  Sub-lobe [Superior temporal ▾]
-               ( ) By Brodmann area  Side [Right ▾]  Area [BA22 — superior temporal ▾]
+Brain region   (•) By region        Side [Right ▾]  Lobe [Temporal ▾]  Sub-lobe [Superior temporal ▾]
+               ( ) By Brodmann area Side [Right ▾]  Area [BA22 — superior temporal ▾]
                ─────────────────────────────────────────────
-               This game uses: side (right), background (cold; solid)
+               This game uses: hemisphere (right), background (cold; solid)
                Draft settings, pending clinical review
 ```
 
-- Cascading selects; lobes without sub-lobes (occipital, limbic, insula) are not offered for games.
+- Side is required (it replaces the Hemisphere control). Lobe and sub-lobe are optional: "Any" stops the filter at
+  that level. Side only = today's behaviour.
+- Lobe with sub-lobe "Any": the summary says "Each session uses one of: DLPFC, orbital frontal" and lists what can
+  vary. Lobes with no rows yet (occipital, limbic, insula) are not offered for games.
+- When the row's hemisphere differs from the side (the cerebellum), the summary says so: "Runs with the right
+  hemisphere's look and placement, as the table sets for the left cerebellum." 
 - The Brodmann list shows each area with its sub-lobe; areas with no sub-lobe appear disabled ("no settings yet").
 - The summary lists only what the chosen game uses (from `regionUse`), in the therapist's language.
 - The same control appears wherever a patient's step is edited.
