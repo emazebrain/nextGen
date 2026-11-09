@@ -1011,11 +1011,11 @@ const REGION_NODES: BrainRegion[] = (() => {
   const id = () => `0192f3a0-0000-7000-8000-${(++n).toString(16).padStart(12, "0")}`;
   HEMISPHERES.forEach((h, hi) => {
     const hid = id();
-    out.push({ id: hid, parent_id: null, kind: "hemisphere", code: h.code, path: h.code, label: h.en, sort: hi + 1 });
+    out.push({ id: hid, parent_id: null, kind: "hemisphere", code: h.code, path: h.code, label: h.en, sort: hi + 1, sublobe_id: null, setting: null });
     LOBES.forEach((l, li) => {
       const lid = id();
-      out.push({ id: lid, parent_id: hid, kind: "lobe", code: l.code, path: `${h.code}.${l.code}`, label: l.en, sort: li + 1 });
-      AREAS.filter((a) => a.lobe === l.code).forEach((a, ai) => out.push({ id: id(), parent_id: lid, kind: "area", code: a.code, path: `${h.code}.${l.code}.${a.code}`, label: a.en, sort: ai + 1 }));
+      out.push({ id: lid, parent_id: hid, kind: "lobe", code: l.code, path: `${h.code}.${l.code}`, label: l.en, sort: li + 1, sublobe_id: null, setting: null });
+      AREAS.filter((a) => a.lobe === l.code).forEach((a, ai) => out.push({ id: id(), parent_id: lid, kind: "area", code: a.code, path: `${h.code}.${l.code}.${a.code}`, label: a.en, sort: ai + 1, sublobe_id: null, setting: null }));
     });
   });
   return out;

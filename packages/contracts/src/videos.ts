@@ -3,6 +3,7 @@
  * edit a video, and what clients get back.
  */
 import { z } from "zod";
+import type { RegionSettingView } from "./regions.ts";
 
 export const VIDEO_LOCALES = ["en", "he", "ar", "ru", "fr", "es", "zh"] as const;
 export type VideoLocale = (typeof VIDEO_LOCALES)[number];
@@ -52,7 +53,7 @@ export type VideoInput = z.input<typeof videoInput>;
 
 export interface RegionRef {
   id: string;
-  kind: "hemisphere" | "lobe" | "area";
+  kind: "hemisphere" | "lobe" | "sublobe" | "area";
   code: string;
   path: string;
 }
@@ -61,6 +62,10 @@ export interface BrainRegion extends RegionRef {
   parent_id: string | null;
   label: string;
   sort: number;
+  /** An area's sub-lobe (brain-region filters spec): a game filtered by the area runs with that sub-lobe's row. */
+  sublobe_id: string | null;
+  /** A sub-lobe's settings row from the product owner's table; null for every other node. */
+  setting: RegionSettingView | null;
 }
 
 export interface VideoSummary {
