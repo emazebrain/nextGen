@@ -6,7 +6,8 @@ export type Direction = "ltr" | "rtl" | "ttb" | "btt" | "tldbr" | "brdtl" | "trd
 export type Compass = "N" | "NE" | "E" | "SE" | "S" | "SW" | "W" | "NW";
 export interface Point { x: number; y: number }
 
-export const PAD = 24;
+/** Space from the play area's edge, clear of the answer-run frame. */
+export const PAD = 36;
 export const GAP = 12;
 export const MAX_SIZE = 160;
 export const MIN_SIZE = 64;

@@ -3,7 +3,7 @@
   "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "Game Runtime (design doc C4, §8): runs inside the sandboxed frame, owns Session Rules, the shared HUD and the results envelope. Builds one self-contained frame bundle per game.",
+  "description": "Game Runtime (design doc C4, \u00a78): runs inside the sandboxed frame, owns Session Rules, the shared HUD and the results envelope. Builds one self-contained frame bundle per game.",
   "exports": {
     "./protocol": "./src/protocol.ts",
     "./frames/*": "./dist/frames/*"
@@ -15,13 +15,14 @@
   },
   "dependencies": {
     "@emb/game-beep-beep": "workspace:*",
-    "@emb/game-catch-me": "workspace:*",
     "@emb/game-block-crasher": "workspace:*",
+    "@emb/game-catch-me": "workspace:*",
     "@emb/game-echo-keys": "workspace:*",
     "@emb/game-orbital-order": "workspace:*",
     "@emb/game-peek-peek": "workspace:*",
-    "@emb/game-tunnel-rush": "workspace:*",
+    "@emb/game-picture-trail": "workspace:*",
     "@emb/game-sdk": "workspace:*",
+    "@emb/game-tunnel-rush": "workspace:*",
     "@emb/session-rules": "workspace:*"
   },
   "devDependencies": {

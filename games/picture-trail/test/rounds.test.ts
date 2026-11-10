@@ -113,3 +113,12 @@ describe("buildRound", () => {
     }
   });
 });
+
+describe("buildRound and the screen", () => {
+  it("uses the picture count the screen allows for the chosen direction", () => {
+    const r = buildRound(mulberry(3), { level: 25, band: "13+", lures: false, directions: ["tldbr"], targets: [], n: 8, nFor: (d) => (d === "tldbr" ? 6 : 8), used: new Set() });
+    expect(r.n).toBe(6);
+    expect(r.question).toHaveLength(6);
+    expect(r.answer).toHaveLength(6);
+  });
+});

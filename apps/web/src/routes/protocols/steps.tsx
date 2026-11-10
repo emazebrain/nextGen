@@ -250,7 +250,11 @@ export function StepEditor({ step: s, manifest: m, onChange }: { step: GameStepI
   const regionCat = useRegionCatalog(locale);
   const runsAs = regionCat ? runsAsHemisphere(regionCat, s) : s.hemisphere;
   // A brain-region filter sets the game's own background settings (spec 2026-11-09 §5): shown, not editable.
-  const lockedByRegion = new Set(s.region_id && m.regionUse?.background ? [m.regionUse.background.temperature, m.regionUse.background.type] : []);
+  const lockedByRegion = new Set([
+    ...(s.region_id && m.regionUse?.background ? [m.regionUse.background.temperature, m.regionUse.background.type] : []),
+    // A game whose line direction follows the region keeps its own "direction" setting for steps without one.
+    ...(s.region_id && m.regionUse?.direction && m.paramsSchema.properties.direction ? ["direction"] : []),
+  ]);
 
   const tw = m.capabilities.trialWindow;
   const windows = tw ? WINDOWS_S.filter((x) => x * 1000 >= tw.minMs && x * 1000 <= tw.maxMs) : [];

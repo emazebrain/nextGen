@@ -22,6 +22,7 @@
     "@emb/game-echo-keys": "workspace:*",
     "@emb/game-orbital-order": "workspace:*",
     "@emb/game-peek-peek": "workspace:*",
+    "@emb/game-picture-trail": "workspace:*",
     "@emb/game-runtime": "workspace:*",
     "@emb/game-sdk": "workspace:*",
     "@emb/game-tunnel-rush": "workspace:*",

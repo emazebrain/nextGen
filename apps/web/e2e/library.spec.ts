@@ -346,3 +346,32 @@ test("Block Crasher: the clock waits for the first serve, then a key serves the 
   await expect(game.getByRole("heading", { name: "Great effort!" })).toBeVisible();
   await context.close();
 });
+
+test("Picture Trail: pictures one at a time along the line, then the answer run with its cue; the clock waits for Tap to start", async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await enrol(page, "nitzan@synthetic.test");
+  await page.goto("/library/picture-trail");
+  await expect(page.getByRole("heading", { level: 1, name: "Picture Trail" })).toBeVisible();
+  await page.getByLabel("Start with practice").uncheck();
+  await page.getByRole("button", { name: "Start preview" }).click();
+
+  const game = page.frameLocator("iframe.gameframe");
+  await game.getByRole("button", { name: "Play" }).click();
+  const start = game.getByRole("button", { name: "Tap to start" });
+  await expect(start).toBeVisible({ timeout: 20_000 });
+  const timer = game.locator(".hud-timer .time");
+  const before = await timer.textContent();
+  await page.waitForTimeout(1200);
+  await expect(timer).toHaveText(before!); // nothing runs until the child taps
+  await start.click();
+  await expect(game.getByText("Watch!")).toBeVisible();
+  await shot(page, "36-picture-trail-question");
+  // After the question run, the answer run starts with its cue.
+  await expect(game.getByText("Tap the one you saw!")).toBeVisible({ timeout: 15_000 });
+  await shot(page, "37-picture-trail-answer");
+  await expect(timer).not.toHaveText(before!);
+  await stopFromPauseMenu(page);
+  await expect(game.getByRole("heading", { name: "Great effort!" })).toBeVisible();
+  await context.close();
+});

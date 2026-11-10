@@ -78,6 +78,9 @@ importers:
       '@emb/game-peek-peek':
         specifier: workspace:*
         version: link:../../games/peek-peek
+      '@emb/game-picture-trail':
+        specifier: workspace:*
+        version: link:../../games/picture-trail
       '@emb/game-runtime':
         specifier: workspace:*
         version: link:../../packages/game-runtime
@@ -399,6 +402,9 @@ importers:
       '@emb/game-peek-peek':
         specifier: workspace:*
         version: link:../../games/peek-peek
+      '@emb/game-picture-trail':
+        specifier: workspace:*
+        version: link:../../games/picture-trail
       '@emb/game-sdk':
         specifier: workspace:*
         version: link:../game-sdk

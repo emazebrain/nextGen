@@ -1,7 +1,7 @@
 /** Picture Trail: levels, pace and the line (spec 2026-11-10). */
 import { describe, expect, it } from "vitest";
 import { countForLevel, MAX_LEVEL, nextLevel, showMs, startLevel } from "../src/config.ts";
-import { alongSide, linePoints } from "../src/geometry.ts";
+import { alongSide, linePoints, PAD } from "../src/geometry.ts";
 
 describe("levels and pace", () => {
   it("shows 3, 4, 5, 6 and 8 pictures in bands of six levels", () => {
@@ -40,8 +40,8 @@ describe("the line", () => {
     const l = linePoints("ltr", 4, 1200, 700);
     expect(l.n).toBe(4);
     expect(l.capped).toBe(false);
-    expect(l.points[0]!.x).toBeCloseTo(24 + l.size / 2);
-    expect(l.points[3]!.x).toBeCloseTo(1200 - 24 - l.size / 2);
+    expect(l.points[0]!.x).toBeCloseTo(PAD + l.size / 2);
+    expect(l.points[3]!.x).toBeCloseTo(1200 - PAD - l.size / 2);
     const gaps = l.points.slice(1).map((p, i) => p.x - l.points[i]!.x);
     for (const g of gaps) expect(g).toBeCloseTo(gaps[0]!);
     for (const p of l.points) expect(p.y).toBeCloseTo(350);
@@ -79,8 +79,8 @@ describe("the line", () => {
     expect(d[1]!.x - c[1]!.x).toBeGreaterThan(0); // the middle moves toward the north-east side
     expect(d[1]!.y - c[1]!.y).toBeLessThan(0);
     for (const p of d) {
-      expect(p.x).toBeGreaterThanOrEqual(24);
-      expect(p.y).toBeGreaterThanOrEqual(24);
+      expect(p.x).toBeGreaterThanOrEqual(PAD);
+      expect(p.y).toBeGreaterThanOrEqual(PAD);
     }
   });
 

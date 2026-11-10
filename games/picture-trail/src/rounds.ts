@@ -74,12 +74,16 @@ export interface RoundContext {
   targets: Compass[];
   /** Pictures shown so far this session; refilled when too few are left. The round adds its own. */
   used: Set<string>;
-  /** Pictures per run, after the screen's cap. */
+  /** Pictures per run for the level. */
   n: number;
+  /** The screen's cap for a direction (fewer fit on a small diagonal); defaults to n. */
+  nFor?: (direction: Direction) => number;
 }
 
 export function buildRound(rng: () => number, c: RoundContext): Round {
-  const n = Math.max(2, c.n);
+  const direction = pick(rng, c.directions);
+  const target = c.targets.length ? pick(rng, c.targets) : undefined;
+  const n = Math.max(2, Math.min(c.n, c.nFor ? c.nFor(direction) : c.n));
   const all = picturesFor(c.band);
   const need = 2 * n - 1;
   let fresh = all.filter((p) => !c.used.has(p.id));
@@ -87,9 +91,6 @@ export function buildRound(rng: () => number, c: RoundContext): Round {
     c.used.clear(); // the set is used up: start again, still never repeating within a round
     fresh = all;
   }
-  const direction = pick(rng, c.directions);
-  const target = c.targets.length ? pick(rng, c.targets) : undefined;
-
   const question = shuffle(rng, fresh).slice(0, n);
   const matchQ = Math.floor(rng() * n);
   const match = question[matchQ]!;

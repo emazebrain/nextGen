@@ -58,6 +58,8 @@ if (existing.rowCount) {
     await signUp(`eli@${SYNTHETIC_EMAIL_DOMAIN}`, "Eli Ben Ami"),
     await signUp(`yarden@${SYNTHETIC_EMAIL_DOMAIN}`, "Yarden Cohen"),
     await signUp(`sapir@${SYNTHETIC_EMAIL_DOMAIN}`, "Sapir Levy"),
+    // Picture Trail (spec 2026-11-10): previews the game in the library.
+    await signUp(`nitzan@${SYNTHETIC_EMAIL_DOMAIN}`, "Nitzan Golan"),
     // Brain-region filters (spec 2026-11-09): builds a step filtered to a region. Kept before Ran: entries are looked up from the end.
     await signUp(`hila@${SYNTHETIC_EMAIL_DOMAIN}`, "Hila Sela"),
     await signUp(`ran@${SYNTHETIC_EMAIL_DOMAIN}`, "Ran Biton"),

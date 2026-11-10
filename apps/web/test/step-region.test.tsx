@@ -151,3 +151,16 @@ describe("StepRegion review fixes", () => {
     expect(last!.region_id).toBeNull();
   });
 });
+
+describe("Picture Trail in the builder", () => {
+  const trail = findGame("picture-trail")!.manifest;
+  it("the line's direction is set by the brain region under a filter, and chosen by the therapist without one", async () => {
+    const a = show(trail, { hemisphere: "right", region_id: idOf("right.frontal.dlpfc") }, "en", true);
+    const settings = await screen.findByRole("group", { name: "Game settings" });
+    expect(within(settings).queryByLabelText("Direction of the line")).toBeNull();
+    expect(within(settings).getAllByText("Set by the brain region").length).toBe(3); // direction, colours, background
+    a.unmount();
+    show(trail, { hemisphere: "right" }, "en", true);
+    expect(await screen.findByLabelText("Direction of the line")).toBeInTheDocument();
+  });
+});

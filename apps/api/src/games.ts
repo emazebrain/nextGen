@@ -11,9 +11,10 @@ import { manifest as echoKeys } from "../../../games/echo-keys/src/manifest.ts";
 import { manifest as blockCrasher } from "../../../games/block-crasher/src/manifest.ts";
 import { manifest as tunnelRush } from "../../../games/tunnel-rush/src/manifest.ts";
 import { manifest as peekPeek } from "../../../games/peek-peek/src/manifest.ts";
+import { manifest as pictureTrail } from "../../../games/picture-trail/src/manifest.ts";
 import type { GameStepInput } from "../../../packages/contracts/src/index.ts";
 
-export const GAME_MANIFESTS: Record<string, GameManifest> = { [catchMe.id]: catchMe, [peekPeek.id]: peekPeek, [orbitalOrder.id]: orbitalOrder, [tunnelRush.id]: tunnelRush, [beepBeep.id]: beepBeep, [echoKeys.id]: echoKeys, [blockCrasher.id]: blockCrasher };
+export const GAME_MANIFESTS: Record<string, GameManifest> = { [catchMe.id]: catchMe, [peekPeek.id]: peekPeek, [orbitalOrder.id]: orbitalOrder, [tunnelRush.id]: tunnelRush, [beepBeep.id]: beepBeep, [echoKeys.id]: echoKeys, [blockCrasher.id]: blockCrasher, [pictureTrail.id]: pictureTrail };
 
 /** Checks a step against its game: the game exists, supports the mode, and its own settings match the schema. */
 export function checkStepAgainstGame(step: GameStepInput, index: number): Array<{ path: string; code: string }> {
