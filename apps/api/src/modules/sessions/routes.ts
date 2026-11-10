@@ -33,7 +33,7 @@ import { parseBody } from "../../validate.ts";
 import { UUID } from "../patients/routes.ts";
 import { pick } from "../videos/routes.ts";
 import { timerPositionFor, timerShown } from "@emb/session-rules";
-import { resolveRegion, seededIndex, type RegionCatalog } from "../../../../../packages/contracts/src/index.ts";
+import { ageBand, resolveRegion, seededIndex, type RegionCatalog } from "../../../../../packages/contracts/src/index.ts";
 import { loadRegionCatalog } from "../../regions.ts";
 
 const CLINIC_TICKET_TTL_S = 24 * 3600;
@@ -78,7 +78,7 @@ export interface StepRow {
  * With a brain-region filter (spec 2026-11-09) the table's row decides: `region` carries it, the hemisphere follows the
  * row (cold → right, warm → left), and games that declare `regionUse.background` get their background from it.
  */
-export function buildParams(step: StepRow, patient: { preferred_locale: string; colour_vision_deficiency: boolean }, seed: number, regions?: RegionCatalog) {
+export function buildParams(step: StepRow, patient: { preferred_locale: string; colour_vision_deficiency: boolean; date_of_birth?: string | null }, seed: number, regions?: RegionCatalog) {
   const ns = step.game_id.replace(/-/g, "_");
   const own: Record<string, unknown> = { ...step.game_params };
   if (patient.colour_vision_deficiency && GAME_MANIFESTS[step.game_id]?.paramsSchema.properties.cvd_mode) own.cvd_mode = true; // from the patient record (§8.1)
@@ -106,6 +106,8 @@ export function buildParams(step: StepRow, patient: { preferred_locale: string; 
     practice: step.practice === "auto" ? (step.sessions_completed === 0 ? "on" : "off") : step.practice,
     instructions: step.sessions_completed < 2 ? "always" : "short",
     lang: GAME_LANGS.has(patient.preferred_locale) ? patient.preferred_locale : "en",
+    // Only the band, never the birth date (picture-line game spec 2026-11-10).
+    age_band: ageBand(patient.date_of_birth, new Date()),
     sound: "off",
     reduce_motion: "os",
     high_contrast: false,
@@ -120,7 +122,7 @@ export function buildParams(step: StepRow, patient: { preferred_locale: string; 
 
 
 export type LaunchRows = {
-  row: { id: string; seq: number; week: number; status: string; assignment_id: string; assignment_name: string; total: number; patient_id: string; given_name: string; family_name: string; preferred_locale: string; alert: string | null; colour_vision_deficiency: boolean; planned_date: string };
+  row: { id: string; seq: number; week: number; status: string; assignment_id: string; assignment_name: string; total: number; patient_id: string; given_name: string; family_name: string; preferred_locale: string; alert: string | null; colour_vision_deficiency: boolean; planned_date: string; date_of_birth: string | null };
   steps: Array<StepRow & { done: boolean }>;
   videos: Map<string, { id: string; version: number; source: "upload" | "youtube"; youtube_id: string | null; duration_s: number | null; titles: Record<string, string>; sha256: Buffer | null; has_file: boolean; bytes: number | null }>;
 };
@@ -131,6 +133,7 @@ export async function loadLaunchRows(db: pg.PoolClient, id: string): Promise<Lau
     `SELECT ps.id, ps.seq, ps.week, ps.status, to_char(ps.planned_date, 'YYYY-MM-DD') AS planned_date, a.id AS assignment_id, a.name AS assignment_name, a.status AS assignment_status,
             (SELECT count(*)::int FROM app.planned_session x WHERE x.assignment_id = a.id AND x.status <> 'cancelled') AS total,
             p.id AS patient_id, p.given_name, p.family_name, p.preferred_locale, p.alert, p.colour_vision_deficiency,
+            to_char(p.date_of_birth, 'YYYY-MM-DD') AS date_of_birth,
             app.patient_can_play(p.id) AS can_play, app.can_treat_patient(p.id) AS can_treat
        FROM app.planned_session ps
        JOIN app.protocol_assignment a ON a.id = ps.assignment_id

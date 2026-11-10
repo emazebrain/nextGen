@@ -191,3 +191,15 @@ export function canonicalJson(value: unknown): string {
     .map((k) => `${JSON.stringify(k)}:${canonicalJson(obj[k])}`)
     .join(",")}}`;
 }
+
+/** Picture sets and pace by age (picture-line game spec 2026-11-10). Only the band reaches a game, never the birth date. */
+export type AgeBand = "4-6" | "7-9" | "10-12" | "13+";
+
+/** A child's age band on a given day; 12 years ("10-12") when the birth date is unknown. */
+export function ageBand(dateOfBirth: string | null | undefined, on: Date): AgeBand {
+  if (!dateOfBirth) return "10-12";
+  const [y, m, d] = dateOfBirth.split("-").map(Number) as [number, number, number];
+  let age = on.getUTCFullYear() - y;
+  if (on.getUTCMonth() + 1 < m || (on.getUTCMonth() + 1 === m && on.getUTCDate() < d)) age -= 1;
+  return age < 7 ? "4-6" : age < 10 ? "7-9" : age < 13 ? "10-12" : "13+";
+}

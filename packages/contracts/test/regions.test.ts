@@ -141,3 +141,18 @@ describe("tableConsistencyErrors", () => {
     expect(tableConsistencyErrors([{ path: "left.z", ...warm({ target_locations: ["W"] }) }])[0]).toContain("left.z");
   });
 });
+
+describe("ageBand (picture-line game spec 2026-11-10)", () => {
+  it("bands a child's age on a given day, 12 years when unknown", async () => {
+    const { ageBand } = await import("../src/index.ts");
+    const on = new Date("2026-11-10T12:00:00Z");
+    expect(ageBand("2019-11-11", on)).toBe("4-6"); // 6 years 364 days
+    expect(ageBand("2019-11-10", on)).toBe("7-9"); // 7 today
+    expect(ageBand("2016-11-11", on)).toBe("7-9");
+    expect(ageBand("2016-11-10", on)).toBe("10-12");
+    expect(ageBand("2014-11-10", on)).toBe("10-12"); // 12
+    expect(ageBand("2013-11-10", on)).toBe("13+");
+    expect(ageBand("2023-01-01", on)).toBe("4-6"); // younger children use the youngest set
+    expect(ageBand(null, on)).toBe("10-12");
+  });
+});

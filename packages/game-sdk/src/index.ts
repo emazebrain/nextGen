@@ -113,6 +113,8 @@ export interface PlatformParams {
   seed: number;
   input_assist: "none" | "large_hit" | "dwell_800ms" | "switch_scan";
   speed_scale: number; // 0.5–1.0
+  /** The child's age band, for age-appropriate pictures and pace (picture-line game spec 2026-11-10). "10-12" when unknown. */
+  age_band?: "4-6" | "7-9" | "10-12" | "13+";
   /**
    * The step's brain-region filter, resolved by the host at launch (brain-region filters spec 2026-11-09). Absent when
    * the step has none (side only). `hemisphere` above already follows the row: cold → right, warm → left.

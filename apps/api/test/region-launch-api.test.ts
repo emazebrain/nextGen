@@ -165,6 +165,21 @@ describe.skipIf(!ADMIN_URL)("brain-region filters at launch", () => {
     }
   });
 
+  it("launch and offline params carry the child's age band (picture-line game spec)", async () => {
+    const { ageBand } = await import("../../../packages/contracts/src/index.ts");
+    const p = await patientWith({ hemisphere: "right" });
+    const params = await launch(p.sessions[0]!);
+    expect(params.age_band).toBe(ageBand("2018-03-01", new Date()));
+    const res = await yael.api(`/v1/offline/bundle?device=${device}&lang=en`);
+    expect(JSON.stringify(res.body)).toContain(`"age_band":"${ageBand("2018-03-01", new Date())}"`);
+  });
+
+  it("a different age band in a package is not a step change", async () => {
+    const p = await patientWith({ hemisphere: "right" });
+    const params = await launch(p.sessions[0]!);
+    expect((await send(p, p.sessions[1]!, { ...params, age_band: params.age_band === "13+" ? "10-12" : "13+" })).body.outcome).toBe("accepted");
+  });
+
   it("progress shows the region a session ran with", async () => {
     const p = await patientWith({ hemisphere: "right", region_id: rid("right.temporal.ba21") });
     const params = await launch(p.sessions[0]!);

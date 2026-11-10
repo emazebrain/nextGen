@@ -15,7 +15,7 @@
  */
 import { syntheticGuardian, syntheticPatients } from "@emb/db/synthetic";
 import { decide, type Rule } from "@emb/progression";
-import { isVideoStep, regionCatalog, resolveRegion, scheduleDates, seededIndex } from "@emb/contracts";
+import { ageBand, isVideoStep, regionCatalog, resolveRegion, scheduleDates, seededIndex } from "@emb/contracts";
 import { demoRegions } from "./regions.ts";
 import { timerPositionFor, timerShown } from "@emb/session-rules";
 import type {
@@ -560,6 +560,7 @@ function params(s: GameAssignmentStep, p: Patient) {
     practice: s.practice === "auto" ? (s.sessions_completed === 0 ? "on" : "off") : s.practice,
     instructions: s.sessions_completed < 2 ? "always" : "short",
     lang: p.preferred_locale,
+    age_band: ageBand(p.date_of_birth, new Date()),
     sound: "off",
     reduce_motion: "os",
     high_contrast: false,
