@@ -87,6 +87,8 @@ class PictureTrail implements GameModule {
   private size = 120;
   private capped = false;
   private card: CardView | null = null;
+  /** All visible answer-phase cards, keyed by slot. */
+  private answerCards = new Map<number, CardView>();
   private answerPhase = false;
   private hint = false;
   private clock = 0;
@@ -242,6 +244,10 @@ class PictureTrail implements GameModule {
       const pt = this.points[this.card.slot];
       if (pt) this.card.root.position.set(pt.x, pt.y);
     }
+    for (const cv of this.answerCards.values()) {
+      const pt = this.points[cv.slot];
+      if (pt) cv.root.position.set(pt.x, pt.y);
+    }
     this.drawFrame();
   }
 
@@ -254,23 +260,25 @@ class PictureTrail implements GameModule {
         this.drawBackground();
         this.drawFrame();
         this.showPhaseLabel(this.ctx.t("find"));
-      } else if (e.type === "wrong") this.onWrong();
+      } else if (e.type === "wrong") this.onWrong(e.slot);
       else if (e.type === "miss") {
         if (!this.practicing) this.ctx.session.lifeLossEvent("missed_match");
-      } else if (e.type === "correct") this.onCorrect(e.rt);
+      } else if (e.type === "correct") this.onCorrect(e.rt, e.slot);
       else if (e.type === "roundEnd") this.onRoundEnd(e);
     }
   }
 
-  private onCorrect(_rt: number) {
-    if (this.card) this.burst(this.card.root.x, this.card.root.y);
+  private onCorrect(_rt: number, slot?: number) {
+    const cv = slot !== undefined ? this.answerCards.get(slot) : this.card;
+    if (cv) this.burst(cv.root.x, cv.root.y);
     this.say(this.ctx.t("found"), 900);
   }
 
-  private onWrong() {
-    if (this.card) {
-      this.card.body.alpha = 0.45;
-      if (!this.ctx.reducedMotion) this.shake = { c: this.card.root, left: 300, x: this.card.root.x };
+  private onWrong(slot?: number) {
+    const cv = slot !== undefined ? this.answerCards.get(slot) : this.card;
+    if (cv) {
+      cv.body.alpha = 0.45;
+      if (!this.ctx.reducedMotion) this.shake = { c: cv.root, left: 300, x: cv.root.x };
     }
     if (!this.practicing) this.ctx.session.lifeLossEvent("wrong_picture");
   }
@@ -283,6 +291,7 @@ class PictureTrail implements GameModule {
     if (this.practicing) {
       this.after(this.ctx.reducedMotion ? 300 : FEEDBACK_MS, () => {
         this.hideCard();
+        this.hideAllAnswerCards();
         const done = this.onRoundDone;
         this.onRoundDone = null;
         done?.();
@@ -320,6 +329,7 @@ class PictureTrail implements GameModule {
     }
     this.after(this.ctx.reducedMotion ? 300 : FEEDBACK_MS, () => {
       this.hideCard();
+      this.hideAllAnswerCards();
       this.nextRound();
     });
   }
@@ -350,14 +360,22 @@ class PictureTrail implements GameModule {
     this.engine.stop();
     this.startBtn.hidden = true;
     this.hideCard();
+    this.hideAllAnswerCards();
     this.answerPhase = false;
     this.drawBackground();
     this.drawFrame();
   }
 
   private tap(slot: number) {
-    if (this.ended || this.paused || !this.card || this.card.slot !== slot || this.card.phase !== "answer") return;
-    this.render(this.engine.tap(this.clock));
+    if (this.ended || this.paused) return;
+    // Answer-all mode: any visible answer card is tappable.
+    if (this.answerCards.size > 0) {
+      if (!this.answerCards.has(slot)) return;
+      this.render(this.engine.tap(this.clock, slot));
+      return;
+    }
+    if (!this.card || this.card.slot !== slot || this.card.phase !== "answer") return;
+    this.render(this.engine.tap(this.clock, slot));
   }
 
   private onKey = (e: KeyboardEvent) => {
@@ -383,6 +401,13 @@ class PictureTrail implements GameModule {
       const age = this.clock - this.card.born;
       const s = age < 180 ? 0.6 + 0.4 * easeOutBack(age / 180) : 1;
       this.card.body.scale.set(s);
+    }
+    if (!this.ctx.reducedMotion) {
+      for (const cv of this.answerCards.values()) {
+        const age = this.clock - cv.born;
+        const s = age < 180 ? 0.6 + 0.4 * easeOutBack(age / 180) : 1;
+        cv.body.scale.set(s);
+      }
     }
     if (this.shake) {
       this.shake.left -= dt;
@@ -463,7 +488,7 @@ class PictureTrail implements GameModule {
   }
 
   private showCard(phase: "question" | "answer", slot: number, picture: Picture) {
-    this.hideCard();
+    if (phase === "question") this.hideCard();
     const pt = this.points[slot];
     if (!pt) return;
     const L = this.look;
@@ -501,7 +526,12 @@ class PictureTrail implements GameModule {
     }
     if (!this.ctx.reducedMotion) body.scale.set(0.6);
     this.layer.addChild(root);
-    this.card = { root, body, slot, phase, born: this.clock };
+    const cv: CardView = { root, body, slot, phase, born: this.clock };
+    if (phase === "answer") {
+      this.answerCards.set(slot, cv);
+    } else {
+      this.card = cv;
+    }
   }
 
   private hideCard() {
@@ -509,6 +539,14 @@ class PictureTrail implements GameModule {
     if (this.shake?.c === this.card.root) this.shake = null;
     this.card.root.destroy({ children: true });
     this.card = null;
+  }
+
+  private hideAllAnswerCards() {
+    for (const cv of this.answerCards.values()) {
+      if (this.shake?.c === cv.root) this.shake = null;
+      cv.root.destroy({ children: true });
+    }
+    this.answerCards.clear();
   }
 
   private burst(x: number, y: number) {
@@ -585,7 +623,7 @@ class PictureTrail implements GameModule {
     });
   }
 
-  /** A large, centred label that flashes for ~800 ms to announce the phase. */
+  /** A large, centred label that flashes for ~1 s to announce the phase. */
   private showPhaseLabel(text: string) {
     this.phaseLabel.innerHTML = "";
     const el = document.createElement("div");
@@ -593,7 +631,7 @@ class PictureTrail implements GameModule {
     el.textContent = text;
     this.phaseLabel.hidden = false;
     this.phaseLabel.appendChild(el);
-    this.after(800, () => {
+    this.after(1000, () => {
       if (el.parentElement === this.phaseLabel) el.remove();
       if (!this.phaseLabel.firstChild) this.phaseLabel.hidden = true;
     });

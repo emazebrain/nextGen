@@ -38,6 +38,9 @@ export function showMs(level: number, band: AgeBand, speedScale: number, overrid
 /** The gap between two pictures in a run: a quarter of the show time. */
 export const gapMs = (show: number) => Math.round(show / 4);
 
+/** How long ALL answer pictures stay on screen at once (ms). */
+export const ANSWER_SHOW_MS = 4000;
+
 /** Two correct rounds in a row → up; two non-correct in a row → down (results since the last change). */
 export function nextLevel(level: number, sinceChange: boolean[]): number {
   const last = sinceChange.slice(-2);

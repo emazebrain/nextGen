@@ -13,61 +13,61 @@ const GAP = 250;
 const kinds = (es: EngineEvent[]) => es.map((e) => (e.type === "show" || e.type === "hide" ? `${e.type}:${e.phase}:${e.slot}` : e.type));
 
 describe("TrailEngine", () => {
-  it("shows the question run one picture at a time, then the answer run with no pause", () => {
+  it("shows the question run one picture at a time, then all answer pictures at once", () => {
     const e = new TrailEngine();
     expect(kinds(e.startRound(round, SHOW, 0))).toEqual(["show:question:0"]);
     expect(kinds(e.tick(999))).toEqual([]);
     expect(kinds(e.tick(1000))).toEqual(["hide:question:0"]);
     expect(kinds(e.tick(1250))).toEqual(["show:question:1"]);
-    expect(kinds(e.tick(3500))).toEqual(["hide:question:1", "show:question:2", "hide:question:2", "cue", "show:answer:0"]);
+    // At 3500: last question hides, cue fires, all 3 answer pictures shown at once
+    expect(kinds(e.tick(3500))).toEqual([
+      "hide:question:1", "show:question:2", "hide:question:2",
+      "cue", "show:answer:0", "show:answer:1", "show:answer:2",
+    ]);
   });
 
-  it("a tap on the match ends the round as correct, with the time since the match appeared", () => {
+  it("a tap on the match ends the round as correct, with the time since all answers appeared", () => {
     const e = new TrailEngine();
     e.startRound(round, SHOW, 0);
-    e.tick(3500); // answer 0 showing since 3500
-    e.tick(4750); // answer 1 (the match) shows at 4750
-    const out = e.tap(5050);
+    e.tick(3500); // all answer pictures shown at 3500
+    const out = e.tap(3800, 1); // tap match (slot 1) at 3800 → RT = 300
     expect(kinds(out)).toEqual(["correct", "roundEnd"]);
-    expect(out.find((x) => x.type === "roundEnd")).toMatchObject({ outcome: "correct", rt: 300, wrongTaps: 0, answerShown: 2 });
+    expect(out.find((x) => x.type === "roundEnd")).toMatchObject({ outcome: "correct", rt: 300, wrongTaps: 0, answerShown: 3 });
     expect(e.tick(9000)).toEqual([]);
   });
 
   it("wrong taps then the match: a life per wrong picture, the run goes on, and it still counts as correct", () => {
     const e = new TrailEngine();
     e.startRound(round, SHOW, 0);
-    e.tick(3500);
-    expect(kinds(e.tap(3600))).toEqual(["wrong"]);
-    expect(kinds(e.tap(3700))).toEqual([]); // one life per picture, however many taps
-    e.tick(4750);
-    const out = e.tap(4800);
+    e.tick(3500); // all answer pictures shown
+    expect(kinds(e.tap(3600, 0))).toEqual(["wrong"]); // tap slot 0 (wrong)
+    expect(kinds(e.tap(3700, 0))).toEqual([]); // one life per picture, however many taps
+    const out = e.tap(3800, 1); // tap match (slot 1)
     expect(out.find((x) => x.type === "roundEnd")).toMatchObject({ outcome: "correct", wrongTaps: 1 });
   });
 
-  it("the match passing untapped is a miss; the round ends when the run ends", () => {
+  it("the match not tapped within 4000 ms is a miss; the round ends", () => {
     const e = new TrailEngine();
     e.startRound(round, SHOW, 0);
-    e.tick(3500);
-    expect(kinds(e.tick(5750))).toEqual(["hide:answer:0", "show:answer:1", "hide:answer:1", "miss"]);
-    const end = e.tick(7000);
-    expect(kinds(end)).toEqual(["show:answer:2", "hide:answer:2", "roundEnd"]);
+    e.tick(3500); // all answers shown at 3500
+    const end = e.tick(7500); // 3500 + 4000 = 7500 → timeout
+    expect(kinds(end)).toEqual(["miss", "roundEnd"]);
     expect(end.at(-1)).toMatchObject({ outcome: "omission", rt: null, wrongTaps: 0, answerShown: 3 });
   });
 
-  it("a wrong tap and no match is a commission", () => {
+  it("a wrong tap and no match tap within the time is a commission", () => {
     const e = new TrailEngine();
     e.startRound(round, SHOW, 0);
     e.tick(3500);
-    e.tap(3600);
-    expect(e.tick(7000).at(-1)).toMatchObject({ outcome: "commission", wrongTaps: 1 });
+    e.tap(3600, 0); // wrong tap on slot 0
+    expect(e.tick(7500).at(-1)).toMatchObject({ outcome: "commission", wrongTaps: 1 });
   });
 
-  it("taps between pictures and during the question run are ignored", () => {
+  it("taps during the question run are ignored", () => {
     const e = new TrailEngine();
     e.startRound(round, SHOW, 0);
-    expect(e.tap(500)).toEqual([]); // question run
-    e.tick(4500);
-    expect(e.tap(4600)).toEqual([]); // the gap after answer 0
+    expect(e.tap(500)).toEqual([]); // question run, no slot
+    expect(e.tap(500, 0)).toEqual([]); // question run, with slot
   });
 
   it("ends mid-round cleanly", () => {
@@ -76,7 +76,7 @@ describe("TrailEngine", () => {
     e.tick(3600);
     e.stop();
     expect(e.tick(9000)).toEqual([]);
-    expect(e.tap(9001)).toEqual([]);
+    expect(e.tap(9001, 1)).toEqual([]);
     expect(e.active).toBe(false);
   });
 });
