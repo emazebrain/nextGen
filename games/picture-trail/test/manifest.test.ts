@@ -39,3 +39,10 @@ describe("strings", () => {
     expect(strings.en.credits).toMatch(/Twemoji.*CC-BY 4\.0/);
   });
 });
+
+describe("credits", () => {
+  it("the manifest carries the picture credit for the library page", () => {
+    expect(manifest.credits?.en).toMatch(/Twemoji.*CC-BY 4\.0/);
+    expect(manifest.credits?.he).toMatch(/Twemoji.*CC-BY 4\.0/);
+  });
+});

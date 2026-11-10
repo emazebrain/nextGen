@@ -703,5 +703,6 @@
   "step.region": "Region: {label}",
   "progress.col.region": "Brain region",
   "step.paletteVaries": "look varies by session",
-  "stepEditor.timerVaries": "The clock's corner and colours follow the hemisphere each session's sub-lobe sets."
+  "stepEditor.timerVaries": "The clock's corner and colours follow the hemisphere each session's sub-lobe sets.",
+  "library.credits": "Credits"
 }

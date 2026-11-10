@@ -703,5 +703,6 @@
   "step.region": "אזור: {label}",
   "progress.col.region": "אזור במוח",
   "step.paletteVaries": "המראה משתנה בין מפגשים",
-  "stepEditor.timerVaries": "פינת השעון והצבעים נקבעים לפי ההמיספרה שתת-האונה של כל מפגש קובעת."
+  "stepEditor.timerVaries": "פינת השעון והצבעים נקבעים לפי ההמיספרה שתת-האונה של כל מפגש קובעת.",
+  "library.credits": "קרדיטים"
 }

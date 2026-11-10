@@ -11,7 +11,7 @@
 import "pixi.js/unsafe-eval";
 import { Application, ColorMatrixFilter, Container, FillGradient, Graphics, Rectangle, Sprite, Texture, type Ticker } from "pixi.js";
 import type { GameDefinition, GameModule, InitContext, LevelHistoryRow, PauseReason, SessionStatus } from "@emb/game-sdk";
-import { countForLevel, MAX_LEVEL, nextLevel, showMs, startLevel, usesLures, type AgeBand, type Difficulty } from "./config.ts";
+import { countForLevel, finalLevelOutcome, MAX_LEVEL, nextLevel, showMs, startLevel, usesLures, type AgeBand, type Difficulty } from "./config.ts";
 import { TrailEngine, type EngineEvent } from "./engine.ts";
 import { linePoints, type Compass, type Direction, type Point } from "./geometry.ts";
 import { computeMetrics, type RoundRecord } from "./metrics.ts";
@@ -49,7 +49,10 @@ interface Timer {
   fn: () => void;
 }
 interface CardView {
+  /** Positioned and tappable; never scaled, so the tap area is full size from the first frame. */
   root: Container;
+  /** What the child sees: pops in by scaling. */
+  body: Container;
   slot: number;
   phase: "question" | "answer";
   born: number;
@@ -171,7 +174,7 @@ class PictureTrail implements GameModule {
 
   end(status: SessionStatus): Record<string, number | string | object> {
     this.stopAll();
-    this.flushLevel(status === "time_up" ? "timeout" : "failed");
+    this.flushLevel(finalLevelOutcome(status, this.maxClears));
     return { ...computeMetrics(this.records), score: this.score, age_band: this.band, directions: this.directions.join(",") };
   }
 
@@ -223,7 +226,8 @@ class PictureTrail implements GameModule {
   private layoutRound() {
     if (!this.round) return;
     const { w, h } = this.area();
-    const l = linePoints(this.round.direction, this.round.n, w, h, this.round.target);
+    // keepN: a resize mid-round must not drop slots the round already uses (the match could vanish).
+    const l = linePoints(this.round.direction, this.round.n, w, h, this.round.target, { keepN: true });
     this.points = l.points.map((pt) => ({ x: pt.x, y: pt.y + HUD_SPACE }));
     this.size = l.size;
   }
@@ -260,7 +264,7 @@ class PictureTrail implements GameModule {
 
   private onWrong() {
     if (this.card) {
-      this.card.root.alpha = 0.45;
+      this.card.body.alpha = 0.45;
       if (!this.ctx.reducedMotion) this.shake = { c: this.card.root, left: 300, x: this.card.root.x };
     }
     if (!this.practicing) this.ctx.session.lifeLossEvent("wrong_picture");
@@ -284,7 +288,7 @@ class PictureTrail implements GameModule {
     this.records.push(rec);
     this.levelRows.push(rec);
     if (e.outcome === "correct") this.score += 10 * r.n;
-    const pt = this.points[r.matchA]!;
+    const pt = this.points[r.matchA] ?? { x: this.app.screen.width / 2, y: this.app.screen.height / 2 };
     const cx = this.app.screen.width / 2;
     this.ctx.session.trial({
       trialId: String(this.roundNo),
@@ -371,7 +375,7 @@ class PictureTrail implements GameModule {
     if (this.card && !this.ctx.reducedMotion) {
       const age = this.clock - this.card.born;
       const s = age < 180 ? 0.6 + 0.4 * easeOutBack(age / 180) : 1;
-      this.card.root.scale.set(s);
+      this.card.body.scale.set(s);
     }
     if (this.shake) {
       this.shake.left -= dt;
@@ -457,9 +461,11 @@ class PictureTrail implements GameModule {
     const s = this.size;
     const root = new Container();
     root.position.set(pt.x, pt.y);
+    const body = new Container();
+    root.addChild(body);
     const shadow = new Graphics().roundRect(-s / 2 + 3, -s / 2 + 6, s, s, s * 0.22).fill({ color: "#000000", alpha: 0.12 });
     const face = new Graphics().roundRect(-s / 2, -s / 2, s, s, s * 0.22).fill(L.card).stroke({ width: Math.max(3, s * 0.04), color: L.cardEdge });
-    root.addChild(shadow, face);
+    body.addChild(shadow, face);
     const tex = this.textures.get(picture.id);
     if (tex) {
       const sp = new Sprite(tex);
@@ -470,11 +476,11 @@ class PictureTrail implements GameModule {
         f.desaturate();
         sp.filters = [f];
       }
-      root.addChild(sp);
+      body.addChild(sp);
     }
     const round = this.round;
     if (phase === "answer" && this.hint && round && slot === round.matchA) {
-      root.addChild(new Graphics().roundRect(-s / 2 - 10, -s / 2 - 10, s + 20, s + 20, s * 0.26).stroke({ width: 6, color: L.good }));
+      body.addChild(new Graphics().roundRect(-s / 2 - 10, -s / 2 - 10, s + 20, s + 20, s * 0.26).stroke({ width: 6, color: L.good }));
     }
     if (phase === "answer" && round && slot === round.matchA) this.matchShownAt = this.clock;
     if (phase === "answer") {
@@ -484,10 +490,9 @@ class PictureTrail implements GameModule {
       root.hitArea = new Rectangle(-s / 2 - extra / 2, -s / 2 - extra / 2, s + extra, s + extra);
       root.on("pointerdown", () => this.tap(slot));
     }
-    if (this.ctx.reducedMotion) root.alpha = 1;
-    else root.scale.set(0.6);
+    if (!this.ctx.reducedMotion) body.scale.set(0.6);
     this.layer.addChild(root);
-    this.card = { root, slot, phase, born: this.clock };
+    this.card = { root, body, slot, phase, born: this.clock };
   }
 
   private hideCard() {

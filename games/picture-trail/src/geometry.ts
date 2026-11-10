@@ -42,10 +42,12 @@ function sizeFor(dir: Direction, n: number, w: number, h: number): number {
  * The n points of a line in direction `dir` on a w × h area, shifted toward `target` across the line. When the pictures
  * would be smaller than MIN_SIZE, n is reduced (never below 2) and `capped` says so.
  */
-export function linePoints(dir: Direction, n: number, w: number, h: number, target?: Compass): { points: Point[]; size: number; n: number; capped: boolean } {
+export function linePoints(dir: Direction, n: number, w: number, h: number, target?: Compass, opts: { keepN?: boolean } = {}): { points: Point[]; size: number; n: number; capped: boolean } {
   let count = Math.max(2, n);
   let size = sizeFor(dir, count, w, h);
-  while (size < MIN_SIZE && count > 2) size = sizeFor(dir, --count, w, h);
+  // A round already under way keeps its count when the screen changes (the device turned): smaller pictures, same slots.
+  if (opts.keepN) size = Math.max(24, size);
+  else while (size < MIN_SIZE && count > 2) size = sizeFor(dir, --count, w, h);
   const capped = count < n;
   size = Math.floor(size);
   const d = DIR[dir];

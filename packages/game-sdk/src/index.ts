@@ -81,6 +81,8 @@ export interface GameManifest {
   metrics: MetricDefinition[];
   /** Short description for the library card. */
   summary: LocalText;
+  /** Credit for third-party artwork the game uses (e.g. CC-BY), shown on its library page. */
+  credits?: LocalText;
   ageRange: [number, number];
   minutes: number;
   assetPacks: Record<Palette | "shared", string>;

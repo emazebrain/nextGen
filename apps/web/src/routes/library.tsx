@@ -171,6 +171,12 @@ export function GamePage() {
               </dt>
               <dd>{t("library.ages", { from: m.ageRange[0], to: m.ageRange[1] })}</dd>
             </div>
+            {m.credits && (
+              <div>
+                <dt>{t("library.credits")}</dt>
+                <dd>{localText(m.credits, locale)}</dd>
+              </div>
+            )}
           </dl>
         </Card>
         <Card as="section" labelledBy="g-try">

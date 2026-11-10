@@ -1,6 +1,6 @@
 /** Picture Trail: levels, pace and the line (spec 2026-11-10). */
 import { describe, expect, it } from "vitest";
-import { countForLevel, MAX_LEVEL, nextLevel, showMs, startLevel } from "../src/config.ts";
+import { countForLevel, finalLevelOutcome, MAX_LEVEL, nextLevel, showMs, startLevel } from "../src/config.ts";
 import { alongSide, linePoints, PAD } from "../src/geometry.ts";
 
 describe("levels and pace", () => {
@@ -94,5 +94,27 @@ describe("the line", () => {
     expect(alongSide("tldbr", "NE")).toBe(0); // across the line
     expect(alongSide("tldbr", "W")).toBe(-1);
     expect(alongSide("trdbl", "S")).toBe(1);
+  });
+});
+
+describe("review fixes", () => {
+  it("re-laying out a round keeps its picture count when the screen turns", () => {
+    const portrait = linePoints("tldbr", 7, 375, 560, undefined, { keepN: true });
+    expect(portrait.n).toBe(7);
+    expect(portrait.points).toHaveLength(7);
+    expect(portrait.capped).toBe(false);
+    expect(portrait.size).toBeGreaterThan(0);
+  });
+
+  it("a fixed time per picture below 500 ms runs at 500 ms, not automatic", () => {
+    expect(showMs(5, "10-12", 1, 300)).toBe(500);
+    expect(showMs(5, "10-12", 1, 2600)).toBe(2500);
+  });
+
+  it("the last level row says cleared when the child finished every level", () => {
+    expect(finalLevelOutcome("completed", 2)).toBe("cleared");
+    expect(finalLevelOutcome("time_up", 0)).toBe("timeout");
+    expect(finalLevelOutcome("out_of_lives", 0)).toBe("failed");
+    expect(finalLevelOutcome("abandoned", 1)).toBe("failed");
   });
 });

@@ -29,7 +29,7 @@ export function startLevel(d: Difficulty): number {
  * speed scale (0.5–1.0 slows). A therapist's fixed time (500–2500 ms) replaces it; 0 means automatic.
  */
 export function showMs(level: number, band: AgeBand, speedScale: number, override = 0): number {
-  if (override >= 500 && override <= 2500) return Math.round(override);
+  if (override > 0) return Math.round(clamp(override, 500, 2500));
   const pos = (clamp(level, 1, MAX_LEVEL) - 1) % BAND_SIZE;
   const scale = clamp(speedScale || 1, 0.5, 1);
   return Math.round((BASE_SHOW_MS[band] * 0.96 ** pos) / scale);
@@ -51,4 +51,11 @@ export function usesLures(level: number, difficulty: Difficulty, setting: "auto"
   if (setting === "on") return true;
   if (setting === "off") return false;
   return difficulty >= 4 && level >= LURE_FROM_LEVEL;
+}
+
+/** The last level row's outcome when the session ends: finishing every level is "cleared", not a failure. */
+export function finalLevelOutcome(status: "completed" | "time_up" | "out_of_lives" | "abandoned", maxClears: number): "cleared" | "failed" | "timeout" {
+  if (status === "time_up") return "timeout";
+  if (status === "completed" && maxClears >= 2) return "cleared";
+  return "failed";
 }
