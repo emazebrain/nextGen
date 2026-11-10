@@ -119,7 +119,7 @@ Per level, a `levelComplete` row. Session metrics (computed in a pure `metrics.t
 | key | meaning | unit |
 | --- | --- | --- |
 | accuracy | correct rounds ÷ rounds | ratio |
-| miss_rate | rounds where the match passed untapped ÷ rounds | ratio |
+| miss_rate | rounds with no tap at all (the match passed untapped) ÷ rounds | ratio |
 | wrong_tap_rate | wrong-picture taps ÷ pictures shown in answer runs | ratio |
 | rt_correct_ms | median response time on correct rounds | ms |
 | span | largest N with at least two correct rounds | count |
