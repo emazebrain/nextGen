@@ -1,0 +1,24 @@
+{
+  "name": "@emb/game-picture-trail",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Picture Trail (spec 2026-11-10): pictures appear one at a time along a line, then find the one you saw. Imports only @emb/game-sdk and its renderer.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./manifest": "./src/manifest.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@emb/game-sdk": "workspace:*",
+    "pixi.js": "^8.9.0"
+  },
+  "devDependencies": {
+    "@twemoji/svg": "15.0.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0"
+  }
+}
