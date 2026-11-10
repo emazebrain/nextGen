@@ -546,13 +546,15 @@ async function stepChanged(db: pg.PoolClient, claims: TicketClaimsV2): Promise<b
   const ns = `${step.game_id.replace(/-/g, "_")}.`;
   const exact = claims.allowed.exact;
   const was = (exact.region as { path?: string } | undefined)?.path ?? null;
-  if (!step.region_id && was === null) {
+  // The filter as a launch would resolve it now: a region whose row is gone launches side only (null), as buildParams does.
+  const cat = step.region_id ? await loadRegionCatalog(db) : null;
+  const nowPath = cat && step.region_id && resolveRegion(cat, step.region_id, 0) ? cat.byId.get(step.region_id)!.path : null;
+  if (nowPath === null && was === null) {
     const keys = [...STRUCTURAL, ...Object.keys(now).filter((k) => k.startsWith(ns) && k !== `${ns}cvd_mode`)];
     return keys.some((k) => JSON.stringify((now as Record<string, unknown>)[k] ?? null) !== JSON.stringify(exact[k] ?? null));
   }
   // A filtered step (spec 2026-11-09 §6): compare the filter the therapist chose, not what it resolved to. The hemisphere,
   // timer corner, drawn sub-lobe, row revision and the row-driven background legitimately differ between packages.
-  const nowPath = step.region_id ? ((await loadRegionCatalog(db)).byId.get(step.region_id)?.path ?? step.region_id) : null;
   if (nowPath !== was) return true;
   if (timerShown(step.timer_position) !== (exact.timer_position !== "hidden")) return true;
   const bg = GAME_MANIFESTS[step.game_id]?.regionUse?.background;

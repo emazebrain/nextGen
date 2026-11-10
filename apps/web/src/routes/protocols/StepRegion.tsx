@@ -20,6 +20,13 @@ export function useRegionCatalog(locale: string): RegionCatalog | null {
   return useMemo(() => (regions.data ? regionCatalog(regions.data) : null), [regions.data]);
 }
 
+/** The hemisphere a step's game runs as: its side, or its row's (cold → right); "varies" when a lobe draws both. */
+export function runsAsHemisphere(cat: RegionCatalog, s: Pick<GameStepInput, "hemisphere" | "region_id">): Side | "varies" {
+  if (!s.region_id) return s.hemisphere;
+  const hs = [...new Set(sublobesFor(cat, s.region_id).map((o) => hemisphereForSetting(o.setting!)))];
+  return hs.length === 0 ? s.hemisphere : hs.length === 1 ? hs[0]! : "varies";
+}
+
 /** "Right · Superior temporal", "Left · BA46", "Right · Frontal lobe". */
 export function regionLabel(cat: RegionCatalog, path: string, short: (s: Side) => string): string | null {
   const r = cat.byPath.get(path);
@@ -80,7 +87,11 @@ export function StepRegion({ step: s, manifest: m, onChange }: { step: GameStepI
         legend={t("stepRegion.mode")}
         name={`${id}-mode`}
         value={mode}
-        onChange={setMode}
+        onChange={(next) => {
+          setMode(next);
+          // A filter the other list can't show is cleared, so what the control shows is what will run.
+          if (node && (next === "area") !== (node.kind === "area")) set(side, null);
+        }}
         options={[
           { value: "region", label: t("stepRegion.byRegion") },
           { value: "area", label: t("stepRegion.byArea") },

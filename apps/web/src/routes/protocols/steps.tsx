@@ -16,7 +16,7 @@ import { useT, usePrefs } from "../../i18n/index.tsx";
 import { useVideo } from "../../api/queries.ts";
 import { formatDuration, VideoSourceChip } from "../admin/videos.tsx";
 import { VideoPicker } from "./VideoPicker.tsx";
-import { regionLabel, StepRegion, useRegionCatalog } from "./StepRegion.tsx";
+import { regionLabel, runsAsHemisphere, StepRegion, useRegionCatalog } from "./StepRegion.tsx";
 
 export function defaultStep(m: GameManifest): GameStepInput {
   const mode = m.recommendedMode ?? m.capabilities.modes[0] ?? "timed_lives";
@@ -39,6 +39,8 @@ export function defaultStep(m: GameManifest): GameStepInput {
     trial_window_ms: null,
     game_params,
     progression: DEFAULT_PROGRESSION,
+    // Always sent, so the server never mistakes a new step for an older app's and carries a deleted step's filter over.
+    region_id: null,
   };
 }
 
@@ -67,8 +69,10 @@ export function useStepSummary() {
       s.duration_s !== null ? (s.duration_s < 60 ? t("stepEditor.seconds", { n: s.duration_s }) : t("step.minutes", { n: Math.round((s.duration_s / 60) * 10) / 10 })) : null,
       s.lives_auto ? t("step.heartsAuto") : s.lives !== null ? t("step.hearts", { n: s.lives }) : null,
       t("step.difficulty", { n: s.difficulty_start }),
-      t("step.palette", { h: s.hemisphere }),
-      s.duration_s !== null && timerShown(s.timer_position) ? t("step.timer", { h: s.hemisphere }) : null,
+      ...((h) =>
+        h === "varies"
+          ? [t("step.paletteVaries")]
+          : [t("step.palette", { h }), s.duration_s !== null && timerShown(s.timer_position) ? t("step.timer", { h }) : null])(cat ? runsAsHemisphere(cat, s) : s.hemisphere),
       s.monochrome ? t("step.monochrome") : null,
     ]
       .filter(Boolean)
@@ -242,6 +246,9 @@ export function StepEditor({ step: s, manifest: m, onChange }: { step: GameStepI
     });
   // The timer's corner and look follow the hemisphere (ADR 0008); the therapist only chooses whether it shows.
   const showTimer = timerShown(s.timer_position);
+  // With a brain-region filter the table's row decides the hemisphere the game runs as (spec 2026-11-09 §4).
+  const regionCat = useRegionCatalog(locale);
+  const runsAs = regionCat ? runsAsHemisphere(regionCat, s) : s.hemisphere;
   // A brain-region filter sets the game's own background settings (spec 2026-11-09 §5): shown, not editable.
   const lockedByRegion = new Set(s.region_id && m.regionUse?.background ? [m.regionUse.background.temperature, m.regionUse.background.type] : []);
 
@@ -316,7 +323,9 @@ export function StepEditor({ step: s, manifest: m, onChange }: { step: GameStepI
             onChange={(v) => set("timer_position", timerPositionFor(s.hemisphere, v === "shown"))}
             options={(["shown", "hidden"] as const).map((v) => ({ value: v, label: t("stepEditor.timerValue", { v }) }))}
           />
-          <p className="emb-field__hint">{showTimer ? t("stepEditor.timerHelp", { h: s.hemisphere, mono: s.monochrome ? "yes" : "no" }) : t("stepEditor.timerHidden")}</p>
+          <p className="emb-field__hint">
+            {!showTimer ? t("stepEditor.timerHidden") : runsAs === "varies" ? t("stepEditor.timerVaries") : t("stepEditor.timerHelp", { h: runsAs, mono: s.monochrome ? "yes" : "no" })}
+          </p>
         </div>
       )}
       <div className="pform__row">

@@ -10,7 +10,7 @@ import { timerPositionFor } from "@emb/session-rules";
 import { makeQueryClient } from "../src/App.tsx";
 import { PrefsProvider, type Locale } from "../src/i18n/index.tsx";
 import { findGame } from "../src/games/registry.ts";
-import { defaultStep, StepEditor } from "../src/routes/protocols/steps.tsx";
+import { defaultStep, StepEditor, useStepSummary } from "../src/routes/protocols/steps.tsx";
 import { StepRegion } from "../src/routes/protocols/StepRegion.tsx";
 import { demoRegions } from "../src/demo/regions.ts";
 
@@ -110,5 +110,44 @@ describe("StepRegion", () => {
     expect((screen.getByLabelText("תת-אונה") as HTMLSelectElement).selectedOptions[0]!.textContent).toBe("רקתי עליון");
     expect(screen.getByText(/המשחק משתמש ב/)).toBeInTheDocument();
     expect(container.innerHTML).not.toMatch(/margin-(left|right)|padding-(left|right)/);
+  });
+});
+
+describe("StepRegion review fixes", () => {
+  it("a new step starts with no region, so the server never carries an old one over", () => {
+    expect(defaultStep(catchMe).region_id).toBeNull();
+  });
+
+  it("left cerebellum: the clock hint and the step summary follow the right hemisphere it runs as", async () => {
+    show(catchMe, { hemisphere: "left", region_id: idOf("left.subcortical.cerebellum") }, "en", true);
+    expect(await screen.findByText(/^Top left corner: a cold bar/)).toBeInTheDocument();
+    function Summary() {
+      const summary = useStepSummary();
+      return <p data-testid="sum">{summary({ ...defaultStep(catchMe), hemisphere: "left", region_id: idOf("left.subcortical.cerebellum") })}</p>;
+    }
+    render(
+      <PrefsProvider initialLocale="en">
+        <QueryClientProvider client={makeQueryClient()}>
+          <Summary />
+        </QueryClientProvider>
+      </PrefsProvider>,
+    );
+    await screen.findByText(/Region: Left · Cerebellum/);
+    expect(screen.getByTestId("sum").textContent).toMatch(/Cold, right/);
+    expect(screen.getByTestId("sum").textContent).toMatch(/bar top left/);
+  });
+
+  it("a lobe that draws warm and cold rows says the look varies", async () => {
+    show(catchMe, { hemisphere: "right", region_id: idOf("right.subcortical") }, "en", true);
+    expect(await screen.findByText("The clock's corner and colours follow the hemisphere each session's sub-lobe sets.")).toBeInTheDocument();
+  });
+
+  it("switching between region and Brodmann area clears a filter the new list can't show", async () => {
+    show(catchMe, { hemisphere: "right", region_id: idOf("right.frontal.dlpfc") });
+    await userEvent.click(await screen.findByRole("radio", { name: "Brodmann area" }));
+    expect(last).toMatchObject({ hemisphere: "right", region_id: null });
+    await userEvent.selectOptions(screen.getByLabelText("Area"), idOf("right.frontal.ba46"));
+    await userEvent.click(screen.getByRole("radio", { name: "Region" }));
+    expect(last!.region_id).toBeNull();
   });
 });

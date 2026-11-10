@@ -151,6 +151,20 @@ describe.skipIf(!ADMIN_URL)("brain-region filters at launch", () => {
     }
   });
 
+  it("a step whose row was removed launches side only and its results are not flagged", async () => {
+    const p = await patientWith({ hemisphere: "right", region_id: rid("right.temporal.inferior_temporal") });
+    const saved = await env.db.query(`SELECT * FROM app.region_setting WHERE sublobe_id = $1`, [rid("right.temporal.inferior_temporal")]);
+    await env.db.query(`DELETE FROM app.region_setting WHERE sublobe_id = $1`, [rid("right.temporal.inferior_temporal")]);
+    try {
+      const params = await launch(p.sessions[0]!);
+      expect("region" in params).toBe(false);
+      expect((await send(p, p.sessions[1]!, params)).body.outcome).toBe("accepted");
+    } finally {
+      const r = saved.rows[0];
+      await env.db.query(`INSERT INTO app.region_setting (sublobe_id, bg_temperature, bg_types, motion, target_locations, rotation, clinical_status, revision) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, [r.sublobe_id, r.bg_temperature, r.bg_types, JSON.stringify(r.motion), r.target_locations, r.rotation, r.clinical_status, r.revision]);
+    }
+  });
+
   it("progress shows the region a session ran with", async () => {
     const p = await patientWith({ hemisphere: "right", region_id: rid("right.temporal.ba21") });
     const params = await launch(p.sessions[0]!);
