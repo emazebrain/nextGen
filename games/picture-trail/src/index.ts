@@ -28,6 +28,8 @@ const BANDS: AgeBand[] = ["4-6", "7-9", "10-12", "13+"];
 
 interface Look {
   sky: [string, string];
+  /** Deeper gradient for the answer phase — makes the phase shift visible. */
+  answerSky: [string, string];
   solid: string;
   pattern: string;
   card: string;
@@ -39,9 +41,9 @@ interface Look {
 }
 /** Bright, modern looks (spec "Look"): warm and cool palettes, and black and white (ADR 0009). */
 const LOOKS: Record<"warm" | "cold" | "mono", Look> = {
-  warm: { sky: ["#FFF3DC", "#FFC98A"], solid: "#FFE3BC", pattern: "#FFB25E", card: "#FFFFFF", cardEdge: "#F08A3C", cue: "#FF5E7E", ink: "#4A1F0E", good: "#2FB36B", burst: ["#FF5E7E", "#FFC93C", "#FF8A3C", "#7ED957", "#FFFFFF"] },
-  cold: { sky: ["#E2F6FF", "#9FD8F5"], solid: "#CDEBFA", pattern: "#6EC3EE", card: "#FFFFFF", cardEdge: "#2F80ED", cue: "#7B61FF", ink: "#0E2240", good: "#18A999", burst: ["#7B61FF", "#3CC8FF", "#18A999", "#FFD23C", "#FFFFFF"] },
-  mono: { sky: ["#F4F4F4", "#D6D6D6"], solid: "#E6E6E6", pattern: "#9A9A9A", card: "#FFFFFF", cardEdge: "#222222", cue: "#111111", ink: "#111111", good: "#111111", burst: ["#111111", "#555555", "#999999", "#FFFFFF"] },
+  warm: { sky: ["#FFF3DC", "#FFC98A"], answerSky: ["#FFE4B5", "#FFB060"], solid: "#FFE3BC", pattern: "#FFB25E", card: "#FFFFFF", cardEdge: "#F08A3C", cue: "#FF5E7E", ink: "#4A1F0E", good: "#2FB36B", burst: ["#FF5E7E", "#FFC93C", "#FF8A3C", "#7ED957", "#FFFFFF"] },
+  cold: { sky: ["#E2F6FF", "#9FD8F5"], answerSky: ["#C5E8FA", "#6FBBEB"], solid: "#CDEBFA", pattern: "#6EC3EE", card: "#FFFFFF", cardEdge: "#2F80ED", cue: "#7B61FF", ink: "#0E2240", good: "#18A999", burst: ["#7B61FF", "#3CC8FF", "#18A999", "#FFD23C", "#FFFFFF"] },
+  mono: { sky: ["#F4F4F4", "#D6D6D6"], answerSky: ["#E0E0E0", "#B8B8B8"], solid: "#E6E6E6", pattern: "#9A9A9A", card: "#FFFFFF", cardEdge: "#222222", cue: "#111111", ink: "#111111", good: "#111111", burst: ["#111111", "#555555", "#999999", "#FFFFFF"] },
 };
 
 interface Timer {
@@ -102,6 +104,7 @@ class PictureTrail implements GameModule {
   private score = 0;
   private startBtn!: HTMLButtonElement;
   private msg!: HTMLDivElement;
+  private phaseLabel!: HTMLDivElement;
   private onRoundDone: (() => void) | null = null;
 
   async init(ctx: InitContext): Promise<void> {
@@ -218,8 +221,9 @@ class PictureTrail implements GameModule {
     this.capped = round.n < n;
     this.layoutRound();
     this.answerPhase = false;
+    this.drawBackground();
     this.drawFrame();
-    this.say(this.ctx.t("watch"), Math.min(1200, show));
+    this.showPhaseLabel(this.ctx.t("watch"));
     this.render(this.engine.startRound(round, show, this.clock));
   }
 
@@ -247,8 +251,9 @@ class PictureTrail implements GameModule {
       else if (e.type === "hide") this.hideCard();
       else if (e.type === "cue") {
         this.answerPhase = true;
+        this.drawBackground();
         this.drawFrame();
-        this.say(this.ctx.t("find"), 1400);
+        this.showPhaseLabel(this.ctx.t("find"));
       } else if (e.type === "wrong") this.onWrong();
       else if (e.type === "miss") {
         if (!this.practicing) this.ctx.session.lifeLossEvent("missed_match");
@@ -273,6 +278,7 @@ class PictureTrail implements GameModule {
   private onRoundEnd(e: Extract<EngineEvent, { type: "roundEnd" }>) {
     const r = this.round!;
     this.answerPhase = false;
+    this.drawBackground();
     this.drawFrame();
     if (this.practicing) {
       this.after(this.ctx.reducedMotion ? 300 : FEEDBACK_MS, () => {
@@ -345,6 +351,7 @@ class PictureTrail implements GameModule {
     this.startBtn.hidden = true;
     this.hideCard();
     this.answerPhase = false;
+    this.drawBackground();
     this.drawFrame();
   }
 
@@ -409,7 +416,9 @@ class PictureTrail implements GameModule {
     const L = this.look;
     this.bg.clear();
     // Plain: a soft, bright gradient. Patterned: the same with a light pattern on top.
-    const grad = new FillGradient({ type: "linear", start: { x: 0, y: 0 }, end: { x: 0, y: 1 }, colorStops: [{ offset: 0, color: L.sky[0] }, { offset: 1, color: L.sky[1] }] });
+    // Answer phase uses a deeper gradient so the child notices the shift.
+    const sky = this.answerPhase ? L.answerSky : L.sky;
+    const grad = new FillGradient({ type: "linear", start: { x: 0, y: 0 }, end: { x: 0, y: 1 }, colorStops: [{ offset: 0, color: sky[0] }, { offset: 1, color: sky[1] }] });
     this.bg.rect(0, 0, w, h).fill(grad);
     if (this.textured) {
       // A soft pattern: dots for warm, waves for cool (and black and white).
@@ -541,8 +550,17 @@ class PictureTrail implements GameModule {
       .pt-start[hidden]{display:none}
       .pt-msg{position:absolute;inset-inline:0;inset-block-start:${HUD_SPACE + 6}px;display:flex;justify-content:center;pointer-events:none;font-family:${font}}
       .pt-say{padding:8px 18px;border-radius:999px;background:${L.ink};color:#FFFFFF;font-size:22px;font-weight:700}
+      .pt-phase{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;font-family:${font};z-index:10}
+      .pt-phase-text{padding:18px 48px;border-radius:24px;background:${L.ink};color:#FFFFFF;font-size:38px;font-weight:800;letter-spacing:0.03em;opacity:0;transform:scale(0.7);animation:pt-phase-in 600ms ease-out forwards}
+      @keyframes pt-phase-in{0%{opacity:0;transform:scale(0.7)}20%{opacity:1;transform:scale(1.05)}40%{transform:scale(1)}80%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(0.95)}}
+      @media(prefers-reduced-motion:reduce){.pt-phase-text{animation:pt-phase-fade 600ms ease-out forwards}@keyframes pt-phase-fade{0%{opacity:0}20%{opacity:1}80%{opacity:1}100%{opacity:0}}}
     `;
     this.ctx.mount.appendChild(style);
+    this.phaseLabel = document.createElement("div");
+    this.phaseLabel.className = "pt-phase";
+    this.phaseLabel.setAttribute("aria-live", "assertive");
+    this.phaseLabel.hidden = true;
+    this.ctx.mount.appendChild(this.phaseLabel);
     this.startBtn = document.createElement("button");
     this.startBtn.type = "button";
     this.startBtn.className = "pt-start";
@@ -564,6 +582,20 @@ class PictureTrail implements GameModule {
     this.msg.appendChild(el);
     this.after(ms, () => {
       if (el.parentElement === this.msg) el.remove();
+    });
+  }
+
+  /** A large, centred label that flashes for ~800 ms to announce the phase. */
+  private showPhaseLabel(text: string) {
+    this.phaseLabel.innerHTML = "";
+    const el = document.createElement("div");
+    el.className = "pt-phase-text";
+    el.textContent = text;
+    this.phaseLabel.hidden = false;
+    this.phaseLabel.appendChild(el);
+    this.after(800, () => {
+      if (el.parentElement === this.phaseLabel) el.remove();
+      if (!this.phaseLabel.firstChild) this.phaseLabel.hidden = true;
     });
   }
 }
