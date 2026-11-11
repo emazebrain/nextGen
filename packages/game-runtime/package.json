@@ -18,6 +18,7 @@
     "@emb/game-block-crasher": "workspace:*",
     "@emb/game-catch-me": "workspace:*",
     "@emb/game-echo-keys": "workspace:*",
+    "@emb/game-its-left-its-right": "workspace:*",
     "@emb/game-orbital-order": "workspace:*",
     "@emb/game-peek-peek": "workspace:*",
     "@emb/game-picture-trail": "workspace:*",

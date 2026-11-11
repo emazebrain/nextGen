@@ -72,6 +72,9 @@ importers:
       '@emb/game-echo-keys':
         specifier: workspace:*
         version: link:../../games/echo-keys
+      '@emb/game-its-left-its-right':
+        specifier: workspace:*
+        version: link:../../games/its-left-its-right
       '@emb/game-orbital-order':
         specifier: workspace:*
         version: link:../../games/orbital-order
@@ -412,6 +415,9 @@ importers:
       '@emb/game-echo-keys':
         specifier: workspace:*
         version: link:../../games/echo-keys
+      '@emb/game-its-left-its-right':
+        specifier: workspace:*
+        version: link:../../games/its-left-its-right
       '@emb/game-orbital-order':
         specifier: workspace:*
         version: link:../../games/orbital-order
