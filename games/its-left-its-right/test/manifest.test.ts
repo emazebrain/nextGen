@@ -35,7 +35,7 @@ describe("manifest", () => {
     expect(Object.keys(p).sort()).toEqual(["background", "bg_temperature", "body_parts", "direction", "max_rotation", "time_limit_ms"]);
     expect(p.time_limit_ms).toMatchObject({ minimum: 0, maximum: 10000, default: 0 });
     expect(p.max_rotation).toMatchObject({ minimum: 0, maximum: 180, default: 0 });
-    expect(p.body_parts!["x-ui"]!.widget).toBe("multiselect");
+    expect(p.body_parts!["x-ui"]!.widget).toBe("select");
   });
 
   it("asset packs: shared is real, warm/cold are stubs", () => {
