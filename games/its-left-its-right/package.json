@@ -1,0 +1,19 @@
+{
+  "name": "@emb/game-its-left-its-right",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./manifest": "./src/manifest.ts"
+  },
+  "scripts": { "test": "vitest run" },
+  "dependencies": {
+    "@emb/game-sdk": "workspace:*",
+    "pixi.js": "^8.9.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0"
+  }
+}

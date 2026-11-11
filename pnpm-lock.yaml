@@ -270,6 +270,22 @@ importers:
         specifier: ^3.2.0
         version: 3.2.7(@types/node@22.20.5)(jsdom@26.1.0)(terser@5.51.2)(yaml@2.9.1)
 
+  games/its-left-its-right:
+    dependencies:
+      '@emb/game-sdk':
+        specifier: workspace:*
+        version: link:../../packages/game-sdk
+      pixi.js:
+        specifier: ^8.9.0
+        version: 8.22.0
+    devDependencies:
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.0
+        version: 3.2.7(@types/node@22.20.5)(jsdom@26.1.0)(terser@5.51.2)(yaml@2.9.1)
+
   games/orbital-order:
     dependencies:
       '@emb/game-sdk':
