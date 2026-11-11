@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Right arm reaching down -->
+  <g transform="translate(100,70)">
+    <!-- Sleeve at top -->
+    <rect x="-20" y="-35" width="40" height="22" rx="5" fill="#7B8794" stroke="#5E6B77" stroke-width="1.5"/>
+    <rect x="-20" y="-18" width="40" height="10" rx="3" fill="#FFFFFF" stroke="#DDD" stroke-width="1"/>
+    <circle cx="-6" cy="-13" r="2.5" fill="#3D4852"/>
+    <circle cx="6" cy="-13" r="2.5" fill="#3D4852"/>
+    <!-- Upper arm -->
+    <rect x="-16" y="-15" width="32" height="55" rx="16" fill="#F5B7B1" stroke="#E8967A" stroke-width="1.5"/>
+    <!-- Forearm -->
+    <rect x="-14" y="35" width="28" height="55" rx="14" fill="#F5B7B1" stroke="#E8967A" stroke-width="1.5"/>
+    <!-- Hand reaching down -->
+    <ellipse cx="0" cy="93" rx="14" ry="10" fill="#F5B7B1" stroke="#E8967A" stroke-width="1.5"/>
+    <!-- Fingers dangling -->
+    <rect x="-8" y="100" width="8" height="14" rx="4" fill="#F5B7B1" stroke="#E8967A" stroke-width="1"/>
+    <rect x="2" y="100" width="8" height="14" rx="4" fill="#F5B7B1" stroke="#E8967A" stroke-width="1"/>
+  </g>
+</svg>

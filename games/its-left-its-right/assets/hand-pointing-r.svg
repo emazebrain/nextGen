@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Right hand pointing -->
+  <g transform="translate(100,110)">
+    <ellipse cx="0" cy="35" rx="28" ry="22" fill="#7B8794" stroke="#5E6B77" stroke-width="1.5"/>
+    <rect x="-28" y="25" width="56" height="14" rx="3" fill="#FFFFFF" stroke="#DDD" stroke-width="1"/>
+    <circle cx="-10" cy="32" r="3" fill="#3D4852"/>
+    <circle cx="10" cy="32" r="3" fill="#3D4852"/>
+    <ellipse cx="0" cy="5" rx="24" ry="20" fill="#F5B7B1" stroke="#E8967A" stroke-width="1.5"/>
+    <!-- Curled fingers -->
+    <path d="M-18,0 Q-20,-8 -15,-12 Q-10,-8 -8,0" fill="#F5B7B1" stroke="#E8967A" stroke-width="1"/>
+    <path d="M8,0 Q10,-8 15,-12 Q20,-8 18,0" fill="#F5B7B1" stroke="#E8967A" stroke-width="1"/>
+    <!-- Index finger pointing up -->
+    <rect x="-6" y="-55" width="12" height="55" rx="6" fill="#F5B7B1" stroke="#E8967A" stroke-width="1.5"/>
+    <ellipse cx="0" cy="-55" rx="6" ry="5" fill="#F5B7B1" stroke="#E8967A" stroke-width="1"/>
+    <ellipse cx="0" cy="-53" rx="4" ry="2.5" fill="#F0D0C8"/>
+  </g>
+</svg>

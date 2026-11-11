@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Right ear profile view -->
+  <g transform="translate(100,100)">
+    <!-- Head silhouette (partial) -->
+    <path d="M20,-50 Q50,-45 55,-10 Q58,20 50,40 Q45,50 30,55 Q20,58 15,50" fill="#F5B7B1" stroke="#E8967A" stroke-width="1.5" opacity="0.4"/>
+    <!-- Ear -->
+    <path d="M-5,-35 Q-35,-30 -40,-5 Q-42,15 -35,30 Q-28,40 -15,42 Q-5,43 0,35 Q5,25 0,15 Q-5,10 -8,0 Q-10,-10 -5,-20 Q0,-28 -5,-35Z" fill="#F5B7B1" stroke="#E8967A" stroke-width="2"/>
+    <!-- Inner ear details -->
+    <path d="M-5,-25 Q-25,-20 -28,0 Q-30,15 -22,25 Q-15,30 -8,28" fill="none" stroke="#D4745E" stroke-width="1.5"/>
+    <path d="M-8,15 Q-12,20 -10,28 Q-8,32 -5,30" fill="#E8967A" stroke="#D4745E" stroke-width="1"/>
+    <!-- Ear lobe -->
+    <ellipse cx="-8" cy="38" rx="8" ry="6" fill="#F5B7B1" stroke="#E8967A" stroke-width="1.5"/>
+  </g>
+</svg>

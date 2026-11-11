@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Right arm bent at elbow -->
+  <g transform="translate(95,100)">
+    <!-- Upper arm -->
+    <rect x="-16" y="-55" width="32" height="60" rx="16" fill="#F5B7B1" stroke="#E8967A" stroke-width="1.5"/>
+    <!-- Sleeve -->
+    <rect x="-20" y="-60" width="40" height="20" rx="5" fill="#7B8794" stroke="#5E6B77" stroke-width="1.5"/>
+    <rect x="-20" y="-45" width="40" height="10" rx="3" fill="#FFFFFF" stroke="#DDD" stroke-width="1"/>
+    <circle cx="-6" cy="-40" r="2.5" fill="#3D4852"/>
+    <circle cx="6" cy="-40" r="2.5" fill="#3D4852"/>
+    <!-- Forearm bent right -->
+    <rect x="0" y="-8" width="55" height="26" rx="13" fill="#F5B7B1" stroke="#E8967A" stroke-width="1.5" transform="rotate(-30,0,5)"/>
+    <!-- Hand -->
+    <ellipse cx="50" cy="-20" rx="12" ry="10" fill="#F5B7B1" stroke="#E8967A" stroke-width="1.5"/>
+  </g>
+</svg>
