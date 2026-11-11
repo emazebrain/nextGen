@@ -539,7 +539,7 @@ class ItsLeftItsRight implements GameModule {
       .lr-start{position:absolute;inset-block-start:50%;inset-inline-start:50%;transform:translate(-50%,-50%);padding:22px 44px;border-radius:999px;border:0;background:${L.cue};color:#FFFFFF;font:800 30px ${font};box-shadow:0 10px 0 rgb(0 0 0 / .18),0 18px 36px rgb(0 0 0 / .18);cursor:pointer;z-index:20}
       .lr-start:focus-visible{outline:4px solid ${L.ink};outline-offset:4px}
       .lr-start[hidden]{display:none}
-      .lr-btn{position:fixed;bottom:12px;width:calc(50% - 18px);height:72px;border:0;border-radius:18px;font:800 28px ${font};color:#FFFFFF;cursor:pointer;z-index:10;transition:opacity 0.15s}
+      .lr-btn{position:absolute;inset-block-end:12px;width:calc(50% - 18px);height:72px;border:0;border-radius:18px;font:800 28px ${font};color:#FFFFFF;cursor:pointer;z-index:10;transition:opacity 0.15s}
       .lr-btn:focus-visible{outline:4px solid ${L.ink};outline-offset:4px}
       .lr-btn:disabled{cursor:default}
       .lr-btn-left{left:8px;background:${L.btnLeft}}

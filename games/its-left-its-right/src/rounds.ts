@@ -31,15 +31,17 @@ export interface RoundContext {
 export function generateRound(ctx: RoundContext): RoundSpec {
   const { level, ageBand, bodyParts, maxRotation, rng } = ctx;
 
-  // Get eligible poses: intersection of level body parts and age-eligible
+  // Therapist body-part override takes precedence over level-based
+  // progression; when set, the therapist decides which parts appear
+  // regardless of level. Without an override, level gates the parts.
   const levelParts = bodyPartsForLevel(level);
   const eligible = posesFor(ageBand, bodyParts ?? levelParts);
 
   // Pick a random pose
   const pose = eligible[Math.floor(rng() * eligible.length)]!;
 
-  // 50/50 side
-  const side: Side = rng() < 0.5 ? "left" : "right";
+  // 50/50 side — but if the pose cannot be flipped, force canonical ("right")
+  const side: Side = !pose.canFlip ? "right" : rng() < 0.5 ? "left" : "right";
 
   // Rotation: up to rotationRange, clamped by maxRotation
   let maxDeg = rotationRange(level);

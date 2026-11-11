@@ -88,7 +88,7 @@ export class LateralityEngine {
     this._active = false;
 
     const record = this.buildRecord(
-      correct ? side : side,
+      side,
       correct ? "correct" : "wrong",
       rt,
     );
