@@ -6,7 +6,7 @@ export interface Pose {
   id: string;
   bodyPart: BodyPart;
   minBand: AgeBand;
-  svgFile: string;
+  imageFile: string;
   canFlip: boolean;
 }
 
@@ -21,40 +21,45 @@ const pose = (
   id: string,
   bodyPart: BodyPart,
   minBand: AgeBand,
+  canFlip = true,
 ): Pose => ({
   id,
   bodyPart,
   minBand,
-  svgFile: `${bodyPart}-${id}-r.svg`,
-  canFlip: true,
+  imageFile: `${bodyPart}-${id}-r.png`,
+  canFlip,
 });
 
 export const POSES: Pose[] = [
   // Hands — available from age 4 (band "4-6")
-  pose("thumbsup", "hand", "4-6"),
+  // 3D rendered hands
   pose("pointing", "hand", "4-6"),
   pose("openpalm", "hand", "4-6"),
-  pose("pinch", "hand", "4-6"),
-  pose("peace", "hand", "4-6"),
-  pose("fist", "hand", "4-6"),
-  pose("wave", "hand", "4-6"),
-  pose("grab", "hand", "4-6"),
+  pose("backhand", "hand", "4-6"),
+  pose("thumbsup", "hand", "4-6"),
+  pose("stop", "hand", "4-6"),
 
-  // Arms — available from age 7 (band "7-9")
-  pose("extended", "arm", "7-9"),
-  pose("bent-elbow", "arm", "7-9"),
-  pose("reaching-up", "arm", "7-9"),
-  pose("reaching-down", "arm", "7-9"),
+  // 2D illustrated hands — origami
+  pose("crane", "hand", "4-6"),
+  pose("fox-side", "hand", "4-6"),
+  pose("fox-up", "hand", "4-6"),
+  pose("dog", "hand", "4-6"),
 
-  // Feet — available from age 7 (band "7-9")
-  pose("top-view", "foot", "7-9"),
-  pose("side-view", "foot", "7-9"),
-  pose("sole", "foot", "7-9"),
+  // 2D illustrated hands — vegetables/food
+  pose("tomato-cup", "hand", "4-6"),
+  pose("tomatoes-pile", "hand", "4-6"),
+  pose("tomato-grip", "hand", "4-6"),
+  pose("pepper-red-cup", "hand", "4-6"),
+  pose("pepper-red-flat", "hand", "4-6"),
+  pose("pepper-red-pinch", "hand", "4-6"),
+  pose("pepper-green-pinch", "hand", "4-6"),
+  pose("herbs-pinch", "hand", "4-6"),
+  pose("potato-cup", "hand", "4-6"),
+  pose("bun-cup", "hand", "4-6"),
 
-  // Ears — available from age 10 (band "10-12")
-  pose("profile", "ear", "10-12"),
-  pose("angled", "ear", "10-12"),
-  pose("from-behind", "ear", "10-12"),
+  // Arms — to be added later (band "7-9")
+  // Feet — to be added later (band "7-9")
+  // Ears — to be added later (band "10-12")
 ];
 
 /**

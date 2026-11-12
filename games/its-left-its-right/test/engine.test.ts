@@ -3,7 +3,7 @@ import { LateralityEngine, type EngineEvent, type RoundRecord } from "../src/eng
 import type { RoundSpec } from "../src/rounds.ts";
 
 const spec: RoundSpec = {
-  pose: { id: "thumbsup", bodyPart: "hand", minBand: "4-6", svgFile: "hand-thumbsup-r.svg", canFlip: true },
+  pose: { id: "thumbsup", bodyPart: "hand", minBand: "4-6", imageFile: "hand-thumbsup-r.png", canFlip: true },
   side: "left",
   rotationDeg: 30,
   rotationDir: "cw",

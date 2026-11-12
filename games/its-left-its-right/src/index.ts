@@ -263,7 +263,7 @@ class ItsLeftItsRight implements GameModule {
     const size = Math.min(w * 0.5, (h - HUD_SPACE) * 0.45);
 
     // Create sprite from texture
-    const tex = this.textures.get(spec.pose.svgFile);
+    const tex = this.textures.get(spec.pose.imageFile);
     if (!tex) return;
 
     const container = new Container();
@@ -514,11 +514,10 @@ class ItsLeftItsRight implements GameModule {
     const jobs = eligible.map(
       (pose) =>
         new Promise<void>((resolve) => {
-          // Build an inline data URI from the SVG asset path
-          const assetPath = new URL(`../assets/${pose.svgFile}`, import.meta.url).href;
+          const assetPath = new URL(`../assets/${pose.imageFile}`, import.meta.url).href;
           const img = new Image(256, 256);
           img.onload = () => {
-            this.textures.set(pose.svgFile, Texture.from(img));
+            this.textures.set(pose.imageFile, Texture.from(img));
             resolve();
           };
           img.onerror = () => resolve(); // non-fatal; the pose will just be invisible

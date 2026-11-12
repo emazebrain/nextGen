@@ -51,14 +51,15 @@ describe("generateRound", () => {
     expect(parts).toEqual(new Set(["hand"])); // level 1 = hands only
   });
 
-  it("at level 20, all body parts eligible (with age 13+)", () => {
+  it("at level 20 with age 13+, still uses hand poses (only body part available)", () => {
     const rng = seededRng(7);
     const parts = new Set(
       Array.from({ length: 200 }, () =>
         generateRound({ ...ctx(), level: 20, ageBand: "13+", rng }).pose.bodyPart,
       ),
     );
-    expect(parts.size).toBeGreaterThanOrEqual(3); // statistically should hit 4
+    // Only hand poses exist currently; arm/foot/ear to be added later
+    expect(parts).toEqual(new Set(["hand"]));
   });
 
   it("side is roughly 50/50 over many rounds", () => {
