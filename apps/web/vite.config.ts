@@ -34,7 +34,9 @@ const pwa = VitePWA({
     rollupFormat: "iife",
     globPatterns: ["**/*.{js,css,html,svg,png,woff2,webmanifest}"],
     globIgnores: ["demo-videos/**", "**/*.map"],
-    maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+    // A game frame is one self-contained script with its pictures inlined (games have no network, §8.3).
+    // It's Left, It's Right is 5.4 MB; a frame over the limit fails the build instead of being silently left out.
+    maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
   },
   devOptions: { enabled: false },
 });

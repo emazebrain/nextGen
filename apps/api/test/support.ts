@@ -80,7 +80,7 @@ export interface TestEnv {
   close: () => Promise<void>;
 }
 
-export async function setupApi(): Promise<TestEnv> {
+export async function setupApi(opts: { authSchema?: string } = {}): Promise<TestEnv> {
   vi.useFakeTimers({ toFake: ["Date"], shouldAdvanceTime: true });
   const name = `emb_api_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
   const admin = new pg.Client({ connectionString: ADMIN_URL });
@@ -92,9 +92,13 @@ export async function setupApi(): Promise<TestEnv> {
   const db = new pg.Client({ connectionString: url.toString() });
   await db.connect();
   await migrate(db);
+  if (opts.authSchema) await moveAuthSchema(db, opts.authSchema);
   const pool = new pg.Pool({ connectionString: url.toString(), max: 4 });
-  const authDb = authPool(url.toString());
-  const auth = createAuth({ databaseUrl: url.toString(), secret: randomUUID() + randomUUID(), baseURL: BASE, pool: authDb, rateLimit: false }, pool);
+  const authDb = authPool(url.toString(), opts.authSchema);
+  const auth = createAuth(
+    { databaseUrl: url.toString(), secret: randomUUID() + randomUUID(), baseURL: BASE, pool: authDb, rateLimit: false, ...(opts.authSchema ? { schema: opts.authSchema } : {}) },
+    pool,
+  );
   const fileDir = mkdtempSync(join(tmpdir(), "emb-files-"));
   const key = deviceKey(randomBytes(32).toString("base64"));
   const tickets = ticketSigner();
@@ -118,6 +122,25 @@ export async function setupApi(): Promise<TestEnv> {
       await a.end();
     },
   };
+}
+
+/**
+ * Moves the sign-in tables out of schema `auth`, as on hosts that reserve that
+ * name (Supabase). The function body names its schema, so it is recreated.
+ */
+async function moveAuthSchema(db: pg.Client, schema: string): Promise<void> {
+  await db.query(`ALTER SCHEMA auth RENAME TO ${schema}`);
+  await db.query(`
+    CREATE OR REPLACE FUNCTION ${schema}.claim_totp(p_user text, p_code text) RETURNS boolean
+    LANGUAGE sql VOLATILE AS $$
+      WITH claimed AS (
+        INSERT INTO ${schema}.totp_claim AS t (user_id, code) VALUES (p_user, p_code)
+        ON CONFLICT (user_id, code) DO UPDATE SET claimed_at = now()
+          WHERE t.claimed_at < now() - interval '120 seconds'
+        RETURNING 1
+      )
+      SELECT EXISTS (SELECT 1 FROM claimed);
+    $$`);
 }
 
 /** Signs a staff member up, turns on two-step sign-in and returns a signed-in client. */
