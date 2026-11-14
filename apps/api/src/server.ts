@@ -24,6 +24,8 @@ const auth = createAuth(
     // Origins allowed to call the auth endpoints, e.g. the SPA's dev server (comma-separated).
     // AUTH_RATE_LIMIT=off only for automated end-to-end runs; API tests cover the limits themselves.
     ...(process.env.AUTH_RATE_LIMIT === "off" ? { rateLimit: false } : {}),
+    // AUTH_SCHEMA: where the sign-in tables live when the host reserves schema `auth` (Supabase).
+    ...(process.env.AUTH_SCHEMA ? { schema: process.env.AUTH_SCHEMA } : {}),
     ...(process.env.IP_HEADERS ? { ipAddressHeaders: process.env.IP_HEADERS.split(",").map((s) => s.trim()) } : {}),
     ...(process.env.TRUSTED_ORIGINS ? { trustedOrigins: process.env.TRUSTED_ORIGINS.split(",").map((s) => s.trim()) } : {}),
   },

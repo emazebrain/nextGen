@@ -6,7 +6,8 @@
  *   OIDC come later through Better Auth plugins.
  * - TOTP two-factor. Staff cannot reach any /v1 route until it is enabled
  *   (requireStaffSession in context.ts).
- * - Auth tables live in schema `auth`, which the app role cannot read.
+ * - Auth tables live in their own schema (`auth` by default; AUTH_SCHEMA on
+ *   hosts that reserve that name), which the app role cannot read.
  * - Every auth user gets a matching app.app_user row with the same UUIDv7 id,
  *   which is what RLS sees as app.user_id.
  */
@@ -25,6 +26,8 @@ export interface AuthConfig {
   rateLimit?: boolean;
   /** Connection pool for the auth schema; created from databaseUrl when omitted. */
   pool?: pg.Pool;
+  /** Schema that holds the sign-in tables. Defaults to `auth`. */
+  schema?: string;
   /**
    * Headers that carry the client IP, set by the load balancer in front of the
    * API (never trust these when the API is reachable directly). Without one,
@@ -34,18 +37,37 @@ export interface AuthConfig {
   ipAddressHeaders?: string[];
 }
 
-export function authPool(databaseUrl: string): pg.Pool {
-  // Better Auth's own tables resolve to schema `auth`.
-  return new pg.Pool({ connectionString: databaseUrl, options: "-c search_path=auth", max: 5 });
+export const DEFAULT_AUTH_SCHEMA = "auth";
+
+/** The schema name goes into SQL text, so only a plain lower-case identifier is accepted. */
+function authSchemaName(schema: string | undefined): string {
+  const name = schema ?? DEFAULT_AUTH_SCHEMA;
+  if (!/^[a-z_][a-z0-9_]{0,62}$/.test(name)) throw new Error("auth schema must be a plain lower-case identifier");
+  return name;
+}
+
+export function authPool(databaseUrl: string, schema?: string): pg.Pool {
+  // Better Auth's own tables resolve to the auth schema. The search path is set
+  // by a statement, not a startup option, because connection poolers in front
+  // of managed Postgres do not all pass startup options through.
+  const name = authSchemaName(schema);
+  const pool = new pg.Pool({ connectionString: databaseUrl, max: 5 });
+  pool.on("connect", (client) => {
+    client.query(`SET search_path TO ${name}`).catch(() => {
+      // A connection that cannot set its search path fails its first query instead.
+    });
+  });
+  return pool;
 }
 
 export function createAuth(config: AuthConfig, servicePool: pg.Pool) {
+  const schema = authSchemaName(config.schema);
   return betterAuth({
     appName: "eMazeBrain",
     baseURL: config.baseURL,
     secret: config.secret,
     trustedOrigins: config.trustedOrigins ?? [config.baseURL],
-    database: config.pool ?? authPool(config.databaseUrl),
+    database: config.pool ?? authPool(config.databaseUrl, schema),
     emailAndPassword: {
       enabled: true,
       minPasswordLength: 12,
@@ -65,7 +87,7 @@ export function createAuth(config: AuthConfig, servicePool: pg.Pool) {
         if (!/^\d{6}$/.test(code)) return; // malformed codes fail in Better Auth itself
         const userId = await userForTwoFactor(ctx);
         if (!userId) return; // no pending sign-in or session: Better Auth rejects it
-        const { rows } = await servicePool.query<{ ok: boolean }>(`SELECT auth.claim_totp($1, $2) AS ok`, [userId, code]);
+        const { rows } = await servicePool.query<{ ok: boolean }>(`SELECT ${schema}.claim_totp($1, $2) AS ok`, [userId, code]);
         if (!rows[0]?.ok) throw APIError.from("UNAUTHORIZED", { message: "Invalid code", code: "INVALID_CODE" });
       }),
     },
