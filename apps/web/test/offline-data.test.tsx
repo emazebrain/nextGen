@@ -79,7 +79,8 @@ describe("offline data", () => {
     const next = await screen.findByRole("region", { name: "Next up" }, { timeout: 5000 });
     await waitFor(() => expect(next.textContent).toContain("Noa Levi"), { timeout: 5000 });
     expect(next.textContent).toContain("Tunnel Rush → ▶ Colour shapes");
-    expect(screen.getByRole("status").textContent).toMatch(/Showing saved data from/);
+    // Other live regions (a loader for a later request) may be on screen at the same time.
+    expect(screen.getAllByRole("status").map((el) => el.textContent)).toContainEqual(expect.stringMatching(/Showing saved data from/));
     expect(screen.getByRole("heading", { level: 1 }).textContent).toMatch(/Tamar/);
   });
 
