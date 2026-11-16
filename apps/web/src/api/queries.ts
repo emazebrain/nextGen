@@ -29,6 +29,8 @@ export interface Me {
   memberships: Membership[];
   /** Manages the platform content library (videos). */
   is_platform_admin?: boolean;
+  /** The app_user status: 'active', 'invited', or 'disabled'. */
+  user_status?: string;
 }
 /** Kept for older screens: the list row. */
 export type PatientRow = PatientListItem;

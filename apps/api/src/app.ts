@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type pg from "pg";
 import type { Auth } from "./auth.ts";
-import { requireStaffSession, type Env } from "./context.ts";
+import { requireActiveUser, requireStaffSession, type Env } from "./context.ts";
 import { meRoutes } from "./modules/me/routes.ts";
 import { patientRoutes } from "./modules/patients/routes.ts";
 import { clinicRoutes } from "./modules/clinics/routes.ts";
@@ -10,8 +10,10 @@ import { sessionRoutes } from "./modules/sessions/routes.ts";
 import { videoRoutes } from "./modules/videos/routes.ts";
 import { deviceRoutes } from "./modules/devices/routes.ts";
 import { offlineRoutes } from "./modules/offline/routes.ts";
+import { adminRoutes } from "./modules/admin/routes.ts";
 import { deviceKey, type DeviceKey } from "./device-crypto.ts";
 import { localFileStore, type FileStore } from "./files.ts";
+import { createMailer, type Mailer } from "./email.ts";
 import { ticketSigner, type TicketSigner } from "./tickets.ts";
 
 export interface AppInfo {
@@ -29,6 +31,10 @@ export interface AppDeps {
   files?: FileStore;
   /** Seals device and space secrets. Defaults to a random key per process (dev and tests only). */
   deviceKey?: DeviceKey;
+  /** Invitation mailer. Defaults to a no-op mailer (dev and tests). */
+  mailer?: Mailer;
+  /** Public URL of the web app, used for invitation login links (I4: not from Origin header). */
+  publicAppUrl?: string | undefined;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -56,6 +62,7 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
 
     const v1 = new Hono<Env>();
     v1.use("*", requireStaffSession(deps.auth));
+    v1.use("*", requireActiveUser(deps.pool));
     v1.route("/me", meRoutes(deps.pool));
     v1.route("/patients", patientRoutes(deps.pool));
     v1.route("/clinics", clinicRoutes(deps.pool));
@@ -64,6 +71,7 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
     v1.route("/", videoRoutes(deps.pool, deps.files ?? localFileStore(process.env.FILE_STORE_DIR ?? ".data/files")));
     v1.route("/", deviceRoutes(deps.pool, deps.deviceKey ?? deviceKey(undefined)));
     v1.route("/", offlineRoutes(deps.pool, deps.tickets ?? ticketSigner()));
+    v1.route("/admin", adminRoutes(deps.pool, deps.auth, deps.mailer ?? createMailer({}), deps.publicAppUrl));
     app.route("/v1", v1);
   }
 

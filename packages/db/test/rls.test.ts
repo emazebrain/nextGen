@@ -17,6 +17,7 @@ const ids = {
   org1: randomUUID(), org2: randomUUID(),
   clinic1: randomUUID(), clinic2: randomUUID(),
   therapistA: randomUUID(), therapistB: randomUUID(), managerM: randomUUID(), outsider: randomUUID(),
+  admin: randomUUID(),
   p1: randomUUID(), p2: randomUUID(), p3: randomUUID(),
 };
 
@@ -78,6 +79,15 @@ describe.skipIf(!ADMIN_URL)("row-level security", () => {
     await db.query(
       `INSERT INTO app.patient_care_team (patient_id, user_id) VALUES ($1,$2), ($3,$4)`,
       [ids.p1, ids.therapistA, ids.p3, ids.therapistB],
+    );
+    // Platform admin: org-wide membership with no clinic.
+    await db.query(
+      `INSERT INTO app.app_user (id, email, full_name, kind, status) VALUES ($1,'admin@synthetic.test','Admin','staff','active')`,
+      [ids.admin],
+    );
+    await db.query(
+      `INSERT INTO app.membership (user_id, organization_id, clinic_id, role) VALUES ($1,$2,NULL,'platform_admin')`,
+      [ids.admin, ids.org1],
     );
   });
 
@@ -177,6 +187,93 @@ describe.skipIf(!ADMIN_URL)("row-level security", () => {
       `SELECT rolbypassrls FROM pg_roles WHERE rolname = 'emb_app'`,
     );
     expect(rows[0]?.rolbypassrls).toBe(false);
+  });
+
+  // --- Platform-admin policies (0019) ---
+
+  it("platform admin can read all organizations", async () => {
+    await asUser(ids.admin, async (c) => {
+      const { rows } = await c.query("SELECT id FROM app.organization ORDER BY id");
+      expect(rows.map(r => r.id).sort()).toEqual([ids.org1, ids.org2].sort());
+    });
+  });
+
+  it("platform admin can insert an organization", async () => {
+    await asUser(ids.admin, async (c) => {
+      await c.query("INSERT INTO app.organization (id, name, region) VALUES ($1, 'New Org', 'us')", [randomUUID()]);
+    });
+  });
+
+  it("platform admin can update any clinic", async () => {
+    await asUser(ids.admin, async (c) => {
+      await c.query("UPDATE app.clinic SET name = 'Renamed' WHERE id = $1", [ids.clinic2]);
+      const { rows } = await c.query("SELECT name FROM app.clinic WHERE id = $1", [ids.clinic2]);
+      expect(rows[0].name).toBe("Renamed");
+    });
+  });
+
+  it("platform admin can read and insert memberships across orgs", async () => {
+    await asUser(ids.admin, async (c) => {
+      const { rows } = await c.query("SELECT id FROM app.membership");
+      expect(rows.length).toBeGreaterThan(0);
+      await c.query(
+        "INSERT INTO app.membership (user_id, organization_id, clinic_id, role) VALUES ($1, $2, $3, 'therapist')",
+        [ids.therapistA, ids.org2, ids.clinic2],
+      );
+    });
+  });
+
+  it("platform admin can read all app_user rows", async () => {
+    await asUser(ids.admin, async (c) => {
+      const { rows } = await c.query("SELECT id FROM app.app_user");
+      expect(rows.length).toBeGreaterThanOrEqual(5); // therapistA, therapistB, managerM, outsider, admin
+    });
+  });
+
+  it("user can self-activate from invited to active via self_activate()", async () => {
+    const selfActivate = randomUUID();
+    await db.query("INSERT INTO app.app_user (id, email, full_name, kind, status) VALUES ($1, 'sa@test', 'SA', 'staff', 'invited')", [selfActivate]);
+    await asUser(selfActivate, async (c) => {
+      await c.query("SELECT app.self_activate()");
+      const { rows } = await c.query("SELECT status FROM app.app_user WHERE id = $1", [selfActivate]);
+      expect(rows[0].status).toBe("active");
+    });
+  });
+
+  it("self_activate() rejects disabled → active (I2)", async () => {
+    const disabled = randomUUID();
+    await db.query("INSERT INTO app.app_user (id, email, full_name, kind, status) VALUES ($1, 'dis@test', 'DIS', 'staff', 'disabled')", [disabled]);
+    await asUser(disabled, async (c) => {
+      await expect(c.query("SELECT app.self_activate()")).rejects.toThrow(/only invited/);
+    });
+  });
+
+  it("self_activate() rejects already-active user", async () => {
+    const active = randomUUID();
+    await db.query("INSERT INTO app.app_user (id, email, full_name, kind, status) VALUES ($1, 'act@test', 'ACT', 'staff', 'active')", [active]);
+    await asUser(active, async (c) => {
+      await expect(c.query("SELECT app.self_activate()")).rejects.toThrow(/only invited/);
+    });
+  });
+
+  it("user cannot UPDATE their own app_user row directly (I1)", async () => {
+    const noUpdate = randomUUID();
+    await db.query("INSERT INTO app.app_user (id, email, full_name, kind, status) VALUES ($1, 'nu@test', 'NU', 'staff', 'invited')", [noUpdate]);
+    await asUser(noUpdate, async (c) => {
+      // No UPDATE policy exists for non-admins now — raw UPDATE should affect 0 rows
+      const res = await c.query("UPDATE app.app_user SET email = 'hacked@test' WHERE id = $1", [noUpdate]);
+      expect(res.rowCount).toBe(0);
+      // Verify unchanged
+      const { rows } = await c.query("SELECT email FROM app.app_user WHERE id = $1", [noUpdate]);
+      expect(rows[0].email).toBe("nu@test");
+    });
+  });
+
+  it("non-admin cannot read orgs outside their membership", async () => {
+    await asUser(ids.outsider, async (c) => {
+      const { rows } = await c.query("SELECT id FROM app.organization");
+      expect(rows).toHaveLength(0);
+    });
   });
 
   it("generates time-ordered UUIDv7 keys", async () => {

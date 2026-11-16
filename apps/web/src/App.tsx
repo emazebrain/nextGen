@@ -13,6 +13,7 @@ import { SetupOfflinePage } from "./routes/setup-offline.tsx";
 import { useBundleRefresh } from "./device/refresh.tsx";
 import { DevicePage } from "./routes/device.tsx";
 import { SetupMfaPage, SignInPage, VerifyPage } from "./routes/auth.tsx";
+import { ChangePasswordPage } from "./routes/change-password.tsx";
 import { ComingSoonPage, MorePage, NotFoundPage, SettingsPage, TodayPage } from "./routes/pages.tsx";
 import { LoadError } from "./routes/shared.tsx";
 import { PatientsPage } from "./routes/patients/list.tsx";
@@ -28,6 +29,12 @@ import { useSignOut } from "./shell/ClinicShell.tsx";
 import { ClinicShell } from "./shell/ClinicShell.tsx";
 import { SessionPage } from "./session/SessionPage.tsx";
 import { VideoEditorPage, VideosAdminPage } from "./routes/admin/videos.tsx";
+import { AdminArea } from "./routes/admin/common.tsx";
+import { OrgDetailPage, OrganizationsPage } from "./routes/admin/organizations.tsx";
+import { OrgFormPage } from "./routes/admin/org-form.tsx";
+import { ClinicFormPage } from "./routes/admin/clinic-form.tsx";
+import { ClinicDetailPage } from "./routes/admin/clinic-detail.tsx";
+import { UserFormPage } from "./routes/admin/user-form.tsx";
 import { flush } from "./session/outbox.ts";
 
 /**
@@ -110,6 +117,8 @@ export function RequireStaff({ bare = false }: { bare?: boolean }) {
       </div>
     );
   }
+  // Invited by an admin: nothing else opens until the temporary password is replaced (system admin spec).
+  if (me.data.user_status === "invited" && location.pathname !== "/change-password") return <Navigate to="/change-password" replace />;
   return <StaffArea me={me.data} bare={bare} online />;
 }
 
@@ -183,6 +192,7 @@ export const routes: RouteObject[] = [
       { path: "/library/:gameId/preview", element: <GamePreviewPage /> },
       { path: "/session/:plannedSessionId", element: <SessionPage /> },
       { path: "/setup-offline", element: <SetupOfflinePage /> },
+      { path: "/change-password", element: <ChangePasswordPage /> },
     ],
   },
   {
@@ -213,6 +223,19 @@ export const routes: RouteObject[] = [
       { path: "/reports", element: <ComingSoonPage area="reports" /> },
       { path: "/admin/videos", element: <VideosAdminPage /> },
       { path: "/admin/videos/:id", element: <VideoEditorPage /> },
+      {
+        element: <AdminArea />,
+        children: [
+          { path: "/admin/organizations", element: <OrganizationsPage /> },
+          { path: "/admin/organizations/new", element: <OrgFormPage /> },
+          { path: "/admin/organizations/:id", element: <OrgDetailPage /> },
+          { path: "/admin/organizations/:id/edit", element: <OrgFormPage /> },
+          { path: "/admin/organizations/:orgId/clinics/new", element: <ClinicFormPage /> },
+          { path: "/admin/clinics/:id", element: <ClinicDetailPage /> },
+          { path: "/admin/clinics/:id/edit", element: <ClinicFormPage /> },
+          { path: "/admin/users/new", element: <UserFormPage /> },
+        ],
+      },
       { path: "/settings", element: <SettingsPage /> },
       { path: "/settings/device", element: <DevicePage /> },
       { path: "/more", element: <MorePage /> },

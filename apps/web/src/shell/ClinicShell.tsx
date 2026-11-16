@@ -20,6 +20,7 @@ import {
   Users,
   UsersRound,
   Film,
+  Building2,
 } from "lucide-react";
 import { AppShell, Avatar, Disclosure, Logo, SelectField, type ShellNavItem } from "@emb/ui";
 import { authClient } from "../api/auth.ts";
@@ -90,9 +91,14 @@ export function ClinicShell({ me }: { me: Me }) {
 
   const items: ShellNavItem[] = NAV.map((n) => ({ id: n.id, href: n.path, label: t(n.label), icon: n.icon }));
   // The content library is for platform admins only (ADR 0018).
-  if (me.is_platform_admin) items.push({ id: "videos", href: "/admin/videos", label: t("nav.videos"), icon: Film });
+  if (me.is_platform_admin) {
+    items.push({ id: "organizations", href: "/admin/organizations", label: t("admin.nav.organizations"), icon: Building2 });
+    items.push({ id: "videos", href: "/admin/videos", label: t("nav.videos"), icon: Film });
+  }
   const more: ShellNavItem = { id: "more", href: "/more", label: t("nav.more"), icon: LayoutGrid };
-  const isActive = (item: ShellNavItem) => location.pathname === item.href || location.pathname.startsWith(`${item.href}/`);
+  // Clinics and users are reached through their organization, so they light up the same item.
+  const under = (item: ShellNavItem) => (item.id === "organizations" ? [item.href, "/admin/clinics", "/admin/users"] : [item.href]);
+  const isActive = (item: ShellNavItem) => under(item).some((p) => location.pathname === p || location.pathname.startsWith(`${p}/`));
   const role = clinics.find((c) => c.id === clinicId)?.roles[0] ?? me.memberships[0]?.role;
 
   const toggleRail = () =>
@@ -117,7 +123,7 @@ export function ClinicShell({ me }: { me: Me }) {
       items={items}
       tabIds={PHONE_TABS}
       more={more}
-      isActive={(i) => (i.id === "more" ? ["/more", "/protocols", "/library", "/reports", "/settings", "/team"].some((p) => location.pathname.startsWith(p)) : isActive(i))}
+      isActive={(i) => (i.id === "more" ? ["/more", "/protocols", "/library", "/reports", "/settings", "/team", "/admin"].some((p) => location.pathname.startsWith(p)) : isActive(i))}
       renderLink={({ href: to, className, children, ...rest }) => (
         <Link to={to} className={className} {...rest}>
           {children}

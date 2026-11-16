@@ -6,6 +6,8 @@ import { useMemo, useState, type ComponentType } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { useIntl } from "react-intl";
 import {
+  Building2,
+  Film,
   ArrowLeft,
   BarChart3,
   BookOpen,
@@ -205,12 +207,20 @@ export function MorePage() {
   const t = useT();
   const signOut = useSignOut();
   const { isManager } = useClinic();
+  const me = useMe();
   useTitle(t("nav.more"));
   const links: Array<{ to: string; label: MessageId; icon: ComponentType<{ size?: number; "aria-hidden"?: "true" }> }> = [
     { to: "/protocols", label: "nav.protocols", icon: RouteIcon },
     { to: "/library", label: "nav.library", icon: BookOpen },
     { to: "/reports", label: "nav.reports", icon: BarChart3 },
     ...(isManager ? [{ to: "/team", label: "nav.team" as MessageId, icon: Users }] : []),
+    // Platform admin areas aren't in the phone's tab bar, so they are listed here.
+    ...(me.data?.is_platform_admin
+      ? [
+          { to: "/admin/organizations", label: "admin.nav.organizations" as MessageId, icon: Building2 },
+          { to: "/admin/videos", label: "nav.videos" as MessageId, icon: Film },
+        ]
+      : []),
     { to: "/settings", label: "nav.settings", icon: SettingsIcon },
   ];
   return (
