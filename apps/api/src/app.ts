@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type pg from "pg";
 import type { Auth } from "./auth.ts";
-import { requireStaffSession, type Env } from "./context.ts";
+import { requireActiveUser, requireStaffSession, type Env } from "./context.ts";
 import { meRoutes } from "./modules/me/routes.ts";
 import { patientRoutes } from "./modules/patients/routes.ts";
 import { clinicRoutes } from "./modules/clinics/routes.ts";
@@ -60,6 +60,7 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
 
     const v1 = new Hono<Env>();
     v1.use("*", requireStaffSession(deps.auth));
+    v1.use("*", requireActiveUser(deps.pool));
     v1.route("/me", meRoutes(deps.pool));
     v1.route("/patients", patientRoutes(deps.pool));
     v1.route("/clinics", clinicRoutes(deps.pool));
