@@ -11,6 +11,7 @@
     "seed:dev": "node --experimental-strip-types scripts/seed-dev.ts"
   },
   "dependencies": {
+    "@emb/db": "workspace:*",
     "@emb/game-sdk": "workspace:*",
     "@emb/session-rules": "workspace:*",
     "@hono/node-server": "^1.14.0",

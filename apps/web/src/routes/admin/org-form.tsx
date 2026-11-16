@@ -80,13 +80,15 @@ function OrgForm({ existing }: { existing?: AdminOrg }) {
                 {t("admin.organizations.regionHint")}
               </p>
             </div>
-            <SelectField label={t("admin.organizations.locale")} name="default_locale" value={locale} onChange={(e) => setLocale(e.target.value as OrgLocale)}>
-              {ORG_LOCALES.map((l) => (
-                <option key={l} value={l} lang={l}>
-                  {t(`language.${l}`)}
-                </option>
-              ))}
-            </SelectField>
+            <div>
+              <SelectField label={t("admin.organizations.locale")} name="default_locale" value={locale} onChange={(e) => setLocale(e.target.value as OrgLocale)}>
+                {ORG_LOCALES.map((l) => (
+                  <option key={l} value={l} lang={l}>
+                    {t(`language.${l}`)}
+                  </option>
+                ))}
+              </SelectField>
+            </div>
           </div>
           <div className="pform__actions">
             <Link to={backTo} className="emb-btn emb-btn--secondary">

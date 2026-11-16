@@ -17,6 +17,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@emb/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@emb/game-sdk':
         specifier: workspace:*
         version: link:../../packages/game-sdk

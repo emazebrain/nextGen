@@ -6,6 +6,7 @@ setDefaultResultOrder("ipv4first");
 import { deviceKey } from "./device-crypto.ts";
 import { serve } from "@hono/node-server";
 import pg from "pg";
+import { migrate } from "@emb/db";
 import { createApp } from "./app.ts";
 import { createAuth } from "./auth.ts";
 import { ticketSigner } from "./tickets.ts";
@@ -45,6 +46,16 @@ const tickets = ticketSigner(process.env.LAUNCH_SIGNING_KEY?.replace(/\\n/g, "\n
 const files = localFileStore(process.env.FILE_STORE_DIR ?? ".data/files");
 const mailer = createMailer(process.env);
 const app = createApp(info, { pool, auth, tickets, files, deviceKey: deviceKey(process.env.DEVICE_SECRET_KEY), mailer, publicAppUrl: process.env.PUBLIC_APP_URL });
+
+// Run pending migrations before accepting traffic.
+const migrationClient = new pg.Client({ connectionString: databaseUrl });
+await migrationClient.connect();
+try {
+  const applied = await migrate(migrationClient);
+  if (applied.length) console.log(`migrations applied: ${applied.join(", ")}`);
+} finally {
+  await migrationClient.end();
+}
 
 serve({ fetch: app.fetch, port }, (s) => {
   console.log(`api listening on :${s.port} (cell ${info.cell})`);
