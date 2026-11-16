@@ -747,6 +747,8 @@
   "admin.users.disabled": "Disabled",
   "auth.changePassword.title": "Change your password",
   "auth.changePassword.subtitle": "You signed in with a temporary password. Choose a new one to continue.",
+  "auth.changePassword.currentPassword": "Temporary password",
+  "auth.changePassword.invalid": "That temporary password isn't right. Check the invitation email and try again.",
   "auth.changePassword.newPassword": "New password",
   "auth.changePassword.confirmPassword": "Confirm password",
   "auth.changePassword.submit": "Change password",

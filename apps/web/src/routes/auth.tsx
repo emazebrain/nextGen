@@ -19,7 +19,7 @@ export function safeNext(next: string | null): string {
   return next && next.startsWith("/") && !next.startsWith("//") ? next : "/today";
 }
 
-function failureMessage(f: AuthFailure, invalid: MessageId): MessageId {
+export function failureMessage(f: AuthFailure, invalid: MessageId): MessageId {
   if (f === "rate_limited") return "auth.rateLimited";
   if (f === "network") return "errors.network";
   if (f === "expired") return "auth.verify.expired";

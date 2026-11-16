@@ -13,6 +13,7 @@ import { SetupOfflinePage } from "./routes/setup-offline.tsx";
 import { useBundleRefresh } from "./device/refresh.tsx";
 import { DevicePage } from "./routes/device.tsx";
 import { SetupMfaPage, SignInPage, VerifyPage } from "./routes/auth.tsx";
+import { ChangePasswordPage } from "./routes/change-password.tsx";
 import { ComingSoonPage, MorePage, NotFoundPage, SettingsPage, TodayPage } from "./routes/pages.tsx";
 import { LoadError } from "./routes/shared.tsx";
 import { PatientsPage } from "./routes/patients/list.tsx";
@@ -110,6 +111,8 @@ export function RequireStaff({ bare = false }: { bare?: boolean }) {
       </div>
     );
   }
+  // Invited by an admin: nothing else opens until the temporary password is replaced (system admin spec).
+  if (me.data.user_status === "invited" && location.pathname !== "/change-password") return <Navigate to="/change-password" replace />;
   return <StaffArea me={me.data} bare={bare} online />;
 }
 
@@ -183,6 +186,7 @@ export const routes: RouteObject[] = [
       { path: "/library/:gameId/preview", element: <GamePreviewPage /> },
       { path: "/session/:plannedSessionId", element: <SessionPage /> },
       { path: "/setup-offline", element: <SetupOfflinePage /> },
+      { path: "/change-password", element: <ChangePasswordPage /> },
     ],
   },
   {

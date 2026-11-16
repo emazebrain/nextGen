@@ -747,6 +747,8 @@
   "admin.users.disabled": "מושבת",
   "auth.changePassword.title": "החלפת סיסמה",
   "auth.changePassword.subtitle": "נכנסת עם סיסמה זמנית. יש לבחור סיסמה חדשה כדי להמשיך.",
+  "auth.changePassword.currentPassword": "סיסמה זמנית",
+  "auth.changePassword.invalid": "הסיסמה הזמנית אינה נכונה. בדקו את הודעת ההזמנה ונסו שוב.",
   "auth.changePassword.newPassword": "סיסמה חדשה",
   "auth.changePassword.confirmPassword": "אישור סיסמה",
   "auth.changePassword.submit": "החלפת סיסמה",
