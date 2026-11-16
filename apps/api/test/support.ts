@@ -14,6 +14,7 @@ import { ticketSigner, type TicketSigner } from "../src/tickets.ts";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Mailer } from "../src/email.ts";
 
 export const ADMIN_URL = process.env.DATABASE_URL;
 export const BASE = "http://localhost:8787";
@@ -80,7 +81,7 @@ export interface TestEnv {
   close: () => Promise<void>;
 }
 
-export async function setupApi(opts: { authSchema?: string } = {}): Promise<TestEnv> {
+export async function setupApi(opts: { authSchema?: string; mailer?: Mailer } = {}): Promise<TestEnv> {
   vi.useFakeTimers({ toFake: ["Date"], shouldAdvanceTime: true });
   const name = `emb_api_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
   const admin = new pg.Client({ connectionString: ADMIN_URL });
@@ -102,7 +103,7 @@ export async function setupApi(opts: { authSchema?: string } = {}): Promise<Test
   const fileDir = mkdtempSync(join(tmpdir(), "emb-files-"));
   const key = deviceKey(randomBytes(32).toString("base64"));
   const tickets = ticketSigner();
-  const app = createApp({ cell: "test", version: "test" }, { pool, auth, files: localFileStore(fileDir), deviceKey: key, tickets });
+  const app = createApp({ cell: "test", version: "test" }, { pool, auth, files: localFileStore(fileDir), deviceKey: key, tickets, ...(opts.mailer ? { mailer: opts.mailer } : {}) });
   return {
     app,
     db,
