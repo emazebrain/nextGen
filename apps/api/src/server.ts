@@ -48,13 +48,18 @@ const mailer = createMailer(process.env);
 const app = createApp(info, { pool, auth, tickets, files, deviceKey: deviceKey(process.env.DEVICE_SECRET_KEY), mailer, publicAppUrl: process.env.PUBLIC_APP_URL });
 
 // Run pending migrations before accepting traffic.
-const migrationClient = new pg.Client({ connectionString: databaseUrl });
-await migrationClient.connect();
 try {
-  const applied = await migrate(migrationClient);
-  if (applied.length) console.log(`migrations applied: ${applied.join(", ")}`);
-} finally {
-  await migrationClient.end();
+  const migrationClient = new pg.Client({ connectionString: databaseUrl });
+  await migrationClient.connect();
+  try {
+    const applied = await migrate(migrationClient);
+    if (applied.length) console.log(`migrations applied: ${applied.join(", ")}`);
+    else console.log("migrations: up to date");
+  } finally {
+    await migrationClient.end();
+  }
+} catch (err) {
+  console.error("migration failed — server starting without it:", err);
 }
 
 serve({ fetch: app.fetch, port }, (s) => {
