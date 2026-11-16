@@ -802,6 +802,7 @@
   "admin.users.organizationChoose": "Choose an organization",
   "admin.users.actions": "Actions",
   "admin.users.emailTaken": "Someone already has an account with that email.",
+  "admin.users.clinicRequired": "This role needs a clinic.",
   "admin.users.createdSent": "{name} was invited. The email with their temporary password is on its way.",
   "admin.users.createdNotSent": "{name}'s account was created, but the invitation email couldn't be sent. Use Resend invitation.",
   "admin.users.disable": "Disable",

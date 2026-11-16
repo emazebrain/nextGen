@@ -57,6 +57,15 @@ describe("admin API", () => {
     ).toBe(403);
   });
 
+  it("non-admin gets 403 on PATCH and resend-invite (I9)", async () => {
+    // Use a fake UUID — the 403 fires before it matters that the id doesn't exist
+    const fakeId = "00000000-0000-0000-0000-000000000000";
+    expect((await therapist(`/v1/admin/organizations/${fakeId}`, { method: "PATCH", body: { status: "active" } })).status).toBe(403);
+    expect((await therapist(`/v1/admin/clinics/${fakeId}`, { method: "PATCH", body: { name: "X" } })).status).toBe(403);
+    expect((await therapist(`/v1/admin/users/${fakeId}`, { method: "PATCH", body: { status: "active" } })).status).toBe(403);
+    expect((await therapist(`/v1/admin/users/${fakeId}/resend-invite`, { method: "POST" })).status).toBe(403);
+  });
+
   it("admin creates an organization", async () => {
     const res = await admin("/v1/admin/organizations", {
       method: "POST",
@@ -272,6 +281,40 @@ describe("admin API: reading and editing", () => {
     expect((await admin("/v1/admin/organizations/00000000-0000-7000-8000-000000000000/clinics", { method: "POST", body: { name: "Orphan", country_code: "IL", timezone: "Asia/Jerusalem" } })).status).toBe(404);
   });
 
+  it("requires clinic_id for clinic-scoped roles and forbids it for org-wide roles", async () => {
+    // therapist without clinic_id → 400
+    const noClinic = await admin("/v1/admin/users", {
+      method: "POST",
+      body: { email: "no.clinic@synthetic.test", full_name: "No Clinic", role: "therapist", organization_id: org2 },
+    });
+    expect(noClinic.status).toBe(400);
+    expect(noClinic.body.error).toBe("clinic_required");
+
+    // clinic_manager without clinic_id → 400
+    const noClinic2 = await admin("/v1/admin/users", {
+      method: "POST",
+      body: { email: "no.clinic2@synthetic.test", full_name: "No Clinic 2", role: "clinic_manager", organization_id: org2 },
+    });
+    expect(noClinic2.status).toBe(400);
+    expect(noClinic2.body.error).toBe("clinic_required");
+
+    // org_admin with clinic_id → 400
+    const withClinic = await admin("/v1/admin/users", {
+      method: "POST",
+      body: { email: "with.clinic@synthetic.test", full_name: "With Clinic", role: "org_admin", organization_id: org2, clinic_id: clinic2 },
+    });
+    expect(withClinic.status).toBe(400);
+    expect(withClinic.body.error).toBe("clinic_forbidden");
+
+    // platform_admin with clinic_id → 400
+    const withClinic2 = await admin("/v1/admin/users", {
+      method: "POST",
+      body: { email: "with.clinic2@synthetic.test", full_name: "With Clinic 2", role: "platform_admin", organization_id: org2, clinic_id: clinic2 },
+    });
+    expect(withClinic2.status).toBe(400);
+    expect(withClinic2.body.error).toBe("clinic_forbidden");
+  });
+
   it("never returns the temporary password", async () => {
     const res = await admin("/v1/admin/users", {
       method: "POST",
@@ -334,7 +377,7 @@ describe("account status gate", () => {
     expect(back.body.user.status).toBe("active");
     const invited = await admin("/v1/admin/users", {
       method: "POST",
-      body: { email: "gate.invited@synthetic.test", full_name: "Gate Invited", role: "assistant", organization_id: orgId },
+      body: { email: "gate.invited@synthetic.test", full_name: "Gate Invited", role: "assistant", organization_id: orgId, clinic_id: clinicId },
     });
     const res = await admin(`/v1/admin/users/${invited.body.user.id}`, { method: "PATCH", body: { status: "active" } });
     expect(res.status).toBe(409);

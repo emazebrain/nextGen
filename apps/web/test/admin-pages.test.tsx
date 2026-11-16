@@ -239,6 +239,9 @@ describe("admin screens", () => {
     await user.clear(screen.getByLabelText("Email"));
     await user.type(screen.getByLabelText("Email"), "dana@synthetic.test");
     await user.type(screen.getByLabelText("Full name"), "Dana Again");
+    // C1: therapist (default) needs a clinic — select one so the request reaches the server
+    await waitFor(() => expect(within(screen.getByLabelText("Clinic")).getByRole("option", { name: "Haifa Clinic" })).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText("Clinic"), "c1");
     await user.click(screen.getByRole("button", { name: "Create user" }));
     expect(await screen.findByText("Someone already has an account with that email.")).toBeInTheDocument();
   });

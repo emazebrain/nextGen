@@ -47,10 +47,8 @@ export function meRoutes(pool: pg.Pool) {
       if (currentStatus !== "invited") {
         return { ok: false, currentStatus };
       }
-      // The user_self_activate RLS policy allows this UPDATE
-      await db.query(
-        `UPDATE app.app_user SET status = 'active' WHERE id = app.current_user_id()`,
-      );
+      // SECURITY DEFINER function: only invited → active on own row (I1/I2).
+      await db.query(`SELECT app.self_activate()`);
       return { ok: true };
     });
 

@@ -44,7 +44,7 @@ const tickets = ticketSigner(process.env.LAUNCH_SIGNING_KEY?.replace(/\\n/g, "\n
 // FILE_STORE_DIR: where uploaded videos are kept on this machine (the cloud cells switch to S3 with deployment).
 const files = localFileStore(process.env.FILE_STORE_DIR ?? ".data/files");
 const mailer = createMailer(process.env);
-const app = createApp(info, { pool, auth, tickets, files, deviceKey: deviceKey(process.env.DEVICE_SECRET_KEY), mailer });
+const app = createApp(info, { pool, auth, tickets, files, deviceKey: deviceKey(process.env.DEVICE_SECRET_KEY), mailer, publicAppUrl: process.env.PUBLIC_APP_URL });
 
 serve({ fetch: app.fetch, port }, (s) => {
   console.log(`api listening on :${s.port} (cell ${info.cell})`);

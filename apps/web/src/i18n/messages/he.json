@@ -802,6 +802,7 @@
   "admin.users.organizationChoose": "בחרו ארגון",
   "admin.users.actions": "פעולות",
   "admin.users.emailTaken": "כבר קיים חשבון עם כתובת הדוא״ל הזו.",
+  "admin.users.clinicRequired": "תפקיד זה דורש מרפאה.",
   "admin.users.createdSent": "{name} הוזמן. הודעת הדוא״ל עם הסיסמה הזמנית בדרך.",
   "admin.users.createdNotSent": "החשבון של {name} נוצר, אבל לא הצלחנו לשלוח את הודעת ההזמנה. השתמשו ב״שליחת הזמנה מחדש״.",
   "admin.users.disable": "השבתה",

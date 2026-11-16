@@ -49,10 +49,11 @@ function setClause(fields: Record<string, unknown>): { sql: string; values: unkn
   return { sql: entries.map(([k], i) => `${k} = $${i + 1}`).join(", "), values: entries.map(([, v]) => v) };
 }
 
-export function adminRoutes(pool: pg.Pool, auth: Auth, mailer: Mailer) {
+export function adminRoutes(pool: pg.Pool, auth: Auth, mailer: Mailer, publicAppUrl?: string) {
   const r = new Hono<Env>();
   const run = <T>(c: C, fn: (db: pg.PoolClient) => Promise<T>) => withUser(pool, c.get("user").id, c.get("requestId"), fn);
-  const loginUrl = (c: C) => `${c.req.header("origin") ?? "https://app.emazebrain.com"}/sign-in`;
+  // I4: use a configured URL, never the spoofable Origin header.
+  const loginUrl = `${publicAppUrl ?? "https://app.emazebrain.com"}/sign-in`;
 
   // ── Middleware: reject non-platform-admins ───────────────────────────
   r.use("*", async (c, next) => {
@@ -242,6 +243,12 @@ export function adminRoutes(pool: pg.Pool, auth: Auth, mailer: Mailer) {
     if (!input) return invalid(c);
     const clinicId = input.clinic_id ?? null;
 
+    // Clinic-scoped roles need a clinic; org-wide roles must not have one.
+    const ORG_WIDE_ROLES = ["org_admin", "platform_admin"];
+    const isOrgWide = ORG_WIDE_ROLES.includes(input.role);
+    if (!isOrgWide && !clinicId) return c.json({ error: "clinic_required" }, 400);
+    if (isOrgWide && clinicId) return c.json({ error: "clinic_forbidden" }, 400);
+
     // Check everything that can be checked before an identity exists, so a refusal leaves nothing behind.
     const problem = await run(c, async (db) => {
       const org = await db.query(`SELECT 1 FROM app.organization WHERE id = $1 AND deleted_at IS NULL`, [input.organization_id]);
@@ -286,7 +293,7 @@ export function adminRoutes(pool: pg.Pool, auth: Auth, mailer: Mailer) {
     }
 
     // The account exists whether or not the email goes out; the admin can resend it.
-    const emailSent = await mailer.sendInvitation(input.email, input.full_name, tempPassword, loginUrl(c)).catch(() => false);
+    const emailSent = await mailer.sendInvitation(input.email, input.full_name, tempPassword, loginUrl).catch(() => false);
     return c.json({ user: result.user, membership: result.membership, email_sent: emailSent }, 201);
   });
 
@@ -334,7 +341,7 @@ export function adminRoutes(pool: pg.Pool, auth: Auth, mailer: Mailer) {
     const tempPassword = generateTempPassword();
     const ctx = await auth.$context;
     await ctx.internalAdapter.updatePassword(id, await ctx.password.hash(tempPassword));
-    const sent = await mailer.sendInvitation(target.email, target.full_name, tempPassword, loginUrl(c)).catch(() => false);
+    const sent = await mailer.sendInvitation(target.email, target.full_name, tempPassword, loginUrl).catch(() => false);
     return c.json({ sent });
   });
 

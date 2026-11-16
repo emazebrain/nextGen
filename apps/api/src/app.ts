@@ -33,6 +33,8 @@ export interface AppDeps {
   deviceKey?: DeviceKey;
   /** Invitation mailer. Defaults to a no-op mailer (dev and tests). */
   mailer?: Mailer;
+  /** Public URL of the web app, used for invitation login links (I4: not from Origin header). */
+  publicAppUrl?: string | undefined;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -69,7 +71,7 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
     v1.route("/", videoRoutes(deps.pool, deps.files ?? localFileStore(process.env.FILE_STORE_DIR ?? ".data/files")));
     v1.route("/", deviceRoutes(deps.pool, deps.deviceKey ?? deviceKey(undefined)));
     v1.route("/", offlineRoutes(deps.pool, deps.tickets ?? ticketSigner()));
-    v1.route("/admin", adminRoutes(deps.pool, deps.auth, deps.mailer ?? createMailer({})));
+    v1.route("/admin", adminRoutes(deps.pool, deps.auth, deps.mailer ?? createMailer({}), deps.publicAppUrl));
     app.route("/v1", v1);
   }
 

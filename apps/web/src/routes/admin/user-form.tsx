@@ -25,7 +25,7 @@ export function UserFormPage() {
   const [orgId, setOrgId] = useState(params.get("org") ?? "");
   const [clinicId, setClinicId] = useState(params.get("clinic") ?? "");
   const clinics = useAdminClinics(orgId);
-  const [errors, setErrors] = useState<Partial<Record<"email" | "full_name" | "organization", MessageId>>>({});
+  const [errors, setErrors] = useState<Partial<Record<"email" | "full_name" | "organization" | "clinic", MessageId>>>({});
   const [error, setError] = useState<MessageId | null>(null);
   const save = useAdminMutation(createUser);
   useTitle(t("admin.users.new"));
@@ -44,6 +44,7 @@ export function UserFormPage() {
     if (!EMAIL.test(email.trim())) found.email = "errors.email";
     if (!fullName.trim()) found.full_name = "errors.required";
     if (!orgId) found.organization = "errors.required";
+    if (!orgWide && !clinic) found.clinic = "admin.users.clinicRequired";
     setErrors(found);
     if (Object.keys(found).length) {
       requestAnimationFrame(() => (document.querySelector('[aria-invalid="true"]') as HTMLElement | null)?.focus());
@@ -130,14 +131,17 @@ export function UserFormPage() {
                 </p>
               )}
             </div>
-            <SelectField label={t("admin.users.clinic")} name="clinic_id" value={clinic} disabled={orgWide || !orgId} onChange={(e) => setClinicId(e.target.value)}>
-              <option value="">{t("admin.users.wholeOrganization")}</option>
-              {(clinics.data ?? []).map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </SelectField>
+            <div>
+              <SelectField label={t("admin.users.clinic")} name="clinic_id" value={clinic} disabled={orgWide || !orgId} aria-invalid={errors.clinic ? true : undefined} aria-describedby={errors.clinic ? "user-clinic-error" : undefined} onChange={(e) => { setClinicId(e.target.value); setErrors(({ clinic: _gone, ...rest }) => rest); }}>
+                <option value="">{orgWide ? t("admin.users.wholeOrganization") : ""}</option>
+                {(clinics.data ?? []).map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </SelectField>
+              {errors.clinic && <p className="emb-field__error" id="user-clinic-error">{t(errors.clinic)}</p>}
+            </div>
           </div>
           <div className="pform__actions">
             <Link to={backTo} className="emb-btn emb-btn--secondary">

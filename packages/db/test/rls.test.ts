@@ -230,22 +230,42 @@ describe.skipIf(!ADMIN_URL)("row-level security", () => {
     });
   });
 
-  it("user can self-activate from invited to active", async () => {
+  it("user can self-activate from invited to active via self_activate()", async () => {
     const selfActivate = randomUUID();
     await db.query("INSERT INTO app.app_user (id, email, full_name, kind, status) VALUES ($1, 'sa@test', 'SA', 'staff', 'invited')", [selfActivate]);
     await asUser(selfActivate, async (c) => {
-      await c.query("UPDATE app.app_user SET status = 'active' WHERE id = $1", [selfActivate]);
+      await c.query("SELECT app.self_activate()");
       const { rows } = await c.query("SELECT status FROM app.app_user WHERE id = $1", [selfActivate]);
       expect(rows[0].status).toBe("active");
     });
   });
 
-  it("user cannot self-set status to disabled", async () => {
-    const noDisable = randomUUID();
-    await db.query("INSERT INTO app.app_user (id, email, full_name, kind, status) VALUES ($1, 'nd@test', 'ND', 'staff', 'active')", [noDisable]);
-    await asUser(noDisable, async (c) => {
-      await expect(c.query("UPDATE app.app_user SET status = 'disabled' WHERE id = $1", [noDisable]))
-        .rejects.toThrow(); // RLS WITH CHECK prevents status != 'active'
+  it("self_activate() rejects disabled → active (I2)", async () => {
+    const disabled = randomUUID();
+    await db.query("INSERT INTO app.app_user (id, email, full_name, kind, status) VALUES ($1, 'dis@test', 'DIS', 'staff', 'disabled')", [disabled]);
+    await asUser(disabled, async (c) => {
+      await expect(c.query("SELECT app.self_activate()")).rejects.toThrow(/only invited/);
+    });
+  });
+
+  it("self_activate() rejects already-active user", async () => {
+    const active = randomUUID();
+    await db.query("INSERT INTO app.app_user (id, email, full_name, kind, status) VALUES ($1, 'act@test', 'ACT', 'staff', 'active')", [active]);
+    await asUser(active, async (c) => {
+      await expect(c.query("SELECT app.self_activate()")).rejects.toThrow(/only invited/);
+    });
+  });
+
+  it("user cannot UPDATE their own app_user row directly (I1)", async () => {
+    const noUpdate = randomUUID();
+    await db.query("INSERT INTO app.app_user (id, email, full_name, kind, status) VALUES ($1, 'nu@test', 'NU', 'staff', 'invited')", [noUpdate]);
+    await asUser(noUpdate, async (c) => {
+      // No UPDATE policy exists for non-admins now — raw UPDATE should affect 0 rows
+      const res = await c.query("UPDATE app.app_user SET email = 'hacked@test' WHERE id = $1", [noUpdate]);
+      expect(res.rowCount).toBe(0);
+      // Verify unchanged
+      const { rows } = await c.query("SELECT email FROM app.app_user WHERE id = $1", [noUpdate]);
+      expect(rows[0].email).toBe("nu@test");
     });
   });
 
