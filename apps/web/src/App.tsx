@@ -29,6 +29,12 @@ import { useSignOut } from "./shell/ClinicShell.tsx";
 import { ClinicShell } from "./shell/ClinicShell.tsx";
 import { SessionPage } from "./session/SessionPage.tsx";
 import { VideoEditorPage, VideosAdminPage } from "./routes/admin/videos.tsx";
+import { AdminArea } from "./routes/admin/common.tsx";
+import { OrgDetailPage, OrganizationsPage } from "./routes/admin/organizations.tsx";
+import { OrgFormPage } from "./routes/admin/org-form.tsx";
+import { ClinicFormPage } from "./routes/admin/clinic-form.tsx";
+import { ClinicDetailPage } from "./routes/admin/clinic-detail.tsx";
+import { UserFormPage } from "./routes/admin/user-form.tsx";
 import { flush } from "./session/outbox.ts";
 
 /**
@@ -217,6 +223,19 @@ export const routes: RouteObject[] = [
       { path: "/reports", element: <ComingSoonPage area="reports" /> },
       { path: "/admin/videos", element: <VideosAdminPage /> },
       { path: "/admin/videos/:id", element: <VideoEditorPage /> },
+      {
+        element: <AdminArea />,
+        children: [
+          { path: "/admin/organizations", element: <OrganizationsPage /> },
+          { path: "/admin/organizations/new", element: <OrgFormPage /> },
+          { path: "/admin/organizations/:id", element: <OrgDetailPage /> },
+          { path: "/admin/organizations/:id/edit", element: <OrgFormPage /> },
+          { path: "/admin/organizations/:orgId/clinics/new", element: <ClinicFormPage /> },
+          { path: "/admin/clinics/:id", element: <ClinicDetailPage /> },
+          { path: "/admin/clinics/:id/edit", element: <ClinicFormPage /> },
+          { path: "/admin/users/new", element: <UserFormPage /> },
+        ],
+      },
       { path: "/settings", element: <SettingsPage /> },
       { path: "/settings/device", element: <DevicePage /> },
       { path: "/more", element: <MorePage /> },
