@@ -123,7 +123,7 @@ export function adminRoutes(pool: pg.Pool, auth: Auth, mailer: Mailer) {
       email: body.email,
       name: body.full_name,
       emailVerified: false,
-    });
+    }, { method: "admin" });
     if (!authUser) return c.json({ error: "user_creation_failed" }, 500);
 
     // 3. Link credential account
