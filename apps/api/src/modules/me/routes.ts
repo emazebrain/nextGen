@@ -47,8 +47,13 @@ export function meRoutes(pool: pg.Pool) {
       if (currentStatus !== "invited") {
         return { ok: false, currentStatus };
       }
-      // SECURITY DEFINER function: only invited → active on own row (I1/I2).
-      await db.query(`SELECT app.self_activate()`);
+      // The SECURITY DEFINER function (app.self_activate) could not be created
+      // on Supabase (CREATE FUNCTION blocked for the postgres role). The guard
+      // is enforced here instead: only invited → active, own row only (I1/I2).
+      // RLS user_self_activate policy further constrains the UPDATE.
+      await db.query(
+        `UPDATE app.app_user SET status = 'active' WHERE id = app.current_user_id()`,
+      );
       return { ok: true };
     });
 
