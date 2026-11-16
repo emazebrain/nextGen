@@ -1,3 +1,8 @@
+import { setDefaultResultOrder } from "node:dns";
+// Railway's network does not support IPv6 outbound; Supabase hostnames resolve
+// to both v4 and v6, and Node tries v6 first → ENETUNREACH.  Force IPv4.
+setDefaultResultOrder("ipv4first");
+
 import { deviceKey } from "./device-crypto.ts";
 import { serve } from "@hono/node-server";
 import pg from "pg";
