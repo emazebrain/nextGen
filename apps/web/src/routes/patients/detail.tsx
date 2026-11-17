@@ -5,8 +5,8 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link, Outlet, useLocation, useNavigate, useOutletContext, useParams } from "react-router";
 import { useIntl } from "react-intl";
-import { ArchiveRestore, ArrowLeft, Archive, MoreHorizontal, Pencil, Plus, Route as RouteIcon, ShieldCheck, SearchX, UserRound, Unlink } from "lucide-react";
-import { guardianFields, CONSENT_PURPOSES, LOCALES, RELATIONSHIPS, type GuardianInput, type Locale, type Relationship } from "@emb/contracts";
+import { ArchiveRestore, ArrowLeft, Archive, Mail, MoreHorizontal, Pencil, Plus, RefreshCw, Route as RouteIcon, ShieldCheck, SearchX, UserRound, Unlink, X } from "lucide-react";
+import { guardianFields, CONSENT_PURPOSES, LOCALES, RELATIONSHIPS, type ConsentRequestView, type GuardianInput, type Locale, type Relationship } from "@emb/contracts";
 import {
   Alert,
   Avatar,
@@ -23,7 +23,7 @@ import {
   TextField,
 } from "@emb/ui";
 import { ApiError } from "../../api/http.ts";
-import { useArchivePatient, usePatient, useRemoveGuardian, useSaveGuardian, type PatientDetail } from "../../api/queries.ts";
+import { useArchivePatient, useCancelConsentRequest, usePatient, useRemoveGuardian, useRequestConsent, useResendConsentRequest, useSaveGuardian, type PatientDetail } from "../../api/queries.ts";
 import { useT, usePrefs, type MessageId } from "../../i18n/index.tsx";
 import { useClinic } from "../../lib/clinic.tsx";
 import { calendarDate } from "../../lib/format.ts";
@@ -276,10 +276,16 @@ export function PatientFamily() {
   const { patient: p } = usePatientCtx();
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [unlinking, setUnlinking] = useState<{ id: string; name: string } | null>(null);
+  const [showConsentForm, setShowConsentForm] = useState(false);
+  const [cancellingReq, setCancellingReq] = useState<ConsentRequestView | null>(null);
   const remove = useRemoveGuardian(p.id);
+  const resend = useResendConsentRequest(p.id);
+  const cancelReq = useCancelConsentRequest(p.id);
   const consents = new Map(p.consents.map((c) => [c.purpose, c]));
   const hasLegal = p.guardians.some((g) => g.is_legal_guardian);
   const anyConsent = p.consents.length > 0;
+  const pendingReqs = p.consent_requests.filter((r) => r.status === "pending");
+  const completedReqs = p.consent_requests.filter((r) => r.status !== "pending");
 
   return (
     <div className="pgrid pgrid--even">
@@ -381,6 +387,92 @@ export function PatientFamily() {
         </ul>
       </Card>
 
+      {!p.archived && (
+        <Card as="section" labelledBy="p-consentreq" className="pgrid__full">
+          <div className="app-cardrow">
+            <h2 id="p-consentreq" className="app-cardtitle">
+              {t("consentReq.title")}
+            </h2>
+            {!showConsentForm && (
+              <Button variant="secondary" icon={<Mail size={18} aria-hidden="true" />} onClick={() => setShowConsentForm(true)}>
+                {t("consentReq.sendShort")}
+              </Button>
+            )}
+          </div>
+          {showConsentForm && (
+            <ConsentRequestForm patientId={p.id} guardians={p.guardians} onDone={() => setShowConsentForm(false)} />
+          )}
+          {pendingReqs.length > 0 && (
+            <ul className="plainlist">
+              {pendingReqs.map((r) => (
+                <li key={r.id} className="consentreq">
+                  <Mail size={20} aria-hidden="true" className="consentreq__icon" />
+                  <div className="consentreq__text">
+                    <p className="consentreq__name">
+                      <bdi>{r.guardian_name}</bdi>
+                      <Chip tone="warning">{t("consentReq.pending")}</Chip>
+                    </p>
+                    <p className="app-muted">
+                      <bdi dir="ltr">{r.guardian_email}</bdi>
+                      {" · "}
+                      {t("consentReq.sentAt", { date: intl.formatDate(new Date(r.sent_at), { day: "numeric", month: "short" }) })}
+                    </p>
+                  </div>
+                  <div className="consentreq__actions">
+                    <Button variant="ghost" icon={<RefreshCw size={16} aria-hidden="true" />} loading={resend.isPending} onClick={() => resend.mutate(r.id)}>
+                      {t("consentReq.resend")}
+                    </Button>
+                    <Button variant="ghost" icon={<X size={16} aria-hidden="true" />} onClick={() => setCancellingReq(r)}>
+                      {t("consentReq.cancel")}
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          {completedReqs.length > 0 && (
+            <ul className="plainlist">
+              {completedReqs.map((r) => (
+                <li key={r.id} className="consentreq consentreq--done">
+                  <Mail size={20} aria-hidden="true" className="consentreq__icon" />
+                  <div className="consentreq__text">
+                    <p className="consentreq__name">
+                      <bdi>{r.guardian_name}</bdi>
+                      <Chip tone={r.status === "completed" ? "success" : "neutral"}>{t(`consentReq.${r.status}`)}</Chip>
+                    </p>
+                    <p className="app-muted">
+                      <bdi dir="ltr">{r.guardian_email}</bdi>
+                      {r.completed_at && (
+                        <>
+                          {" · "}
+                          {t("consentReq.completedAt", { date: intl.formatDate(new Date(r.completed_at), { day: "numeric", month: "short" }) })}
+                        </>
+                      )}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          {p.consent_requests.length === 0 && !showConsentForm && (
+            <p className="app-muted">{t("consentReq.noEmail")}</p>
+          )}
+        </Card>
+      )}
+
+      <ConfirmDialog
+        open={!!cancellingReq}
+        title={t("consentReq.cancel.title")}
+        confirmLabel={t("consentReq.cancel")}
+        cancelLabel={t("common.cancel")}
+        tone="danger"
+        busy={cancelReq.isPending}
+        onCancel={() => setCancellingReq(null)}
+        onConfirm={() => cancellingReq && cancelReq.mutate(cancellingReq.id, { onSuccess: () => setCancellingReq(null) })}
+      >
+        {t("consentReq.cancel.body")}
+      </ConfirmDialog>
+
       <ConfirmDialog
         open={!!unlinking}
         title={t("guardian.unlink.title", { name: unlinking?.name ?? "" })}
@@ -463,6 +555,98 @@ function GuardianForm({ patientId, guardian, onDone }: { patientId: string; guar
         <Button type="submit" loading={save.isPending}>
           {guardian ? t("common.save") : t("guardian.add")}
         </Button>
+      </div>
+    </form>
+  );
+}
+
+function ConsentRequestForm({ patientId, guardians, onDone }: { patientId: string; guardians: PatientDetail["guardians"]; onDone: () => void }) {
+  const t = useT();
+  const { locale } = usePrefs();
+  const send = useRequestConsent(patientId);
+  const [g, setG] = useState({
+    full_name: "",
+    email: "",
+    phone: "",
+    relationship: "mother" as Relationship,
+    preferred_locale: locale as Locale,
+  });
+  const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
+  const [prefill, setPrefill] = useState("");
+  const set = <K extends keyof typeof g>(k: K, v: (typeof g)[K]) => {
+    setG((x) => ({ ...x, [k]: v }));
+    setErrors((e) => ({ ...e, [k]: undefined, form: undefined }));
+  };
+
+  const handlePrefill = (guardianId: string) => {
+    setPrefill(guardianId);
+    const found = guardians.find((x) => x.id === guardianId);
+    if (found) {
+      setG({
+        full_name: found.full_name,
+        email: found.email ?? "",
+        phone: found.phone ?? "",
+        relationship: found.relationship,
+        preferred_locale: found.preferred_locale,
+      });
+      setErrors({});
+    }
+  };
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    const errs: Record<string, string> = {};
+    if (!g.full_name.trim()) errs.full_name = "required";
+    if (!g.email.trim()) errs.email = "required";
+    if (Object.keys(errs).length > 0) { setErrors(errs); return; }
+    try {
+      await send.mutateAsync({
+        guardians: [{
+          full_name: g.full_name.trim(),
+          email: g.email.trim(),
+          relationship: g.relationship,
+          phone: g.phone.trim() || null,
+          preferred_locale: g.preferred_locale,
+        }],
+      });
+      onDone();
+    } catch (err) {
+      setErrors({ form: err instanceof ApiError && err.status === 400 ? "errors.fieldsInvalid" : "errors.generic" });
+    }
+  };
+
+  const legalGuardians = guardians.filter((x) => x.is_legal_guardian && x.email);
+
+  return (
+    <form className="gform" onSubmit={(e) => void submit(e)} noValidate aria-label={t("consentReq.formTitle")}>
+      <p className="app-muted">{t("consentReq.formHint")}</p>
+      {errors.form && <Alert tone="danger">{t(errors.form as MessageId)}</Alert>}
+      {legalGuardians.length > 0 && (
+        <SelectField label={t("consentReq.guardianName")} name="prefill" value={prefill} onChange={(e) => handlePrefill(e.target.value)}>
+          <option value="">{t("consentReq.guardianName")}</option>
+          {legalGuardians.map((x) => (
+            <option key={x.id} value={x.id}>{x.full_name}</option>
+          ))}
+        </SelectField>
+      )}
+      <TextField label={t("consentReq.guardianName")} name="consent_name" autoComplete="off" value={g.full_name} onChange={(e) => set("full_name", e.target.value)} error={errors.full_name ? t("errors.required") : undefined} />
+      <TextField label={t("consentReq.guardianEmail")} name="consent_email" type="email" inputMode="email" autoComplete="off" dir="ltr" value={g.email} onChange={(e) => set("email", e.target.value)} error={errors.email ? t("errors.required") : undefined} />
+      <div className="pform__row">
+        <TextField label={t("consentReq.guardianPhone")} name="consent_phone" type="tel" inputMode="tel" autoComplete="off" dir="ltr" value={g.phone} onChange={(e) => set("phone", e.target.value)} />
+        <SelectField label={t("consentReq.relationship")} name="consent_rel" value={g.relationship} onChange={(e) => set("relationship", e.target.value as Relationship)}>
+          {RELATIONSHIPS.map((r) => (
+            <option key={r} value={r}>{t("guardian.relValue", { rel: r })}</option>
+          ))}
+        </SelectField>
+      </div>
+      <SelectField label={t("consentReq.language")} name="consent_locale" value={g.preferred_locale} onChange={(e) => set("preferred_locale", e.target.value as Locale)}>
+        {LOCALES.map((l) => (
+          <option key={l} value={l} lang={l}>{t(`language.${l}`)}</option>
+        ))}
+      </SelectField>
+      <div className="pform__actions">
+        <Button variant="secondary" onClick={onDone}>{t("common.cancel")}</Button>
+        <Button type="submit" loading={send.isPending} icon={<Mail size={18} aria-hidden="true" />}>{t("consentReq.sendShort")}</Button>
       </div>
     </form>
   );

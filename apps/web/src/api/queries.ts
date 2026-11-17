@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  ConsentRequestView,
   CreatePatient,
   GuardianInput,
   PatientDetail,
   PatientListItem,
   PatientStatus,
   RecordConsent,
+  RequestConsent,
   StaffMember,
   UpdatePatient,
 } from "@emb/contracts";
@@ -161,6 +163,30 @@ export function useRecordConsent(patientId: string) {
   return useMutation({
     mutationFn: (body: RecordConsent) => apiSend<{ patient: PatientDetail }>("POST", `/v1/patients/${patientId}/consents`, body).then((r) => r.patient),
     onSuccess: (p) => refresh(p),
+  });
+}
+
+export function useRequestConsent(patientId: string) {
+  const refresh = useRefresh(patientId);
+  return useMutation({
+    mutationFn: (body: RequestConsent) => apiSend<{ consent_requests: ConsentRequestView[] }>("POST", `/v1/patients/${patientId}/consent-requests`, body),
+    onSuccess: () => refresh(),
+  });
+}
+
+export function useResendConsentRequest(patientId: string) {
+  const refresh = useRefresh(patientId);
+  return useMutation({
+    mutationFn: (requestId: string) => apiSend<{ ok: true }>("POST", `/v1/patients/${patientId}/consent-requests/${requestId}/resend`),
+    onSuccess: () => refresh(),
+  });
+}
+
+export function useCancelConsentRequest(patientId: string) {
+  const refresh = useRefresh(patientId);
+  return useMutation({
+    mutationFn: (requestId: string) => apiSend<{ ok: true }>("DELETE", `/v1/patients/${patientId}/consent-requests/${requestId}`),
+    onSuccess: () => refresh(),
   });
 }
 

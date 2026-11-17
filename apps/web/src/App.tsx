@@ -21,6 +21,7 @@ import { EditPatientPage, NewPatientPage } from "./routes/patients/form.tsx";
 import { PatientFamily, PatientLayout, PatientOverview } from "./routes/patients/detail.tsx";
 import { PatientProgress } from "./routes/patients/progress.tsx";
 import { ConsentPage } from "./routes/patients/consent.tsx";
+import { PublicConsentPage } from "./routes/public-consent.tsx";
 import { TeamPage } from "./routes/team.tsx";
 import { GamePage, GamePreviewPage, LibraryPage } from "./routes/library.tsx";
 import { AssignPage, ProtocolsPage, TemplateBuilderPage } from "./routes/protocols/pages.tsx";
@@ -185,6 +186,7 @@ export const routes: RouteObject[] = [
   { path: "/sign-in/verify", element: <VerifyPage /> },
   { path: "/setup-mfa", element: <SetupMfaPage /> },
   { path: "/offline", element: <OfflineSignInPage /> },
+  { path: "/consent/:token", element: <PublicConsentPage /> },
   {
     element: <RequireStaff bare />,
     children: [
