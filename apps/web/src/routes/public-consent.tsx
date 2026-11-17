@@ -41,7 +41,7 @@ export function PublicConsentPage() {
       return;
     }
     let cancelled = false;
-    fetch(`/consent/${encodeURIComponent(token)}`, { headers: { accept: "application/json" } })
+    fetch(`/api/consent/${encodeURIComponent(token)}`, { headers: { accept: "application/json" } })
       .then(async (res) => {
         if (cancelled) return;
         if (!res.ok) {
@@ -147,7 +147,7 @@ function ConsentForm({ data, token, onDone }: { data: PublicConsentData; token: 
 
     setSubmitting(true);
     try {
-      const res = await fetch(`/consent/${encodeURIComponent(token)}`, {
+      const res = await fetch(`/api/consent/${encodeURIComponent(token)}`, {
         method: "POST",
         headers: { "content-type": "application/json", accept: "application/json" },
         body: JSON.stringify({

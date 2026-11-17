@@ -53,23 +53,10 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
     const requestId = incoming && UUID.test(incoming) ? incoming : crypto.randomUUID();
     c.set("requestId", requestId);
     c.header("x-request-id", requestId);
-    // DEBUG: log every incoming request to trace routing issues
-    if (c.req.path.includes("consent")) {
-      console.log(`[req] ${c.req.method} ${c.req.path} (url: ${c.req.url})`);
-    }
     await next();
   });
 
   app.get("/health", (c) => c.json({ status: "ok", cell: info.cell, version: info.version }));
-
-  // DEBUG: temporary route-debug endpoint (remove after fixing consent-request 404)
-  app.get("/debug/routes", (c) => {
-    return c.json({
-      msg: "route debug active",
-      timestamp: new Date().toISOString(),
-      hasDeps: !!deps,
-    });
-  });
 
   if (deps) {
     app.on(["GET", "POST"], "/api/auth/*", (c) => deps.auth.handler(c.req.raw));
@@ -90,11 +77,14 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
     app.route("/v1", v1);
 
     // Public consent endpoints — outside /v1 (no auth required).
-    app.route("/consent", publicConsentRoutes(deps.pool));
+    // Mounted at /api/consent so the Vercel proxy (/api/:path*) forwards them,
+    // and also at /consent for backward-compat with any already-sent emails.
+    const consentRouter = publicConsentRoutes(deps.pool);
+    app.route("/api/consent", consentRouter);
+    app.route("/consent", consentRouter);
   }
 
   app.notFound((c) => {
-    console.error(`[404] ${c.req.method} ${c.req.path} (url: ${c.req.url})`);
     return c.json({ error: "not_found" }, 404);
   });
   app.onError((err, c) => {
