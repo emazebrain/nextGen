@@ -53,10 +53,23 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
     const requestId = incoming && UUID.test(incoming) ? incoming : crypto.randomUUID();
     c.set("requestId", requestId);
     c.header("x-request-id", requestId);
+    // DEBUG: log every incoming request to trace routing issues
+    if (c.req.path.includes("consent")) {
+      console.log(`[req] ${c.req.method} ${c.req.path} (url: ${c.req.url})`);
+    }
     await next();
   });
 
   app.get("/health", (c) => c.json({ status: "ok", cell: info.cell, version: info.version }));
+
+  // DEBUG: temporary route-debug endpoint (remove after fixing consent-request 404)
+  app.get("/debug/routes", (c) => {
+    return c.json({
+      msg: "route debug active",
+      timestamp: new Date().toISOString(),
+      hasDeps: !!deps,
+    });
+  });
 
   if (deps) {
     app.on(["GET", "POST"], "/api/auth/*", (c) => deps.auth.handler(c.req.raw));
@@ -80,7 +93,10 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
     app.route("/consent", publicConsentRoutes(deps.pool));
   }
 
-  app.notFound((c) => c.json({ error: "not_found" }, 404));
+  app.notFound((c) => {
+    console.error(`[404] ${c.req.method} ${c.req.path} (url: ${c.req.url})`);
+    return c.json({ error: "not_found" }, 404);
+  });
   app.onError((err, c) => {
     // The database said no (RLS or a guard trigger): that's a permission answer, not a crash.
     const code = (err as { code?: string }).code;

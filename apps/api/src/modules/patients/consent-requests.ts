@@ -35,6 +35,7 @@ export function registerConsentRequestRoutes(
 
   // POST /:id/consent-requests — create requests and send emails
   r.post("/:id/consent-requests", async (c) => {
+    console.log(`[consent-req] POST handler hit, path=${c.req.path}, param=${c.req.param("id")}`);
     const id = c.req.param("id");
     if (!UUID.test(id)) return notFound(c);
     const body = await parseBody(c, requestConsent);
