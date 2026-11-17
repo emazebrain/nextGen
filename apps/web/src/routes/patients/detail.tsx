@@ -162,20 +162,6 @@ export function PatientLayout() {
             {p.alert}
           </Alert>
         )}
-        {!p.archived && (p.status === "pending_consent" || p.status === "consent_legacy") && (
-          <Alert
-            tone="info"
-            title={t("patient.pending.title")}
-            action={
-              <Link to={`${base}/family`} className="emb-btn emb-btn--primary">
-                <ShieldCheck size={18} aria-hidden="true" />
-                <span>{t("consent.record")}</span>
-              </Link>
-            }
-          >
-            {t("patient.pending.body")}
-          </Alert>
-        )}
       </div>
       <TabNav
         label={t("patient.tabs")}
