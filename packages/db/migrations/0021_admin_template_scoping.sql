@@ -32,7 +32,8 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = app, pg_t
        ))
 $$;
 
--- 3. Update can_see_template: also let platform admins see everything.
+-- 3. Update can_see_template: platform admins see everything; any clinic member
+--    (therapist, clinic_manager, org_admin) sees all templates in their clinic.
 CREATE OR REPLACE FUNCTION app.can_see_template(p_template uuid)
 RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = app, pg_temp AS $$
   SELECT EXISTS (
@@ -43,7 +44,7 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = app, pg_t
          OR (t.visibility = 'platform' AND EXISTS (SELECT 1 FROM app.membership m WHERE m.user_id = app.current_user_id() AND m.status = 'active'))
          OR (t.visibility = 'clinic' AND app.has_clinic_role(t.clinic_id, enum_range(NULL::app.member_role)))
          OR (t.owner_user_id = app.current_user_id() AND app.has_clinic_role(t.clinic_id, enum_range(NULL::app.member_role)))
-         OR app.has_clinic_role(t.clinic_id, ARRAY['clinic_manager', 'org_admin']::app.member_role[])
+         OR app.has_clinic_role(t.clinic_id, ARRAY['therapist', 'clinic_manager', 'org_admin']::app.member_role[])
        ))
 $$;
 
