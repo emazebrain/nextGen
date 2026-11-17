@@ -14,3 +14,6 @@ playwright-report/
 
 # Taste skill working files
 .taste-skill/
+
+# Claude session state
+.claude/
