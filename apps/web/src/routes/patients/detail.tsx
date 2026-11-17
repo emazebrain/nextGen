@@ -284,8 +284,8 @@ export function PatientFamily() {
   const consents = new Map(p.consents.map((c) => [c.purpose, c]));
   const hasLegal = p.guardians.some((g) => g.is_legal_guardian);
   const anyConsent = p.consents.length > 0;
-  const pendingReqs = p.consent_requests.filter((r) => r.status === "pending");
-  const completedReqs = p.consent_requests.filter((r) => r.status !== "pending");
+  const pendingReqs = (p.consent_requests ?? []).filter((r) => r.status === "pending");
+  const completedReqs = (p.consent_requests ?? []).filter((r) => r.status !== "pending");
 
   return (
     <div className="pgrid pgrid--even">
