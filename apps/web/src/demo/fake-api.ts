@@ -46,7 +46,7 @@ const CLINIC_A = "0192f3a0-0000-7000-8000-00000000c11a";
 const CLINIC_B = "0192f3a0-0000-7000-8000-00000000c11b";
 
 type Auth = { email: string | null; name: string; mfa: boolean; stage: "out" | "pending_2fa" | "in" };
-interface Patient extends Omit<PatientDetail, "can_play" | "guardians" | "consents" | "care_team"> {
+interface Patient extends Omit<PatientDetail, "can_play" | "guardians" | "consents" | "care_team" | "consent_requests"> {
   guardianIds: string[];
   legal: Record<string, boolean>;
   relationship: Record<string, GuardianView["relationship"]>;
@@ -527,6 +527,7 @@ function detail(db: Db, p: Patient): PatientDetail {
       .filter((g): g is Guardian => !!g)
       .map((g) => ({ ...g, relationship: relationship[g.id] ?? "parent", is_legal_guardian: legal[g.id] ?? false })),
     consents: [...consentCurrent(db, p.id).values()].map(({ patient_id: _p, ...c }) => c),
+    consent_requests: [],
   };
 }
 function listItem(p: Patient): PatientListItem {

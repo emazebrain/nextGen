@@ -11,6 +11,7 @@ import { videoRoutes } from "./modules/videos/routes.ts";
 import { deviceRoutes } from "./modules/devices/routes.ts";
 import { offlineRoutes } from "./modules/offline/routes.ts";
 import { adminRoutes } from "./modules/admin/routes.ts";
+import { publicConsentRoutes } from "./modules/consent/public-routes.ts";
 import { deviceKey, type DeviceKey } from "./device-crypto.ts";
 import { localFileStore, type FileStore } from "./files.ts";
 import { createMailer, type Mailer } from "./email.ts";
@@ -64,15 +65,19 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
     v1.use("*", requireStaffSession(deps.auth));
     v1.use("*", requireActiveUser(deps.pool));
     v1.route("/me", meRoutes(deps.pool));
-    v1.route("/patients", patientRoutes(deps.pool));
+    const mailer = deps.mailer ?? createMailer({});
+    v1.route("/patients", patientRoutes(deps.pool, mailer, deps.publicAppUrl));
     v1.route("/clinics", clinicRoutes(deps.pool));
     v1.route("/", protocolRoutes(deps.pool));
     v1.route("/", sessionRoutes(deps.pool, deps.tickets ?? ticketSigner()));
     v1.route("/", videoRoutes(deps.pool, deps.files ?? localFileStore(process.env.FILE_STORE_DIR ?? ".data/files")));
     v1.route("/", deviceRoutes(deps.pool, deps.deviceKey ?? deviceKey(undefined)));
     v1.route("/", offlineRoutes(deps.pool, deps.tickets ?? ticketSigner()));
-    v1.route("/admin", adminRoutes(deps.pool, deps.auth, deps.mailer ?? createMailer({}), deps.publicAppUrl));
+    v1.route("/admin", adminRoutes(deps.pool, deps.auth, mailer, deps.publicAppUrl));
     app.route("/v1", v1);
+
+    // Public consent endpoints — outside /v1 (no auth required).
+    app.route("/consent", publicConsentRoutes(deps.pool));
   }
 
   app.notFound((c) => c.json({ error: "not_found" }, 404));

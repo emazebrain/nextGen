@@ -28,6 +28,7 @@ beforeAll(async () => {
         outbox.push({ to, name, tempPassword, loginUrl });
         return true;
       },
+      async sendConsentRequest() { return true; },
     },
   });
   admin = (await platformAdmin(env)).api;

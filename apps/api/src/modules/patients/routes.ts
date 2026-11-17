@@ -17,6 +17,8 @@ import {
 import { withUser, type Env } from "../../context.ts";
 import { uuidv7 } from "../../ids.ts";
 import { parseBody } from "../../validate.ts";
+import type { Mailer } from "../../email.ts";
+import { registerConsentRequestRoutes } from "./consent-requests.ts";
 
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MANAGERS = `ARRAY['clinic_manager','org_admin']::app.member_role[]`;
@@ -34,7 +36,7 @@ export async function loadPatient(db: pg.PoolClient, id: string): Promise<Patien
   );
   const p = rows[0];
   if (!p) return null;
-  const [team, guardians, consents] = await Promise.all([
+  const [team, guardians, consents, consentReqs] = await Promise.all([
     db.query(
       `SELECT t.user_id, u.full_name, t.role
          FROM app.patient_care_team t LEFT JOIN app.app_user u ON u.id = t.user_id
@@ -57,16 +59,28 @@ export async function loadPatient(db: pg.PoolClient, id: string): Promise<Patien
         WHERE c.patient_id = $1`,
       [id],
     ),
+    db.query(
+      `SELECT cr.id, cr.guardian_id, cr.guardian_name, cr.guardian_email, cr.status, cr.sent_at, cr.completed_at
+         FROM app.consent_request cr
+        WHERE cr.patient_id = $1
+        ORDER BY cr.created_at DESC`,
+      [id],
+    ),
   ]);
   return {
     ...p,
     care_team: team.rows.map((r) => ({ ...r, full_name: r.full_name ?? "" })),
     guardians: guardians.rows,
     consents: consents.rows.map((r) => ({ ...r, signed_at: (r.signed_at as Date).toISOString() })),
+    consent_requests: consentReqs.rows.map((r) => ({
+      ...r,
+      sent_at: (r.sent_at as Date).toISOString(),
+      completed_at: r.completed_at ? (r.completed_at as Date).toISOString() : null,
+    })),
   };
 }
 
-export function patientRoutes(pool: pg.Pool) {
+export function patientRoutes(pool: pg.Pool, mailer?: Mailer, publicAppUrl?: string) {
   const r = new Hono<Env>();
   const run = <T>(c: Context<Env>, fn: (db: pg.PoolClient) => Promise<T>) => withUser(pool, c.get("user").id, c.get("requestId"), fn);
 
@@ -290,6 +304,11 @@ export function patientRoutes(pool: pg.Pool) {
     if (result === "not_legal_guardian") return c.json({ error: "not_legal_guardian" }, 422);
     return c.json({ patient: result }, 201);
   });
+
+  // ---- Consent requests (email-based consent flow)
+  if (mailer) {
+    registerConsentRequestRoutes(r, pool, mailer, publicAppUrl);
+  }
 
   return r;
 }

@@ -63,6 +63,9 @@ export const updatePatient = z
   .partial();
 export type UpdatePatient = z.infer<typeof updatePatient>;
 
+export const CONSENT_REQUEST_STATUSES = ["pending", "completed", "cancelled"] as const;
+export type ConsentRequestStatus = (typeof CONSENT_REQUEST_STATUSES)[number];
+
 const email = z.string().trim().max(254).regex(/^[^@\s]+@[^@\s]+\.[^@\s]+$/, "invalid_email");
 const phone = z.string().trim().regex(/^\+?[0-9 ()-]{6,20}$/, "invalid_phone");
 
@@ -75,6 +78,30 @@ export const guardianFields = z.object({
   preferred_locale: z.enum(LOCALES),
 });
 export type GuardianInput = z.infer<typeof guardianFields>;
+
+/** Guardian entry for the consent request form (therapist fills this). */
+const consentGuardianEntry = z.object({
+  full_name: name,
+  email: email,
+  relationship: z.enum(RELATIONSHIPS),
+  phone: phone.nullable().optional(),
+  preferred_locale: z.enum(LOCALES),
+});
+
+/** Request consent via email: 1 or 2 guardians. */
+export const requestConsent = z.object({
+  guardians: z.array(consentGuardianEntry).min(1).max(2),
+});
+export type RequestConsent = z.infer<typeof requestConsent>;
+
+/** Submit consent from the public page (guardian signs). */
+export const submitConsent = z.object({
+  full_name: name,
+  email: email,
+  phone: phone.nullable().optional(),
+  locale: z.enum(LOCALES),
+});
+export type SubmitConsent = z.infer<typeof submitConsent>;
 
 export const recordConsent = z.object({
   guardian_id: uuid,
@@ -137,6 +164,28 @@ export interface PatientDetail {
   care_team: Array<{ user_id: string; full_name: string; role: "primary" | "secondary" | "assistant" }>;
   guardians: GuardianView[];
   consents: ConsentState[];
+  consent_requests: ConsentRequestView[];
+}
+
+export interface ConsentRequestView {
+  id: string;
+  guardian_id: string;
+  guardian_name: string;
+  guardian_email: string;
+  status: ConsentRequestStatus;
+  sent_at: string;
+  completed_at: string | null;
+}
+
+/** Data returned by the public GET /v1/consent/:token endpoint. */
+export interface PublicConsentData {
+  clinic_name: string;
+  patient_first_name: string;
+  guardian_name: string;
+  guardian_email: string;
+  locale: Locale;
+  policy_version: string;
+  purposes: typeof CONSENT_PURPOSES;
 }
 
 export interface StaffMember {
