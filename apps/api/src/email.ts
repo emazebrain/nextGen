@@ -1,15 +1,15 @@
 /**
- * Email module — invitation emails via SMTP (spec §Email).
+ * Email module — invitation emails via Resend HTTP API (spec §Email).
  *
- * Uses nodemailer with Gmail SMTP (or any SMTP provider). Falls back to a
- * no-op mailer when SMTP_HOST is not configured, so the API still works in
- * development without email credentials.
+ * Uses Resend's REST API (https://api.resend.com) over HTTPS — no SMTP
+ * needed, so it works on Railway and other hosts that block outbound SMTP.
+ * Falls back to a no-op mailer when RESEND_API_KEY is not configured, so the
+ * API still works in development without email credentials.
  *
  * **No patient data in emails.** The invitation mentions no clinic name, no
  * organization name, and no role — just the platform name and credentials.
  */
 import { randomBytes } from "node:crypto";
-import nodemailer from "nodemailer";
 
 // ---------------------------------------------------------------------------
 // Temporary password generation
@@ -37,6 +37,10 @@ export function generateTempPassword(): string {
 // ---------------------------------------------------------------------------
 
 export interface MailerConfig {
+  RESEND_API_KEY?: string;
+  EMAIL_FROM?: string;
+  // Legacy SMTP vars — kept so createMailer(process.env) doesn't need changes
+  // in server.ts. Ignored when RESEND_API_KEY is set.
   SMTP_HOST?: string;
   SMTP_PORT?: string;
   SMTP_SECURE?: string;
@@ -54,35 +58,47 @@ export interface Mailer {
   ): Promise<boolean>;
 }
 
+const RESEND_API_URL = "https://api.resend.com/emails";
+
 export function createMailer(env: MailerConfig): Mailer {
-  if (!env.SMTP_HOST) {
+  const apiKey = env.RESEND_API_KEY;
+  if (!apiKey) {
     return {
       available: false,
       async sendInvitation() {
-        console.warn("[email] SMTP not configured — invitation email not sent");
+        console.warn("[email] RESEND_API_KEY not configured — invitation email not sent");
         return false;
       },
     };
   }
 
-  const transport = nodemailer.createTransport({
-    host: env.SMTP_HOST,
-    port: Number(env.SMTP_PORT ?? "465"),
-    secure: env.SMTP_SECURE !== "false",
-    auth: { user: env.SMTP_USER, pass: env.SMTP_PASS },
-  });
+  const from = env.EMAIL_FROM ?? "eMazeBrain <onboarding@resend.dev>";
 
   return {
     available: true,
     async sendInvitation(to, name, tempPassword, loginUrl) {
       try {
-        await transport.sendMail({
-          from: env.SMTP_USER,
-          to,
-          subject: "You've been invited to eMazeBrain",
-          text: invitationText(name, tempPassword, loginUrl),
-          html: invitationHtml(name, tempPassword, loginUrl),
+        const res = await fetch(RESEND_API_URL, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from,
+            to: [to],
+            subject: "You've been invited to eMazeBrain",
+            text: invitationText(name, tempPassword, loginUrl),
+            html: invitationHtml(name, tempPassword, loginUrl),
+          }),
         });
+        if (!res.ok) {
+          const body = await res.text();
+          console.error(`[email] Resend API error (${res.status}):`, body);
+          return false;
+        }
+        const data = await res.json();
+        console.log("[email] Invitation sent via Resend, id:", (data as { id?: string }).id);
         return true;
       } catch (err) {
         console.error("[email] Failed to send invitation:", err);
