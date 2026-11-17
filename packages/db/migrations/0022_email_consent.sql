@@ -26,17 +26,20 @@ ALTER TABLE app.consent_request ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app.consent_request FORCE ROW LEVEL SECURITY;
 GRANT SELECT, INSERT, UPDATE ON app.consent_request TO emb_app;
 
--- Therapist can see requests for patients in their clinic (via is_clinic_staff).
+-- Clinic staff can see requests for patients in their clinic; platform admins can see all.
 CREATE POLICY cr_select ON app.consent_request FOR SELECT
-  USING (app.is_clinic_staff(clinic_id));
+  USING (app.has_clinic_role(clinic_id, ARRAY['therapist', 'assistant', 'clinic_manager', 'org_admin']::app.member_role[])
+         OR app.is_platform_admin());
 
--- Therapist can create requests for patients in their clinic.
+-- Clinic staff can create requests for patients in their clinic.
 CREATE POLICY cr_insert ON app.consent_request FOR INSERT
-  WITH CHECK (app.is_clinic_staff(clinic_id) AND created_by = app.current_user_id());
+  WITH CHECK (app.has_clinic_role(clinic_id, ARRAY['therapist', 'assistant', 'clinic_manager', 'org_admin']::app.member_role[])
+              AND created_by = app.current_user_id());
 
--- Therapist can update (cancel / resend) requests in their clinic.
+-- Clinic staff can update (cancel / resend) requests in their clinic; platform admins can update all.
 CREATE POLICY cr_update ON app.consent_request FOR UPDATE
-  USING (app.is_clinic_staff(clinic_id));
+  USING (app.has_clinic_role(clinic_id, ARRAY['therapist', 'assistant', 'clinic_manager', 'org_admin']::app.member_role[])
+         OR app.is_platform_admin());
 
 -- Audit trigger.
 CREATE TRIGGER consent_request_audit AFTER INSERT OR UPDATE OR DELETE ON app.consent_request
