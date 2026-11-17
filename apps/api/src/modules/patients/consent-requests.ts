@@ -43,15 +43,22 @@ export function registerConsentRequestRoutes(
     const me = c.get("user").id;
 
     const result = await run(c, async (db) => {
-      // Verify patient exists and get clinic info
+      // Verify patient exists (separate from clinic to avoid RLS JOIN issues)
       const { rows: patients } = await db.query(
-        `SELECT p.id, p.clinic_id, cl.name AS clinic_name
-           FROM app.patient p JOIN app.clinic cl ON cl.id = p.clinic_id
-          WHERE p.id = $1 AND p.deleted_at IS NULL`,
+        `SELECT id, clinic_id FROM app.patient WHERE id = $1 AND deleted_at IS NULL`,
         [id],
       );
-      if (!patients[0]) return { error: "not_found" as const };
-      const { clinic_id, clinic_name } = patients[0];
+      if (!patients[0]) {
+        console.error(`[consent-request] patient ${id} not visible (RLS or missing)`);
+        return { error: "not_found" as const };
+      }
+      const { clinic_id } = patients[0];
+      // Fetch clinic name separately (uses its own RLS policies incl. admin)
+      const { rows: clinics } = await db.query(
+        `SELECT name FROM app.clinic WHERE id = $1`,
+        [clinic_id],
+      );
+      const clinic_name = clinics[0]?.name ?? "Clinic";
 
       // Cancel any existing pending requests for this patient
       await db.query(
