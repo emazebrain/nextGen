@@ -165,6 +165,7 @@ function seed(): Db {
     games: ["catch-me-if-you-can", "catch-me-if-you-can"],
     items: [],
     clinic_id: null,
+    organization_id: null,
     steps: [
       { ...step({}), id: uid(), ordinal: 1 },
       { ...step({ session_mode: "timed", duration_s: 120, lives: null, hemisphere: "right", timer_position: "left" }), id: uid(), ordinal: 2 },
@@ -184,6 +185,7 @@ function seed(): Db {
     games: ["catch-me-if-you-can"],
     items: [],
     clinic_id: null,
+    organization_id: null,
     steps: [{ ...step({ session_mode: "lives", duration_s: null, lives: 5, difficulty_start: 3, trial_window_ms: 8000 }), id: uid(), ordinal: 1 }],
   };
   const memory: TemplateDetail = {
@@ -200,6 +202,7 @@ function seed(): Db {
     games: ["peek-peek"],
     items: [],
     clinic_id: null,
+    organization_id: null,
     steps: [
       {
         ...step({ game_id: "peek-peek", duration_s: 360, lives: null, lives_auto: true, difficulty_start: 3, game_params: { pack: "marine", control_trials: true, hidden_count: false, study_time_s: 0 } }),
@@ -222,6 +225,7 @@ function seed(): Db {
     games: ["orbital-order"],
     items: [],
     clinic_id: null,
+    organization_id: null,
     steps: [
       {
         ...step({ game_id: "orbital-order", session_mode: "lives", duration_s: null, lives: 5, difficulty_start: 2, game_params: { glyph_type: "digits", rule_visible: "on_request", motor_baseline: true, max_rule_trials: 24, neon: false } }),
@@ -244,6 +248,7 @@ function seed(): Db {
     games: ["tunnel-rush"],
     items: [],
     clinic_id: null,
+    organization_id: null,
     steps: [
       {
         ...step({ game_id: "tunnel-rush", session_mode: "timed", duration_s: 120, lives: null, difficulty_start: 2, game_params: { lanes: 8, ship_mode: "fixed", object_type: "shapes", object_orientation: "upright", rotation: "none", spin_speed: 14, progressive: true } }),
@@ -266,6 +271,7 @@ function seed(): Db {
     games: ["beep-beep"],
     items: [],
     clinic_id: null,
+    organization_id: null,
     steps: [
       {
         ...step({ game_id: "beep-beep", session_mode: "timed_lives", duration_s: 480, lives: 3, difficulty_start: 2, game_params: { hint_button: true, show_answer_on_miss: true, undo: true } }),
@@ -288,6 +294,7 @@ function seed(): Db {
     games: ["echo-keys"],
     items: [],
     clinic_id: null,
+    organization_id: null,
     steps: [
       {
         ...step({ game_id: "echo-keys", session_mode: "timed", duration_s: 300, lives: null, difficulty_start: 2, game_params: { go_no_go: true, key_count: 0 } }),
@@ -310,6 +317,7 @@ function seed(): Db {
     games: ["block-crasher"],
     items: [],
     clinic_id: null,
+    organization_id: null,
     steps: [
       {
         ...step({ game_id: "block-crasher", session_mode: "timed", duration_s: 300, lives: null, difficulty_start: 2, game_params: { specials: true, special_rate: -1, paddle_assist: 0 } }),
@@ -333,6 +341,7 @@ function seed(): Db {
     games: ["tunnel-rush", "block-crasher"],
     items: [],
     clinic_id: null,
+    organization_id: null,
     steps: [
       { ...step({ game_id: "tunnel-rush", session_mode: "timed", duration_s: 120, lives: null, progression: null }), id: uid(), ordinal: 1 },
       { step_type: "video", video_id: breakVideo.id, id: uid(), ordinal: 2 },
@@ -820,6 +829,7 @@ async function handle(path: string, method: string, q: URLSearchParams, body: Re
           games: steps.flatMap((s) => (isVideoStep(s) ? [] : [s.game_id])),
           items: itemsOf(db, steps),
           clinic_id: (body.clinic_id as string) ?? CLINIC_A,
+          organization_id: (body.organization_id as string) ?? null,
           steps,
         };
         db.templates.push(t);

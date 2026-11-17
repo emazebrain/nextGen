@@ -9,7 +9,8 @@ import { ArrowLeft, Copy, FilePlus2, Pencil, Plus, Route as RouteIcon, Trash2 } 
 import type { StepInput, StepItem, TemplateDetail, TemplateSummary } from "@emb/contracts";
 import { Alert, Button, Card, Chip, ConfirmDialog, EmptyState, MazeLoader, PageHeader, Segmented, SelectField, TextAreaField, TextField } from "@emb/ui";
 import { ApiError } from "../../api/http.ts";
-import { useAssign, useDeleteTemplate, usePatient, useSaveTemplate, useTemplate, useTemplates } from "../../api/queries.ts";
+import { useAssign, useDeleteTemplate, useMe, usePatient, useSaveTemplate, useTemplate, useTemplates } from "../../api/queries.ts";
+import { useAdminOrgs, useAdminClinics, type AdminOrg, type AdminClinic } from "../../api/admin.ts";
 import { findGame, localText } from "../../games/registry.ts";
 import { useT, usePrefs, type MessageId } from "../../i18n/index.tsx";
 import { useClinic } from "../../lib/clinic.tsx";
@@ -196,6 +197,115 @@ function PlanFields({ plan, onChange, visibility }: { plan: Plan; onChange: (p: 
 
 const stripIds = (steps: TemplateDetail["steps"]): StepInput[] => steps.map(({ id: _i, ordinal: _o, ...s }) => s);
 
+// ------------------------------------------------------------------ admin scope selector
+
+type ScopeKind = "platform" | "org" | "clinic";
+interface ScopeState {
+  kind: ScopeKind;
+  orgId: string | null;
+  clinicId: string | null;
+}
+
+function ScopeSelector({ scope, onChange }: { scope: ScopeState; onChange: (s: ScopeState) => void }) {
+  const t = useT();
+  const orgs = useAdminOrgs();
+  const clinics = useAdminClinics(scope.orgId ?? "");
+  const [orgSearch, setOrgSearch] = useState("");
+  const [clinicSearch, setClinicSearch] = useState("");
+
+  const filteredOrgs = useMemo(() => {
+    const list = orgs.data ?? [];
+    if (!orgSearch.trim()) return list;
+    const q = orgSearch.toLowerCase();
+    return list.filter((o) => o.name.toLowerCase().includes(q));
+  }, [orgs.data, orgSearch]);
+
+  const filteredClinics = useMemo(() => {
+    const list = clinics.data ?? [];
+    if (!clinicSearch.trim()) return list;
+    const q = clinicSearch.toLowerCase();
+    return list.filter((c) => c.name.toLowerCase().includes(q));
+  }, [clinics.data, clinicSearch]);
+
+  return (
+    <div className="scope-selector">
+      <Segmented
+        legend={t("builder.scope")}
+        name="scope"
+        value={scope.kind}
+        onChange={(k) => onChange({ kind: k as ScopeKind, orgId: null, clinicId: null })}
+        options={[
+          { value: "platform", label: t("builder.scopePlatform") },
+          { value: "org", label: t("builder.scopeOrg") },
+          { value: "clinic", label: t("builder.scopeClinic") },
+        ]}
+      />
+      {scope.kind !== "platform" && (
+        <div className="scope-selector__dropdown">
+          <label className="app-label">{t("builder.selectOrg")}</label>
+          <input
+            type="text"
+            className="emb-input"
+            placeholder={t("builder.searchOrg")}
+            value={orgSearch}
+            onChange={(e) => setOrgSearch(e.target.value)}
+          />
+          {orgs.isPending ? (
+            <p className="app-muted">{t("common.loading")}</p>
+          ) : (
+            <select
+              className="emb-select"
+              value={scope.orgId ?? ""}
+              onChange={(e) => {
+                const v = e.target.value || null;
+                onChange({ ...scope, orgId: v, clinicId: null });
+                setClinicSearch("");
+              }}
+              size={Math.min(filteredOrgs.length + 1, 8)}
+            >
+              <option value="">{t("builder.selectOrg")}</option>
+              {filteredOrgs.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
+      {scope.kind === "clinic" && scope.orgId && (
+        <div className="scope-selector__dropdown">
+          <label className="app-label">{t("builder.selectClinic")}</label>
+          <input
+            type="text"
+            className="emb-input"
+            placeholder={t("builder.searchClinic")}
+            value={clinicSearch}
+            onChange={(e) => setClinicSearch(e.target.value)}
+          />
+          {clinics.isPending ? (
+            <p className="app-muted">{t("common.loading")}</p>
+          ) : (
+            <select
+              className="emb-select"
+              value={scope.clinicId ?? ""}
+              onChange={(e) => onChange({ ...scope, clinicId: e.target.value || null })}
+              size={Math.min(filteredClinics.length + 1, 8)}
+            >
+              <option value="">{t("builder.selectClinic")}</option>
+              {filteredClinics.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ------------------------------------------------------------------ builder
 
 export function TemplateBuilderPage() {
@@ -215,6 +325,8 @@ function Builder({ existing, copyOf, onSaved }: { existing?: TemplateDetail | un
   const offline = useNeedsConnection();
   const t = useT();
   const { clinicId } = useClinic();
+  const me = useMe();
+  const isAdmin = !!me.data?.is_platform_admin;
   const base = existing ?? copyOf;
   const save = useSaveTemplate(existing?.id);
   const [plan, setPlan] = useState<Plan>({
@@ -227,6 +339,19 @@ function Builder({ existing, copyOf, onSaved }: { existing?: TemplateDetail | un
   const [visibility, setVisibility] = useState<"private" | "clinic">(existing && existing.visibility !== "platform" ? existing.visibility : "private");
   const [steps, setSteps] = useState<StepInput[]>(base ? stripIds(base.steps) : []);
   const [error, setError] = useState<MessageId | null>(null);
+
+  // Admin scope: determines where the template is scoped to
+  const initScope = (): ScopeState => {
+    if (!isAdmin) return { kind: "clinic", orgId: null, clinicId: null };
+    if (base) {
+      if (base.clinic_id) return { kind: "clinic", orgId: base.organization_id, clinicId: base.clinic_id };
+      if (base.organization_id) return { kind: "org", orgId: base.organization_id, clinicId: null };
+      return { kind: "platform", orgId: null, clinicId: null };
+    }
+    return { kind: "platform", orgId: null, clinicId: null };
+  };
+  const [scope, setScope] = useState<ScopeState>(initScope);
+
   const title = existing ? t("builder.editTitle") : t("builder.newTitle");
   useTitle(title);
 
@@ -236,7 +361,15 @@ function Builder({ existing, copyOf, onSaved }: { existing?: TemplateDetail | un
     if (steps.length === 0 || stepProblems(steps).length) return setError("errors.fieldsInvalid");
     setError(null);
     try {
-      await save.mutateAsync({ clinic_id: clinicId!, ...plan, description: plan.description.trim() || null, visibility, steps });
+      if (isAdmin) {
+        // Admin scope: derive clinic_id, organization_id and visibility from scope
+        const effClinicId = scope.kind === "clinic" ? scope.clinicId : null;
+        const effOrgId = scope.kind === "org" ? scope.orgId : null;
+        const effVisibility = scope.kind === "clinic" ? visibility : "platform";
+        await save.mutateAsync({ clinic_id: effClinicId, organization_id: effOrgId, ...plan, description: plan.description.trim() || null, visibility: effVisibility, steps });
+      } else {
+        await save.mutateAsync({ clinic_id: clinicId!, ...plan, description: plan.description.trim() || null, visibility, steps });
+      }
       onSaved();
     } catch (err) {
       setError(err instanceof ApiError && err.status === 400 ? "errors.fieldsInvalid" : err instanceof ApiError && err.status === 403 ? "errors.forbidden" : "errors.generic");
@@ -252,11 +385,23 @@ function Builder({ existing, copyOf, onSaved }: { existing?: TemplateDetail | un
       <PageHeader title={title} />
       <form className="builder" onSubmit={(e) => void submit(e)} noValidate>
         {error && <Alert tone="danger">{t(error)}</Alert>}
+        {isAdmin && (
+          <Card as="section" labelledBy="b-scope">
+            <h2 id="b-scope" className="app-cardtitle">
+              {t("builder.scope")}
+            </h2>
+            <ScopeSelector scope={scope} onChange={setScope} />
+          </Card>
+        )}
         <Card as="section" labelledBy="b-plan">
           <h2 id="b-plan" className="app-cardtitle">
             {t("builder.plan")}
           </h2>
-          <PlanFields plan={plan} onChange={setPlan} visibility={{ value: visibility, onChange: setVisibility }} />
+          {scope.kind === "clinic" || !isAdmin ? (
+            <PlanFields plan={plan} onChange={setPlan} visibility={{ value: visibility, onChange: setVisibility }} />
+          ) : (
+            <PlanFields plan={plan} onChange={setPlan} />
+          )}
         </Card>
         <Card as="section" labelledBy="b-steps">
           <h2 id="b-steps" className="app-cardtitle">

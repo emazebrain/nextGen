@@ -107,7 +107,7 @@ const LANGS = new Set(["en", "he", "ar", "ru", "fr", "es", "zh"]);
 const langOf = (c: Context) => (LANGS.has(c.req.query("lang") ?? "") ? c.req.query("lang")! : "en");
 
 const SUMMARY_SQL = `
-  SELECT t.id, t.clinic_id, t.name, t.description, t.weeks, t.sessions_per_week, t.setting, t.visibility, t.version,
+  SELECT t.id, t.clinic_id, t.organization_id, t.name, t.description, t.weeks, t.sessions_per_week, t.setting, t.visibility, t.version,
          u.full_name AS owner_name, app.can_edit_template(t.id) AS can_edit,
          COALESCE((SELECT array_agg(s.game_id ORDER BY s.ordinal) FILTER (WHERE s.step_type = 'game') FROM app.template_step s WHERE s.template_id = t.id), '{}') AS games,
          ${ITEMS_SQL("template_step", "template_id", "t.id")}
@@ -139,11 +139,13 @@ export async function loadAssignment(db: pg.PoolClient, patientId: string): Prom
 
 
 /** Templates the caller may use (their clinic's and platform ones), with steps in order. */
-export async function listTemplates(db: pg.PoolClient, clinic: string | null, lang: string): Promise<TemplateSummary[]> {
+export async function listTemplates(db: pg.PoolClient, clinic: string | null, lang: string, isAdmin = false): Promise<TemplateSummary[]> {
   const { rows } = await db.query<TemplateSummary>(
-    `${SUMMARY_SQL} WHERE t.deleted_at IS NULL AND ($1::uuid IS NULL OR t.clinic_id IS NULL OR t.clinic_id = $1::uuid)
-      ORDER BY (t.visibility = 'platform'), t.name`,
-    [clinic],
+    isAdmin
+      ? `${SUMMARY_SQL} WHERE t.deleted_at IS NULL ORDER BY (t.visibility = 'platform'), t.name`
+      : `${SUMMARY_SQL} WHERE t.deleted_at IS NULL AND ($1::uuid IS NULL OR t.clinic_id IS NULL OR t.clinic_id = $1::uuid)
+          ORDER BY (t.visibility = 'platform'), t.name`,
+    isAdmin ? [] : [clinic],
   );
   return rows.map((t) => ({ ...t, items: toItems(t.items as unknown as RawItem[], lang) }));
 }
@@ -185,7 +187,10 @@ export function protocolRoutes(pool: pg.Pool) {
   r.get("/templates", async (c) => {
     const clinic = c.req.query("clinic");
     if (clinic !== undefined && !UUID.test(clinic)) return c.json({ error: "invalid_clinic" }, 400);
-    const templates = await run(c, (db) => listTemplates(db, clinic ?? null, langOf(c)));
+    const templates = await run(c, async (db) => {
+      const isAdmin = (await db.query<{ a: boolean }>(`SELECT app.is_platform_admin() AS a`)).rows[0]!.a;
+      return listTemplates(db, clinic ?? null, langOf(c), isAdmin);
+    });
     return c.json({ templates });
   });
 
@@ -206,13 +211,30 @@ export function protocolRoutes(pool: pg.Pool) {
     const result = await run(c, async (db) => {
       const vIssues = [...(await videoIssues(db, input.steps)), ...(await regionIssues(db, input.steps))];
       if (vIssues.length) return { issues: vIssues };
-      const { rows } = await db.query(`SELECT organization_id FROM app.clinic WHERE id = $1`, [input.clinic_id]);
-      if (!rows[0]) return null;
+
+      let orgId: string | null = null;
+      if (input.clinic_id) {
+        // Clinic-scoped: look up org from clinic
+        const { rows } = await db.query(`SELECT organization_id FROM app.clinic WHERE id = $1`, [input.clinic_id]);
+        if (!rows[0]) return null;
+        orgId = rows[0].organization_id;
+      } else {
+        // Platform or org-wide scope — only admins
+        const admin = await db.query<{ a: boolean }>(`SELECT app.is_platform_admin() AS a`);
+        if (!admin.rows[0]!.a) return null; // forbidden
+        orgId = input.organization_id ?? null;
+        // Validate org exists if specified
+        if (orgId) {
+          const { rows } = await db.query(`SELECT 1 FROM app.organization WHERE id = $1 AND deleted_at IS NULL`, [orgId]);
+          if (!rows[0]) return { issues: [{ path: "organization_id", code: "not_found" }] };
+        }
+      }
+
       const id = uuidv7();
       await db.query(
         `INSERT INTO app.protocol_template (id, organization_id, clinic_id, owner_user_id, name, description, weeks, sessions_per_week, setting, visibility)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-        [id, rows[0].organization_id, input.clinic_id, me, input.name, input.description ?? null, input.weeks, input.sessions_per_week, input.setting, input.visibility],
+        [id, orgId, input.clinic_id, me, input.name, input.description ?? null, input.weeks, input.sessions_per_week, input.setting, input.visibility],
       );
       await insertTemplateSteps(db, id, input.steps);
       return loadTemplate(db, id, langOf(c));
@@ -235,10 +257,23 @@ export function protocolRoutes(pool: pg.Pool) {
       input.steps = await carryRegions(db, "template_step", id, input.steps);
       const vIssues = [...(await videoIssues(db, input.steps, new Set(had.rows.map((r) => r.video_id)))), ...(await regionIssues(db, input.steps))];
       if (vIssues.length) return { issues: vIssues };
+
+      // Resolve org_id for the update
+      let orgId: string | null = null;
+      if (input.clinic_id) {
+        const { rows } = await db.query(`SELECT organization_id FROM app.clinic WHERE id = $1`, [input.clinic_id]);
+        if (!rows[0]) return { issues: [{ path: "clinic_id", code: "not_found" }] };
+        orgId = rows[0].organization_id;
+      } else {
+        const admin = await db.query<{ a: boolean }>(`SELECT app.is_platform_admin() AS a`);
+        if (!admin.rows[0]!.a) return null;
+        orgId = input.organization_id ?? null;
+      }
+
       const upd = await db.query(
-        `UPDATE app.protocol_template SET name = $2, description = $3, weeks = $4, sessions_per_week = $5, setting = $6, visibility = $7, version = version + 1
+        `UPDATE app.protocol_template SET organization_id = $2, clinic_id = $3, name = $4, description = $5, weeks = $6, sessions_per_week = $7, setting = $8, visibility = $9, version = version + 1
           WHERE id = $1 AND deleted_at IS NULL`,
-        [id, input.name, input.description ?? null, input.weeks, input.sessions_per_week, input.setting, input.visibility],
+        [id, orgId, input.clinic_id, input.name, input.description ?? null, input.weeks, input.sessions_per_week, input.setting, input.visibility],
       );
       if (upd.rowCount === 0) return null;
       await db.query(`DELETE FROM app.template_step WHERE template_id = $1`, [id]);

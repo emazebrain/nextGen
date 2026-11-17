@@ -81,12 +81,19 @@ const planFields = {
   setting: z.enum(["clinic", "home", "mixed"]),
 };
 
-export const templateInput = z.object({
-  clinic_id: z.string().uuid(),
-  ...planFields,
-  visibility: z.enum(["private", "clinic"]),
-  steps: z.array(stepInput).min(1).max(12),
-});
+export const templateInput = z
+  .object({
+    clinic_id: z.string().uuid().nullable(),
+    organization_id: z.string().uuid().nullable().optional(),
+    ...planFields,
+    visibility: z.enum(["private", "clinic", "platform"]),
+    steps: z.array(stepInput).min(1).max(12),
+  })
+  .superRefine((v, ctx) => {
+    // clinic_id=null → visibility must be 'platform'; clinic_id set → 'private'|'clinic'
+    if (v.clinic_id === null && v.visibility !== "platform") ctx.addIssue({ code: "custom", path: ["visibility"], message: "platform_scope_needs_platform_visibility" });
+    if (v.clinic_id !== null && v.visibility === "platform") ctx.addIssue({ code: "custom", path: ["visibility"], message: "clinic_scope_no_platform_visibility" });
+  });
 export type TemplateInput = z.input<typeof templateInput>;
 
 export const assignInput = z.object({
@@ -118,6 +125,7 @@ export type StepItem = { kind: "game"; game_id: string } | { kind: "video"; vide
 
 export interface TemplateDetail extends TemplateSummary {
   clinic_id: string | null;
+  organization_id: string | null;
   steps: Array<StepInput & { id: string; ordinal: number }>;
 }
 
