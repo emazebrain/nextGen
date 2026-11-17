@@ -881,6 +881,49 @@
   border-block-start: 1px solid var(--border-decorative);
 }
 
+.consent__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.consentreq {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding-block: var(--space-3);
+  border-block-start: 1px solid var(--border-decorative);
+}
+
+.consentreq__icon {
+  flex-shrink: 0;
+  margin-block-start: 2px;
+  color: var(--text-muted);
+}
+
+.consentreq__text {
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.consentreq__name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.consentreq__actions {
+  display: flex;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.consentreq--done .consentreq__icon {
+  opacity: 0.5;
+}
+
 .app-flash {
   margin-block-end: var(--space-4);
 }

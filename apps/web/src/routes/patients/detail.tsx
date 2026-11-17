@@ -167,7 +167,7 @@ export function PatientLayout() {
             tone="info"
             title={t("patient.pending.title")}
             action={
-              <Link to={`${base}/consent`} className="emb-btn emb-btn--primary">
+              <Link to={`${base}/family`} className="emb-btn emb-btn--primary">
                 <ShieldCheck size={18} aria-hidden="true" />
                 <span>{t("consent.record")}</span>
               </Link>
@@ -351,19 +351,56 @@ export function PatientFamily() {
         )}
       </Card>
 
-      <Card as="section" labelledBy="p-consent">
+      <Card as="section" labelledBy="p-consent" className="pgrid__full">
         <div className="app-cardrow">
           <h2 id="p-consent" className="app-cardtitle">
             {t("consent.title")}
           </h2>
-          {!p.archived && hasLegal && (
-            <Link to={`/patients/${p.id}/consent`} className={anyConsent ? "emb-btn emb-btn--secondary" : "emb-btn emb-btn--primary"}>
-              <ShieldCheck size={18} aria-hidden="true" />
-              <span>{t(anyConsent ? "consent.update" : "consent.record")}</span>
-            </Link>
+          {!p.archived && hasLegal && !showConsentForm && (
+            <div className="consent__actions">
+              <Button icon={<Mail size={18} aria-hidden="true" />} onClick={() => setShowConsentForm(true)}>
+                {t("consentReq.send")}
+              </Button>
+              <span className="app-muted">{t("consentReq.or")}</span>
+              <Link to={`/patients/${p.id}/consent`} className="emb-btn emb-btn--secondary">
+                <ShieldCheck size={18} aria-hidden="true" />
+                <span>{t("consentReq.inClinic")}</span>
+              </Link>
+            </div>
           )}
         </div>
         {!hasLegal && <p className="app-muted">{t("consentFlow.noLegal")}</p>}
+        {showConsentForm && (
+          <ConsentRequestForm patientId={p.id} guardians={p.guardians} onDone={() => setShowConsentForm(false)} />
+        )}
+        {pendingReqs.length > 0 && (
+          <ul className="plainlist">
+            {pendingReqs.map((r) => (
+              <li key={r.id} className="consentreq">
+                <Mail size={20} aria-hidden="true" className="consentreq__icon" />
+                <div className="consentreq__text">
+                  <p className="consentreq__name">
+                    <bdi>{r.guardian_name}</bdi>
+                    <Chip tone="warning">{t("consentReq.pending")}</Chip>
+                  </p>
+                  <p className="app-muted">
+                    <bdi dir="ltr">{r.guardian_email}</bdi>
+                    {" · "}
+                    {t("consentReq.sentAt", { date: intl.formatDate(new Date(r.sent_at), { day: "numeric", month: "short" }) })}
+                  </p>
+                </div>
+                <div className="consentreq__actions">
+                  <Button variant="ghost" icon={<RefreshCw size={16} aria-hidden="true" />} loading={resend.isPending} onClick={() => resend.mutate(r.id)}>
+                    {t("consentReq.resend")}
+                  </Button>
+                  <Button variant="ghost" icon={<X size={16} aria-hidden="true" />} onClick={() => setCancellingReq(r)}>
+                    {t("consentReq.cancel")}
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
         <ul className="consentlist">
           {CONSENT_PURPOSES.map((purpose) => {
             const c = consents.get(purpose);
@@ -385,80 +422,31 @@ export function PatientFamily() {
             );
           })}
         </ul>
+        {completedReqs.length > 0 && (
+          <ul className="plainlist">
+            {completedReqs.map((r) => (
+              <li key={r.id} className="consentreq consentreq--done">
+                <Mail size={20} aria-hidden="true" className="consentreq__icon" />
+                <div className="consentreq__text">
+                  <p className="consentreq__name">
+                    <bdi>{r.guardian_name}</bdi>
+                    <Chip tone={r.status === "completed" ? "success" : "neutral"}>{t(`consentReq.${r.status}`)}</Chip>
+                  </p>
+                  <p className="app-muted">
+                    <bdi dir="ltr">{r.guardian_email}</bdi>
+                    {r.completed_at && (
+                      <>
+                        {" · "}
+                        {t("consentReq.completedAt", { date: intl.formatDate(new Date(r.completed_at), { day: "numeric", month: "short" }) })}
+                      </>
+                    )}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
-
-      {!p.archived && (
-        <Card as="section" labelledBy="p-consentreq" className="pgrid__full">
-          <div className="app-cardrow">
-            <h2 id="p-consentreq" className="app-cardtitle">
-              {t("consentReq.title")}
-            </h2>
-            {!showConsentForm && (
-              <Button variant="secondary" icon={<Mail size={18} aria-hidden="true" />} onClick={() => setShowConsentForm(true)}>
-                {t("consentReq.sendShort")}
-              </Button>
-            )}
-          </div>
-          {showConsentForm && (
-            <ConsentRequestForm patientId={p.id} guardians={p.guardians} onDone={() => setShowConsentForm(false)} />
-          )}
-          {pendingReqs.length > 0 && (
-            <ul className="plainlist">
-              {pendingReqs.map((r) => (
-                <li key={r.id} className="consentreq">
-                  <Mail size={20} aria-hidden="true" className="consentreq__icon" />
-                  <div className="consentreq__text">
-                    <p className="consentreq__name">
-                      <bdi>{r.guardian_name}</bdi>
-                      <Chip tone="warning">{t("consentReq.pending")}</Chip>
-                    </p>
-                    <p className="app-muted">
-                      <bdi dir="ltr">{r.guardian_email}</bdi>
-                      {" · "}
-                      {t("consentReq.sentAt", { date: intl.formatDate(new Date(r.sent_at), { day: "numeric", month: "short" }) })}
-                    </p>
-                  </div>
-                  <div className="consentreq__actions">
-                    <Button variant="ghost" icon={<RefreshCw size={16} aria-hidden="true" />} loading={resend.isPending} onClick={() => resend.mutate(r.id)}>
-                      {t("consentReq.resend")}
-                    </Button>
-                    <Button variant="ghost" icon={<X size={16} aria-hidden="true" />} onClick={() => setCancellingReq(r)}>
-                      {t("consentReq.cancel")}
-                    </Button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-          {completedReqs.length > 0 && (
-            <ul className="plainlist">
-              {completedReqs.map((r) => (
-                <li key={r.id} className="consentreq consentreq--done">
-                  <Mail size={20} aria-hidden="true" className="consentreq__icon" />
-                  <div className="consentreq__text">
-                    <p className="consentreq__name">
-                      <bdi>{r.guardian_name}</bdi>
-                      <Chip tone={r.status === "completed" ? "success" : "neutral"}>{t(`consentReq.${r.status}`)}</Chip>
-                    </p>
-                    <p className="app-muted">
-                      <bdi dir="ltr">{r.guardian_email}</bdi>
-                      {r.completed_at && (
-                        <>
-                          {" · "}
-                          {t("consentReq.completedAt", { date: intl.formatDate(new Date(r.completed_at), { day: "numeric", month: "short" }) })}
-                        </>
-                      )}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-          {p.consent_requests.length === 0 && !showConsentForm && (
-            <p className="app-muted">{t("consentReq.noEmail")}</p>
-          )}
-        </Card>
-      )}
 
       <ConfirmDialog
         open={!!cancellingReq}
