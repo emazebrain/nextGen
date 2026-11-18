@@ -35,6 +35,8 @@ export interface AuthConfig {
    * out everyone.
    */
   ipAddressHeaders?: string[];
+  /** Callback to send password-reset emails. Without one, the forgot-password endpoint is a no-op. */
+  sendResetPassword?: (to: string, resetUrl: string) => Promise<boolean>;
 }
 
 export const DEFAULT_AUTH_SCHEMA = "auth";
@@ -72,6 +74,13 @@ export function createAuth(config: AuthConfig, servicePool: pg.Pool) {
       enabled: true,
       minPasswordLength: 12,
       maxPasswordLength: 128,
+      ...(config.sendResetPassword
+        ? {
+            sendResetPassword: async ({ user, url }) => {
+              await config.sendResetPassword!(user.email, url);
+            },
+          }
+        : {}),
     },
     session: {
       expiresIn: 60 * 60 * 12, // 12 h ceiling; web idle lock (15 min) is enforced by the client

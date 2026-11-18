@@ -29,6 +29,7 @@ beforeAll(async () => {
         return true;
       },
       async sendConsentRequest() { return true; },
+      async sendPasswordReset() { return true; },
     },
   });
   admin = (await platformAdmin(env)).api;

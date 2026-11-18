@@ -12,7 +12,7 @@ import { OfflineSignInPage } from "./routes/offline-sign-in.tsx";
 import { SetupOfflinePage } from "./routes/setup-offline.tsx";
 import { useBundleRefresh } from "./device/refresh.tsx";
 import { DevicePage } from "./routes/device.tsx";
-import { SetupMfaPage, SignInPage, VerifyPage } from "./routes/auth.tsx";
+import { ForgotPasswordPage, ResetPasswordPage, SetupMfaPage, SignInPage, VerifyPage } from "./routes/auth.tsx";
 import { ChangePasswordPage } from "./routes/change-password.tsx";
 import { ComingSoonPage, MorePage, NotFoundPage, SettingsPage, TodayPage } from "./routes/pages.tsx";
 import { LoadError } from "./routes/shared.tsx";
@@ -185,6 +185,8 @@ export const routes: RouteObject[] = [
   { path: "/", element: <Navigate to="/today" replace /> },
   { path: "/sign-in", element: <SignInPage /> },
   { path: "/sign-in/verify", element: <VerifyPage /> },
+  { path: "/forgot-password", element: <ForgotPasswordPage /> },
+  { path: "/reset-password", element: <ResetPasswordPage /> },
   { path: "/setup-mfa", element: <SetupMfaPage /> },
   { path: "/offline", element: <OfflineSignInPage /> },
   { path: "/consent/:token", element: <PublicConsentPage /> },

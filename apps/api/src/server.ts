@@ -23,6 +23,7 @@ const port = Number(process.env.PORT ?? 8787);
 const info = { cell: process.env.CELL ?? "local", version: process.env.APP_VERSION ?? "dev" };
 const databaseUrl = required("DATABASE_URL");
 const pool = new pg.Pool({ connectionString: databaseUrl, max: 10 });
+const mailer = createMailer(process.env);
 const auth = createAuth(
   {
     databaseUrl,
@@ -35,6 +36,7 @@ const auth = createAuth(
     ...(process.env.AUTH_SCHEMA ? { schema: process.env.AUTH_SCHEMA } : {}),
     ...(process.env.IP_HEADERS ? { ipAddressHeaders: process.env.IP_HEADERS.split(",").map((s) => s.trim()) } : {}),
     ...(process.env.TRUSTED_ORIGINS ? { trustedOrigins: process.env.TRUSTED_ORIGINS.split(",").map((s) => s.trim()) } : {}),
+    sendResetPassword: (to, url) => mailer.sendPasswordReset(to, url),
   },
   pool,
 );
@@ -44,7 +46,6 @@ if (!process.env.DEVICE_SECRET_KEY && process.env.NODE_ENV === "production") thr
 const tickets = ticketSigner(process.env.LAUNCH_SIGNING_KEY?.replace(/\\n/g, "\n"));
 // FILE_STORE_DIR: where uploaded videos are kept on this machine (the cloud cells switch to S3 with deployment).
 const files = localFileStore(process.env.FILE_STORE_DIR ?? ".data/files");
-const mailer = createMailer(process.env);
 const app = createApp(info, { pool, auth, tickets, files, deviceKey: deviceKey(process.env.DEVICE_SECRET_KEY), mailer, publicAppUrl: process.env.PUBLIC_APP_URL });
 
 // Run pending migrations before accepting traffic.

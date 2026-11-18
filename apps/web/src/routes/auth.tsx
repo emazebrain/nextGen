@@ -148,6 +148,192 @@ export function SignInPage() {
           {t("auth.signIn.submit")}
         </Button>
       </form>
+      <div className="auth__links">
+        <Link to="/forgot-password" className="app-linkbtn">
+          {t("auth.signIn.forgotPassword")}
+        </Link>
+      </div>
+    </AuthLayout>
+  );
+}
+
+// ------------------------------------------------------------------ Forgot password
+
+export function ForgotPasswordPage() {
+  const t = useT();
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState<MessageId | null>(null);
+  useTitle(t("auth.forgotPassword.title"));
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) {
+      setError("auth.signIn.missing");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    const { error: err } = await authClient
+      .requestPasswordReset({ email: email.trim(), redirectTo: "/reset-password" })
+      .catch(() => ({ error: { status: 0 } }));
+    setBusy(false);
+    if (err && (err as { status?: number }).status === 429) {
+      setError("auth.rateLimited");
+      return;
+    }
+    // Always show "sent" to avoid leaking whether the email exists.
+    setSent(true);
+  };
+
+  return (
+    <AuthLayout>
+      <span className="auth__icon">
+        <KeyRound size={28} aria-hidden="true" />
+      </span>
+      <h1 className="auth__title">{t("auth.forgotPassword.title")}</h1>
+      <p className="auth__subtitle">{t("auth.forgotPassword.subtitle")}</p>
+      {sent && <Alert tone="success">{t("auth.forgotPassword.sent")}</Alert>}
+      {error && <Alert tone="danger">{t(error)}</Alert>}
+      {!sent && (
+        <form className="auth__form" onSubmit={submit} noValidate>
+          <TextField
+            label={t("auth.email")}
+            type="email"
+            name="email"
+            autoComplete="username"
+            inputMode="email"
+            dir="ltr"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <Button type="submit" size="lg" block loading={busy} disabled={!email.trim()}>
+            {t("auth.forgotPassword.submit")}
+          </Button>
+        </form>
+      )}
+      <div className="auth__links">
+        <Link to="/sign-in" className="app-linkbtn">
+          {t("auth.forgotPassword.backToSignIn")}
+        </Link>
+      </div>
+    </AuthLayout>
+  );
+}
+
+// ------------------------------------------------------------------ Reset password (from email link)
+
+const RESET_MIN_LENGTH = 12;
+
+export function ResetPasswordPage() {
+  const t = useT();
+  const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const token = params.get("token");
+  const tokenError = params.get("error");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<MessageId | null>(null);
+  const [fieldError, setFieldError] = useState<"tooShort" | "mismatch" | null>(null);
+  const [done, setDone] = useState(false);
+  useTitle(t("auth.resetPassword.title"));
+
+  if (tokenError || !token) {
+    return (
+      <AuthLayout>
+        <span className="auth__icon">
+          <KeyRound size={28} aria-hidden="true" />
+        </span>
+        <h1 className="auth__title">{t("auth.resetPassword.title")}</h1>
+        <Alert tone="danger">{t("auth.resetPassword.invalidToken")}</Alert>
+        <div className="auth__links">
+          <Link to="/forgot-password" className="app-linkbtn">
+            {t("auth.resetPassword.tryAgain")}
+          </Link>
+        </div>
+      </AuthLayout>
+    );
+  }
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (password.length < RESET_MIN_LENGTH) {
+      setFieldError("tooShort");
+      return;
+    }
+    if (password !== confirm) {
+      setFieldError("mismatch");
+      return;
+    }
+    setFieldError(null);
+    setBusy(true);
+    const { error: err } = await authClient
+      .resetPassword({ newPassword: password, token })
+      .catch(() => ({ error: { status: 0 } }));
+    setBusy(false);
+    if (err) {
+      const f = authFailure(err);
+      if (f === "rate_limited") setError("auth.rateLimited");
+      else setError("auth.resetPassword.failed");
+      return;
+    }
+    setDone(true);
+  };
+
+  if (done) {
+    return (
+      <AuthLayout>
+        <span className="auth__icon">
+          <KeyRound size={28} aria-hidden="true" />
+        </span>
+        <h1 className="auth__title">{t("auth.resetPassword.title")}</h1>
+        <Alert tone="success">{t("auth.resetPassword.success")}</Alert>
+        <div className="auth__links">
+          <Button size="lg" block onClick={() => navigate("/sign-in", { replace: true })}>
+            {t("auth.signIn.title")}
+          </Button>
+        </div>
+      </AuthLayout>
+    );
+  }
+
+  return (
+    <AuthLayout>
+      <span className="auth__icon">
+        <KeyRound size={28} aria-hidden="true" />
+      </span>
+      <h1 className="auth__title">{t("auth.resetPassword.title")}</h1>
+      <p className="auth__subtitle">{t("auth.resetPassword.subtitle")}</p>
+      {error && <Alert tone="danger">{t(error)}</Alert>}
+      <form className="auth__form" onSubmit={submit} noValidate>
+        <TextField
+          label={t("auth.resetPassword.newPassword")}
+          hint={fieldError === "tooShort" ? undefined : t("auth.changePassword.tooShort")}
+          error={fieldError === "tooShort" ? t("auth.changePassword.tooShort") : undefined}
+          type="password"
+          name="new-password"
+          autoComplete="new-password"
+          dir="ltr"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        <TextField
+          label={t("auth.resetPassword.confirmPassword")}
+          error={fieldError === "mismatch" ? t("auth.changePassword.mismatch") : undefined}
+          type="password"
+          name="confirm-password"
+          autoComplete="new-password"
+          dir="ltr"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+        />
+        <Button type="submit" size="lg" block loading={busy} disabled={!password || !confirm}>
+          {t("auth.resetPassword.submit")}
+        </Button>
+      </form>
     </AuthLayout>
   );
 }
