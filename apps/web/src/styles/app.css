@@ -1732,22 +1732,25 @@ a.gamecard:hover {
 /* Reports dashboard (design doc §5.9.2) */
 .reports-tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: var(--space-3, 12px);
   margin-block-end: var(--space-4, 16px);
 }
 .reports-tile {
   text-align: center;
+  padding-block: var(--space-3, 12px);
 }
 .reports-tile dt {
   font-size: 0.8125rem;
   color: var(--text-muted);
+  margin-block-end: var(--space-1, 4px);
 }
 .reports-tile dd {
   font-size: 1.75rem;
   font-weight: 600;
   margin: 0;
   font-variant-numeric: tabular-nums;
+  color: var(--text-default);
 }
 .reports-controls {
   display: flex;
@@ -1758,22 +1761,34 @@ a.gamecard:hover {
 }
 .reports-chart {
   min-block-size: 200px;
-  margin-block-end: var(--space-4, 16px);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .reports-chart svg {
   inline-size: 100%;
   block-size: auto;
+  min-inline-size: 320px;
 }
 .reports-bar {
   fill: var(--brand-500, #6366f1);
+  transition: opacity 0.15s ease;
+}
+.reports-bar:hover {
+  opacity: 0.8;
+}
+.reports-gridline {
+  stroke: var(--border-default, #e5e7eb);
+  stroke-width: 0.5;
+  stroke-dasharray: 4 3;
 }
 .reports-bar-label {
-  font-size: 0.6875rem;
+  font-size: 0.625rem;
   fill: var(--text-muted);
   text-anchor: middle;
 }
 .reports-bar-value {
-  font-size: 0.6875rem;
+  font-size: 0.625rem;
+  font-weight: 500;
   fill: var(--text-default);
   text-anchor: middle;
   font-variant-numeric: tabular-nums;

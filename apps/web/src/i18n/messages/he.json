@@ -874,5 +874,9 @@
   "reports.breakdown.avgAccuracy": "דיוק ממוצע",
   "reports.empty": "אין נתוני מפגשים עדיין. תוצאות יופיעו כאן לאחר שמטופלים ישלימו את הפעילויות הראשונות.",
   "reports.dateRange": "טווח תאריכים",
-  "reports.allTime": "הכול"
+  "reports.allTime": "הכול",
+  "reports.last7days": "7 ימים אחרונים",
+  "reports.last30days": "30 ימים אחרונים",
+  "reports.thisMonth": "החודש הזה",
+  "reports.last3months": "3 חודשים אחרונים"
 }

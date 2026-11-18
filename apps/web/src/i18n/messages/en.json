@@ -874,5 +874,9 @@
   "reports.breakdown.avgAccuracy": "Avg. accuracy",
   "reports.empty": "No session data yet. Results will appear here once patients complete their first activities.",
   "reports.dateRange": "Date range",
-  "reports.allTime": "All time"
+  "reports.allTime": "All time",
+  "reports.last7days": "Last 7 days",
+  "reports.last30days": "Last 30 days",
+  "reports.thisMonth": "This month",
+  "reports.last3months": "Last 3 months"
 }

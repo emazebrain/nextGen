@@ -4,10 +4,10 @@
  *
  * Therapists see their own caseload; clinic admins see all.
  */
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useIntl } from "react-intl";
 import { BarChart3 } from "lucide-react";
-import { Card, EmptyState, MazeLoader, PageHeader, Segmented, type Column, DataList } from "@emb/ui";
+import { Card, EmptyState, MazeLoader, PageHeader, Segmented, SelectField, type Column, DataList } from "@emb/ui";
 import { useReportsSummary, useSessionsOverTime, useActivityBreakdown, type TimeSeriesPoint, type ActivityBreakdown } from "../api/queries.ts";
 import { useClinic } from "../lib/clinic.tsx";
 import { useT, usePrefs } from "../i18n/index.tsx";
@@ -16,6 +16,34 @@ import { findGame, localText } from "../games/registry.ts";
 import { LoadError } from "./shared.tsx";
 
 type Period = "day" | "week" | "month";
+type DateRange = "7d" | "30d" | "month" | "3m" | "all";
+
+/** Compute ISO date strings for a preset range. */
+function dateRangeBounds(range: DateRange): { from?: string; to?: string } {
+  if (range === "all") return {};
+  const now = new Date();
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  switch (range) {
+    case "7d": {
+      const from = new Date(now);
+      from.setDate(from.getDate() - 7);
+      return { from: fmt(from) };
+    }
+    case "30d": {
+      const from = new Date(now);
+      from.setDate(from.getDate() - 30);
+      return { from: fmt(from) };
+    }
+    case "month": {
+      return { from: fmt(new Date(now.getFullYear(), now.getMonth(), 1)) };
+    }
+    case "3m": {
+      const from = new Date(now);
+      from.setMonth(from.getMonth() - 3);
+      return { from: fmt(from) };
+    }
+  }
+}
 
 export function ReportsPage() {
   const t = useT();
@@ -23,11 +51,14 @@ export function ReportsPage() {
   const { locale } = usePrefs();
   const { clinicId } = useClinic();
   const [period, setPeriod] = useState<Period>("week");
+  const [dateRange, setDateRange] = useState<DateRange>("all");
   useTitle(t("reports.title"));
 
+  const bounds = useMemo(() => dateRangeBounds(dateRange), [dateRange]);
+
   const summary = useReportsSummary(clinicId);
-  const timeline = useSessionsOverTime(clinicId, period);
-  const breakdown = useActivityBreakdown(clinicId);
+  const timeline = useSessionsOverTime(clinicId, period, bounds.from, bounds.to);
+  const breakdown = useActivityBreakdown(clinicId, bounds.from, bounds.to);
 
   const gameName = (id: string) => {
     const g = findGame(id);
@@ -85,7 +116,18 @@ export function ReportsPage() {
 
   return (
     <div className="app-page">
-      <PageHeader title={t("reports.title")} />
+      <PageHeader
+        title={t("reports.title")}
+        actions={
+          <SelectField label={t("reports.dateRange")} hideLabel value={dateRange} onChange={(e) => setDateRange(e.currentTarget.value as DateRange)}>
+            <option value="all">{t("reports.allTime")}</option>
+            <option value="7d">{t("reports.last7days")}</option>
+            <option value="30d">{t("reports.last30days")}</option>
+            <option value="month">{t("reports.thisMonth")}</option>
+            <option value="3m">{t("reports.last3months")}</option>
+          </SelectField>
+        }
+      />
 
       <dl className="reports-tiles">
         <Card as="div" className="reports-tile">
@@ -152,24 +194,39 @@ export function ReportsPage() {
   );
 }
 
-/** Simple SVG bar chart for sessions over time. */
+/** Simple SVG bar chart for sessions over time with gridlines and hover. */
 function SessionsChart({ data, dateLabel }: { data: TimeSeriesPoint[]; dateLabel: (s: string) => string }) {
   const max = Math.max(...data.map((d) => d.count), 1);
-  const barWidth = Math.max(20, Math.min(60, 600 / data.length - 4));
-  const chartWidth = data.length * (barWidth + 4) + 40;
+  const gap = 4;
+  const barWidth = Math.max(16, Math.min(48, 560 / data.length - gap));
+  const padStart = 20;
+  const chartWidth = padStart + data.length * (barWidth + gap) + 20;
   const chartHeight = 200;
-  const barAreaHeight = chartHeight - 40; // room for labels
+  const barAreaTop = 16;
+  const barAreaBottom = chartHeight - 28;
+  const barAreaHeight = barAreaBottom - barAreaTop;
+
+  // Simple gridlines: 2–4 horizontal lines at round intervals
+  const step = max <= 4 ? 1 : max <= 10 ? 2 : max <= 30 ? 5 : Math.ceil(max / 4 / 5) * 5;
+  const gridlines: number[] = [];
+  for (let v = step; v < max; v += step) gridlines.push(v);
 
   return (
     <div className="reports-chart" role="img" aria-label="Sessions over time chart">
       <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="xMidYMid meet">
+        {/* Gridlines */}
+        {gridlines.map((v) => {
+          const y = barAreaBottom - (v / max) * barAreaHeight;
+          return <line key={v} className="reports-gridline" x1={padStart - 4} y1={y} x2={chartWidth - 16} y2={y} />;
+        })}
+        {/* Bars */}
         {data.map((d, i) => {
-          const x = 20 + i * (barWidth + 4);
-          const h = max > 0 ? (d.count / max) * (barAreaHeight - 20) : 0;
-          const y = barAreaHeight - h;
+          const x = padStart + i * (barWidth + gap);
+          const h = max > 0 ? (d.count / max) * barAreaHeight : 0;
+          const y = barAreaBottom - h;
           return (
             <g key={d.period}>
-              <rect className="reports-bar" x={x} y={y} width={barWidth} height={h} rx={3} />
+              <rect className="reports-bar" x={x} y={y} width={barWidth} height={Math.max(h, 0)} rx={3} />
               {d.count > 0 && (
                 <text className="reports-bar-value" x={x + barWidth / 2} y={y - 4}>
                   {d.count}
