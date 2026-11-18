@@ -11,6 +11,7 @@ import { videoRoutes } from "./modules/videos/routes.ts";
 import { deviceRoutes } from "./modules/devices/routes.ts";
 import { offlineRoutes } from "./modules/offline/routes.ts";
 import { adminRoutes } from "./modules/admin/routes.ts";
+import { orgAdminRoutes } from "./modules/org/routes.ts";
 import { publicConsentRoutes } from "./modules/consent/public-routes.ts";
 import { deviceKey, type DeviceKey } from "./device-crypto.ts";
 import { localFileStore, type FileStore } from "./files.ts";
@@ -74,6 +75,7 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
     v1.route("/", deviceRoutes(deps.pool, deps.deviceKey ?? deviceKey(undefined)));
     v1.route("/", offlineRoutes(deps.pool, deps.tickets ?? ticketSigner()));
     v1.route("/admin", adminRoutes(deps.pool, deps.auth, mailer, deps.publicAppUrl));
+    v1.route("/org", orgAdminRoutes(deps.pool, deps.auth, mailer, deps.publicAppUrl));
     app.route("/v1", v1);
 
     // Public consent endpoints — outside /v1 (no auth required).

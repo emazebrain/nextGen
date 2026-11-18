@@ -37,6 +37,11 @@ import { ClinicFormPage } from "./routes/admin/clinic-form.tsx";
 import { ClinicDetailPage } from "./routes/admin/clinic-detail.tsx";
 import { UserFormPage } from "./routes/admin/user-form.tsx";
 import { ReportsPage } from "./routes/reports.tsx";
+import { ManageArea } from "./routes/manage/common.tsx";
+import { ManageOverviewPage } from "./routes/manage/overview.tsx";
+import { ManageClinicDetailPage } from "./routes/manage/clinic-detail.tsx";
+import { ManageClinicFormPage } from "./routes/manage/clinic-form.tsx";
+import { ManageStaffFormPage } from "./routes/manage/staff-form.tsx";
 import { flush } from "./session/outbox.ts";
 
 /**
@@ -228,6 +233,16 @@ export const routes: RouteObject[] = [
       { path: "/reports", element: <ReportsPage /> },
       { path: "/admin/videos", element: <VideosAdminPage /> },
       { path: "/admin/videos/:id", element: <VideoEditorPage /> },
+      {
+        element: <ManageArea />,
+        children: [
+          { path: "/manage", element: <ManageOverviewPage /> },
+          { path: "/manage/clinics/new", element: <ManageClinicFormPage /> },
+          { path: "/manage/clinics/:id", element: <ManageClinicDetailPage /> },
+          { path: "/manage/clinics/:id/edit", element: <ManageClinicFormPage /> },
+          { path: "/manage/staff/new", element: <ManageStaffFormPage /> },
+        ],
+      },
       {
         element: <AdminArea />,
         children: [

@@ -95,9 +95,13 @@ export function ClinicShell({ me }: { me: Me }) {
     items.push({ id: "organizations", href: "/admin/organizations", label: t("admin.nav.organizations"), icon: Building2 });
     items.push({ id: "videos", href: "/admin/videos", label: t("nav.videos"), icon: Film });
   }
+  if (me.memberships.some((m) => m.role === "org_admin")) {
+    items.push({ id: "manage", href: "/manage", label: t("manage.nav"), icon: Building2 });
+  }
   const more: ShellNavItem = { id: "more", href: "/more", label: t("nav.more"), icon: LayoutGrid };
   // Clinics and users are reached through their organization, so they light up the same item.
-  const under = (item: ShellNavItem) => (item.id === "organizations" ? [item.href, "/admin/clinics", "/admin/users"] : [item.href]);
+  const under = (item: ShellNavItem) =>
+    item.id === "organizations" ? [item.href, "/admin/clinics", "/admin/users"] : item.id === "manage" ? [item.href, "/manage/clinics", "/manage/staff"] : [item.href];
   const isActive = (item: ShellNavItem) => under(item).some((p) => location.pathname === p || location.pathname.startsWith(`${p}/`));
   const role = clinics.find((c) => c.id === clinicId)?.roles[0] ?? me.memberships[0]?.role;
 
