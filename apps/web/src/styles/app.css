@@ -1760,13 +1760,15 @@ a.gamecard:hover {
   margin-block-end: var(--space-3, 12px);
 }
 .reports-chart {
-  min-block-size: 200px;
+  min-block-size: 120px;
+  max-block-size: 180px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 .reports-chart svg {
   inline-size: 100%;
-  block-size: auto;
+  block-size: 100%;
+  max-block-size: 180px;
   min-inline-size: 320px;
 }
 .reports-bar {

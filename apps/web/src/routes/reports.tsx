@@ -198,12 +198,12 @@ export function ReportsPage() {
 function SessionsChart({ data, dateLabel }: { data: TimeSeriesPoint[]; dateLabel: (s: string) => string }) {
   const max = Math.max(...data.map((d) => d.count), 1);
   const gap = 4;
-  const barWidth = Math.max(16, Math.min(48, 560 / data.length - gap));
+  const barWidth = Math.max(14, Math.min(36, 480 / data.length - gap));
   const padStart = 20;
   const chartWidth = padStart + data.length * (barWidth + gap) + 20;
-  const chartHeight = 200;
-  const barAreaTop = 16;
-  const barAreaBottom = chartHeight - 28;
+  const chartHeight = 140;
+  const barAreaTop = 12;
+  const barAreaBottom = chartHeight - 22;
   const barAreaHeight = barAreaBottom - barAreaTop;
 
   // Simple gridlines: 2–4 horizontal lines at round intervals
