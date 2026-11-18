@@ -64,7 +64,7 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
     const v1 = new Hono<Env>();
     v1.use("*", requireStaffSession(deps.auth));
     v1.use("*", requireActiveUser(deps.pool));
-    v1.route("/me", meRoutes(deps.pool));
+    v1.route("/me", meRoutes(deps.pool, deps.auth));
     const mailer = deps.mailer ?? createMailer({});
     v1.route("/patients", patientRoutes(deps.pool, mailer, deps.publicAppUrl));
     v1.route("/clinics", clinicRoutes(deps.pool));

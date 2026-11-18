@@ -1,9 +1,10 @@
 import { Hono } from "hono";
 import type pg from "pg";
+import type { Auth } from "../../auth.ts";
 import { withUser, type Env } from "../../context.ts";
 
 /** GET /v1/me — the signed-in user and their active clinic memberships (§9.1 S1). */
-export function meRoutes(pool: pg.Pool) {
+export function meRoutes(pool: pg.Pool, auth?: Auth) {
   const r = new Hono<Env>();
 
   r.get("/", async (c) => {
@@ -27,6 +28,24 @@ export function meRoutes(pool: pg.Pool) {
       is_platform_admin: result.isPlatformAdmin,
       user_status: result.userStatus,
     });
+  });
+
+  /** PATCH /v1/me/profile — update the signed-in user's display name (§5.14). */
+  r.patch("/profile", async (c) => {
+    const user = c.get("user");
+    const body = await c.req.json<{ name?: string }>().catch(() => ({} as { name?: string }));
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    if (!name || name.length > 255) return c.json({ error: "invalid_name" }, 400);
+
+    // Update both app.app_user and the auth user table.
+    await withUser(pool, user.id, c.get("requestId"), async (db) => {
+      await db.query(`UPDATE app.app_user SET full_name = $1 WHERE id = app.current_user_id()`, [name]);
+    });
+    if (auth) {
+      const ctx = await auth.$context;
+      await ctx.internalAdapter.updateUser(user.id, { name });
+    }
+    return c.json({ user: { id: user.id, email: user.email, name } });
   });
 
   /** PATCH /v1/me/status — self-activate: invited → active only. */

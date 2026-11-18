@@ -2,7 +2,7 @@
  * Clinic pages for this slice: Today, Patients, one patient, Settings, More,
  * and honest "coming next" pages for destinations built in the MVP.
  */
-import { useMemo, useState, type ComponentType } from "react";
+import { useMemo, useState, type ComponentType, type FormEvent } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { useIntl } from "react-intl";
 import {
@@ -25,8 +25,11 @@ import {
   ChevronRight,
   Play,
 } from "lucide-react";
-import { Alert, Avatar, Button, Card, Chip, DataList, EmptyState, MazeLoader, PageHeader, Segmented, type ChipTone, type Column } from "@emb/ui";
-import { useMe, usePatients, useToday, useReviewCount, useReviewQueue, useReviewFromQueue, type ReviewQueueItem } from "../api/queries.ts";
+import { Alert, Avatar, Button, Card, Chip, DataList, EmptyState, MazeLoader, PageHeader, Segmented, TextField, type ChipTone, type Column } from "@emb/ui";
+import { useQueryClient } from "@tanstack/react-query";
+import { meKey, useMe, usePatients, useToday, useReviewCount, useReviewQueue, useReviewFromQueue, type ReviewQueueItem } from "../api/queries.ts";
+import { apiSend } from "../api/http.ts";
+import { authClient } from "../api/auth.ts";
 import { findGame, localText, GAMES } from "../games/registry.ts";
 import { fullName, LoadError, StatusChip, useAge } from "./shared.tsx";
 import { useT, usePrefs, locales, type Locale, type MessageId, type Motion, type Theme } from "../i18n/index.tsx";
@@ -389,7 +392,6 @@ export function MorePage() {
 
 export function SettingsPage() {
   const t = useT();
-  const me = useMe();
   const { locale, setLocale, theme, setTheme, motion, setMotion } = usePrefs();
   const signOut = useSignOut();
   useTitle(t("settings.title"));
@@ -397,6 +399,7 @@ export function SettingsPage() {
     <div className="app-page app-page--narrow">
       <PageHeader title={t("settings.title")} />
       <div className="settings">
+        <ProfileCard />
         <Card as="section" labelledBy="prefs">
           <h2 id="prefs" className="app-cardtitle">
             {t("settings.preferences")}
@@ -441,26 +444,11 @@ export function SettingsPage() {
             {t("device.settingsLink")}
           </Link>
         </Card>
+        <SecurityCard />
         <Card as="section" labelledBy="account">
           <h2 id="account" className="app-cardtitle">
             {t("settings.account")}
           </h2>
-          <dl className="app-dl">
-            <div>
-              <dt>{t("settings.email")}</dt>
-              <dd>
-                <bdi dir="ltr">{me.data?.user.email}</bdi>
-              </dd>
-            </div>
-            <div>
-              <dt>{t("settings.twoFactor")}</dt>
-              <dd>
-                <Chip tone="success" icon={<CircleCheck size={14} aria-hidden="true" />}>
-                  {t("settings.twoFactor.on")}
-                </Chip>
-              </dd>
-            </div>
-          </dl>
           <div className="settings__actions">
             <Button variant="secondary" icon={<LogOut size={18} aria-hidden="true" className="emb-flip-rtl" />} onClick={() => void signOut("signed_out")}>
               {t("common.signOut")}
@@ -469,6 +457,191 @@ export function SettingsPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+/** Profile editing: display name (§5.14). */
+function ProfileCard() {
+  const t = useT();
+  const me = useMe();
+  const qc = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<MessageId | null>(null);
+
+  const startEdit = () => {
+    setName(me.data?.user.name ?? "");
+    setEditing(true);
+    setSaved(false);
+    setError(null);
+  };
+
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await apiSend("PATCH", "/v1/me/profile", { name: trimmed });
+      await qc.invalidateQueries({ queryKey: meKey });
+      setEditing(false);
+      setSaved(true);
+    } catch {
+      setError("errors.generic");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card as="section" labelledBy="profile">
+      <h2 id="profile" className="app-cardtitle">
+        {t("settings.profile")}
+      </h2>
+      {saved && <Alert tone="success">{t("settings.profile.saved")}</Alert>}
+      {error && <Alert tone="danger">{t(error)}</Alert>}
+      {editing ? (
+        <form className="settings__edit" onSubmit={(e) => void save(e)} noValidate>
+          <TextField
+            label={t("settings.profile.name")}
+            name="display-name"
+            autoComplete="name"
+            maxLength={255}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <div className="settings__actions">
+            <Button variant="secondary" onClick={() => setEditing(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button type="submit" loading={busy} disabled={!name.trim()}>
+              {t("settings.profile.save")}
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <>
+          <dl className="app-dl">
+            <div>
+              <dt>{t("settings.profile.name")}</dt>
+              <dd><bdi>{me.data?.user.name}</bdi></dd>
+            </div>
+            <div>
+              <dt>{t("settings.email")}</dt>
+              <dd><bdi dir="ltr">{me.data?.user.email}</bdi></dd>
+            </div>
+          </dl>
+          <div className="settings__actions">
+            <Button variant="secondary" onClick={startEdit}>
+              {t("settings.profile.edit")}
+            </Button>
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
+/** Security: password change and 2FA status (§5.14). */
+function SecurityCard() {
+  const t = useT();
+  const [changingPw, setChangingPw] = useState(false);
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<MessageId | null>(null);
+  const [fieldError, setFieldError] = useState<"tooShort" | "mismatch" | null>(null);
+  const [pwSaved, setPwSaved] = useState(false);
+
+  const submitPw = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (next.length < 12) { setFieldError("tooShort"); return; }
+    if (next !== confirm) { setFieldError("mismatch"); return; }
+    setFieldError(null);
+    setBusy(true);
+    const { error: err } = await authClient
+      .changePassword({ currentPassword: current, newPassword: next, revokeOtherSessions: false })
+      .catch(() => ({ error: { status: 0 } }));
+    setBusy(false);
+    if (err) { setError("settings.security.pwInvalid"); return; }
+    setChangingPw(false);
+    setCurrent("");
+    setNext("");
+    setConfirm("");
+    setPwSaved(true);
+  };
+
+  return (
+    <Card as="section" labelledBy="security">
+      <h2 id="security" className="app-cardtitle">
+        {t("settings.security")}
+      </h2>
+      {pwSaved && <Alert tone="success">{t("settings.security.pwSaved")}</Alert>}
+      {error && <Alert tone="danger">{t(error)}</Alert>}
+      <dl className="app-dl">
+        <div>
+          <dt>{t("settings.twoFactor")}</dt>
+          <dd>
+            <Chip tone="success" icon={<CircleCheck size={14} aria-hidden="true" />}>
+              {t("settings.twoFactor.on")}
+            </Chip>
+          </dd>
+        </div>
+      </dl>
+      {changingPw ? (
+        <form className="settings__edit" onSubmit={(e) => void submitPw(e)} noValidate>
+          <TextField
+            label={t("settings.security.currentPw")}
+            type="password"
+            name="current-password"
+            autoComplete="current-password"
+            dir="ltr"
+            value={current}
+            onChange={(e) => setCurrent(e.target.value)}
+          />
+          <TextField
+            label={t("settings.security.newPw")}
+            hint={fieldError === "tooShort" ? undefined : t("auth.changePassword.tooShort")}
+            error={fieldError === "tooShort" ? t("auth.changePassword.tooShort") : undefined}
+            type="password"
+            name="new-password"
+            autoComplete="new-password"
+            dir="ltr"
+            value={next}
+            onChange={(e) => setNext(e.target.value)}
+          />
+          <TextField
+            label={t("settings.security.confirmPw")}
+            error={fieldError === "mismatch" ? t("auth.changePassword.mismatch") : undefined}
+            type="password"
+            name="confirm-password"
+            autoComplete="new-password"
+            dir="ltr"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+          />
+          <div className="settings__actions">
+            <Button variant="secondary" onClick={() => { setChangingPw(false); setError(null); setFieldError(null); }}>
+              {t("common.cancel")}
+            </Button>
+            <Button type="submit" loading={busy} disabled={!current || !next || !confirm}>
+              {t("settings.security.changePw")}
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <div className="settings__actions">
+          <Button variant="secondary" onClick={() => { setChangingPw(true); setPwSaved(false); setError(null); }}>
+            {t("settings.security.changePw")}
+          </Button>
+        </div>
+      )}
+    </Card>
   );
 }
 
