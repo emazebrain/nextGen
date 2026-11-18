@@ -350,22 +350,27 @@ export function useProgression(patientId: string) {
 
 export interface ReviewQueueItem {
   id: string;
-  game_id: string;
+  kind: "game" | "video";
+  game_id: string | null;
+  video_id: string | null;
   ended_at: string;
   accuracy: number | null;
-  difficulty: number;
+  difficulty: number | null;
   review_reason: string;
   patient_id: string;
   given_name: string;
   family_name: string;
 }
 
-export function useReviewQueue(clinicId: string | null) {
+export function useReviewQueue(clinicId: string | null, patientId?: string | null) {
   return useQuery({
-    queryKey: ["reviewQueue", clinicId],
+    queryKey: ["reviewQueue", clinicId, patientId ?? null],
     queryFn: ({ signal }) => {
-      const q = clinicId ? `?clinic=${clinicId}` : "";
-      return apiGet<{ items: ReviewQueueItem[] }>(`/v1/review-queue${q}`, { signal }).then((r) => r.items);
+      const q = new URLSearchParams();
+      if (clinicId) q.set("clinic", clinicId);
+      if (patientId) q.set("patient", patientId);
+      const qs = q.toString();
+      return apiGet<{ items: ReviewQueueItem[] }>(`/v1/review-queue${qs ? `?${qs}` : ""}`, { signal }).then((r) => r.items);
     },
     retry,
   });
@@ -375,7 +380,8 @@ export function useReviewQueue(clinicId: string | null) {
 export function useReviewFromQueue(clinicId: string | null) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, decision }: { id: string; decision: "accept" | "exclude" }) => apiSend<{ decision: string }>("POST", `/v1/results/${id}/review`, { decision }),
+    mutationFn: ({ id, kind, decision, note }: { id: string; kind: "game" | "video"; decision: "accept" | "exclude"; note?: string }) =>
+      apiSend<{ decision: string }>("POST", `/v1/${kind === "video" ? "video-views" : "results"}/${id}/review`, { decision, ...(note ? { note } : {}) }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["reviewQueue"] });
       void qc.invalidateQueries({ queryKey: ["today"] });

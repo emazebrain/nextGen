@@ -119,19 +119,42 @@ export function TodayPage() {
   );
 }
 
-/** Cross-patient review queue for flagged sessions (design doc §5.9.1). */
+/** Cross-patient review queue for flagged sessions and video views (design doc §5.9.1). */
 function ReviewQueue({ clinicId, count }: { clinicId: string | null; count: number }) {
   const t = useT();
   const intl = useIntl();
   const { locale } = usePrefs();
   const [expanded, setExpanded] = useState(false);
-  const queue = useReviewQueue(clinicId);
+  const [filterPatient, setFilterPatient] = useState<string | null>(null);
+  const [noteFor, setNoteFor] = useState<string | null>(null);
+  const [noteText, setNoteText] = useState("");
+  const queue = useReviewQueue(clinicId, filterPatient);
   const review = useReviewFromQueue(clinicId);
-  const gameName = (id: string) => {
+  const gameName = (id: string | null) => {
+    if (!id) return "";
     const g = findGame(id);
     return g ? localText(g.manifest.name, locale) : id;
   };
   const date = (s: string) => intl.formatDate(new Date(s), { day: "numeric", month: "short" });
+
+  // Unique patients in the queue for the filter dropdown.
+  const patients = useMemo(() => {
+    if (!queue.data) return [];
+    const seen = new Map<string, { id: string; name: string }>();
+    for (const item of queue.data) {
+      if (!seen.has(item.patient_id)) seen.set(item.patient_id, { id: item.patient_id, name: `${item.given_name} ${item.family_name}` });
+    }
+    return [...seen.values()];
+  }, [queue.data]);
+
+  const doReview = (item: ReviewQueueItem, decision: "accept" | "exclude") => {
+    const note = noteFor === item.id ? noteText.trim() : undefined;
+    review.mutate({ id: item.id, kind: item.kind, decision, ...(note ? { note } : {}) });
+    if (noteFor === item.id) {
+      setNoteFor(null);
+      setNoteText("");
+    }
+  };
 
   return (
     <Card as="section" className="today-reviewq" labelledBy="review-queue">
@@ -147,6 +170,23 @@ function ReviewQueue({ clinicId, count }: { clinicId: string | null; count: numb
       </button>
       {expanded && (
         <div id="review-queue-list">
+          {patients.length > 1 && (
+            <div className="reviewq-filter">
+              <select
+                value={filterPatient ?? ""}
+                onChange={(e) => setFilterPatient(e.target.value || null)}
+                className="reviewq-filter__select"
+                aria-label={t("review.filterPatient")}
+              >
+                <option value="">{t("review.allPatients")}</option>
+                {patients.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           {queue.isPending ? (
             <MazeLoader label={t("common.loading")} />
           ) : queue.isError ? (
@@ -162,17 +202,30 @@ function ReviewQueue({ clinicId, count }: { clinicId: string | null; count: numb
                     <span className="reviewq-item__text">
                       <bdi className="reviewq-item__name">{item.given_name} {item.family_name}</bdi>
                       <span className="app-muted">
-                        {gameName(item.game_id)} · <span className="emb-tnum">{date(item.ended_at)}</span>
+                        {item.kind === "video" ? t("review.videoView") : gameName(item.game_id)}
+                        {" · "}
+                        <span className="emb-tnum">{date(item.ended_at)}</span>
                       </span>
                     </span>
                   </Link>
                   <Chip tone="warning">{t("review.reason", { reason: item.review_reason })}</Chip>
                   <span className="reviewq-item__actions">
                     <Button
+                      variant="ghost"
+                      size="md"
+                      onClick={() => {
+                        setNoteFor(noteFor === item.id ? null : item.id);
+                        setNoteText("");
+                      }}
+                      aria-label={t("review.addNote")}
+                    >
+                      {t("review.note")}
+                    </Button>
+                    <Button
                       variant="secondary"
                       size="md"
                       loading={review.isPending && review.variables?.id === item.id && review.variables?.decision === "accept"}
-                      onClick={() => review.mutate({ id: item.id, decision: "accept" })}
+                      onClick={() => doReview(item, "accept")}
                     >
                       {t("review.accept")}
                     </Button>
@@ -180,11 +233,23 @@ function ReviewQueue({ clinicId, count }: { clinicId: string | null; count: numb
                       variant="ghost"
                       size="md"
                       loading={review.isPending && review.variables?.id === item.id && review.variables?.decision === "exclude"}
-                      onClick={() => review.mutate({ id: item.id, decision: "exclude" })}
+                      onClick={() => doReview(item, "exclude")}
                     >
                       {t("review.exclude")}
                     </Button>
                   </span>
+                  {noteFor === item.id && (
+                    <div className="reviewq-item__note">
+                      <input
+                        type="text"
+                        className="emb-input reviewq-item__note-input"
+                        value={noteText}
+                        onChange={(e) => setNoteText(e.target.value)}
+                        placeholder={t("review.notePlaceholder")}
+                        aria-label={t("review.addNote")}
+                      />
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>

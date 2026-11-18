@@ -450,30 +450,46 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
     return decisions ? c.json({ decisions }) : c.json({ error: "not_found" }, 404);
   });
 
-  // Review queue: flagged sessions across all the caller's patients (design doc §5.9.1).
+  // Review queue: flagged sessions and video views across all the caller's patients (design doc §5.9.1).
+  // Filterable to a single patient with ?patient=<uuid>.
   r.get("/review-queue", async (c) => {
     const clinic = c.req.query("clinic");
+    const patient = c.req.query("patient");
     if (clinic !== undefined && !UUID.test(clinic)) return c.json({ error: "invalid_clinic" }, 400);
+    if (patient !== undefined && !UUID.test(patient)) return c.json({ error: "invalid_patient" }, 400);
     const items = await run(c, async (db) => {
       const { rows } = await db.query<{
         id: string;
-        game_id: string;
+        kind: "game" | "video";
+        game_id: string | null;
+        video_id: string | null;
         ended_at: string;
         accuracy: number | null;
-        difficulty: number;
+        difficulty: number | null;
         review_reason: string;
         patient_id: string;
         given_name: string;
         family_name: string;
       }>(
-        `SELECT g.id, g.game_id, g.ended_at, g.accuracy::float8 AS accuracy, g.difficulty, r.review_reason,
-                g.patient_id, p.given_name, p.family_name
+        `SELECT g.id, 'game' AS kind, g.game_id, NULL AS video_id, g.ended_at, g.accuracy::float8 AS accuracy,
+                g.difficulty, r.review_reason, g.patient_id, p.given_name, p.family_name
            FROM app.game_session g
            JOIN app.game_session_review r ON r.id = g.id
            JOIN app.patient p ON p.id = g.patient_id
           WHERE r.review_reason IS NOT NULL AND r.decision IS NULL AND g.is_valid
             AND app.can_treat_patient(r.patient_id)
-          ORDER BY g.ended_at DESC LIMIT 100`,
+            AND ($1::uuid IS NULL OR g.patient_id = $1::uuid)
+         UNION ALL
+         SELECT v.id, 'video' AS kind, NULL AS game_id, v.video_id, v.ended_at, NULL AS accuracy,
+                NULL AS difficulty, vr.review_reason, v.patient_id, p.given_name, p.family_name
+           FROM app.video_view v
+           JOIN app.video_view_review vr ON vr.id = v.id
+           JOIN app.patient p ON p.id = v.patient_id
+          WHERE vr.review_reason IS NOT NULL AND vr.decision IS NULL
+            AND app.can_treat_patient(vr.patient_id)
+            AND ($1::uuid IS NULL OR v.patient_id = $1::uuid)
+          ORDER BY ended_at DESC LIMIT 100`,
+        [patient ?? null],
       );
       return rows;
     });
