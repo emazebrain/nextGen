@@ -176,7 +176,7 @@ export function ForgotPasswordPage() {
     setBusy(true);
     setError(null);
     const { error: err } = await authClient
-      .requestPasswordReset({ email: email.trim(), redirectTo: "/reset-password" })
+      .requestPasswordReset({ email: email.trim(), redirectTo: `${window.location.origin}/reset-password` })
       .catch(() => ({ error: { status: 0 } }));
     setBusy(false);
     if (err && (err as { status?: number }).status === 429) {
