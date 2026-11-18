@@ -450,6 +450,116 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
     return decisions ? c.json({ decisions }) : c.json({ error: "not_found" }, 404);
   });
 
+  // Review queue: flagged sessions across all the caller's patients (design doc §5.9.1).
+  r.get("/review-queue", async (c) => {
+    const clinic = c.req.query("clinic");
+    if (clinic !== undefined && !UUID.test(clinic)) return c.json({ error: "invalid_clinic" }, 400);
+    const items = await run(c, async (db) => {
+      const { rows } = await db.query<{
+        id: string;
+        game_id: string;
+        ended_at: string;
+        accuracy: number | null;
+        difficulty: number;
+        review_reason: string;
+        patient_id: string;
+        given_name: string;
+        family_name: string;
+      }>(
+        `SELECT g.id, g.game_id, g.ended_at, g.accuracy::float8 AS accuracy, g.difficulty, r.review_reason,
+                g.patient_id, p.given_name, p.family_name
+           FROM app.game_session g
+           JOIN app.game_session_review r ON r.id = g.id
+           JOIN app.patient p ON p.id = g.patient_id
+          WHERE r.review_reason IS NOT NULL AND r.decision IS NULL AND g.is_valid
+            AND app.can_treat_patient(r.patient_id)
+          ORDER BY g.ended_at DESC LIMIT 100`,
+      );
+      return rows;
+    });
+    return c.json({ items });
+  });
+
+  // Reports: summary tiles (design doc §5.9.2).
+  r.get("/reports/summary", async (c) => {
+    const clinic = c.req.query("clinic");
+    if (clinic !== undefined && !UUID.test(clinic)) return c.json({ error: "invalid_clinic" }, 400);
+    const summary = await run(c, async (db) => {
+      const { rows } = await db.query<{
+        total_sessions: string;
+        active_patients: string;
+        sessions_this_month: string;
+        avg_duration_ms: string | null;
+      }>(
+        `SELECT
+           (SELECT count(*) FROM app.game_session g JOIN app.game_session_review r ON r.id = g.id
+            WHERE g.is_valid AND r.counts != false AND app.can_treat_patient(g.patient_id)) AS total_sessions,
+           (SELECT count(DISTINCT g.patient_id) FROM app.game_session g JOIN app.game_session_review r ON r.id = g.id
+            WHERE g.is_valid AND r.counts != false AND g.ended_at >= NOW() - interval '30 days'
+            AND app.can_treat_patient(g.patient_id)) AS active_patients,
+           (SELECT count(*) FROM app.game_session g JOIN app.game_session_review r ON r.id = g.id
+            WHERE g.is_valid AND r.counts != false
+            AND g.ended_at >= date_trunc('month', CURRENT_DATE)
+            AND app.can_treat_patient(g.patient_id)) AS sessions_this_month,
+           (SELECT round(avg(g.active_ms)) FROM app.game_session g JOIN app.game_session_review r ON r.id = g.id
+            WHERE g.is_valid AND r.counts != false AND app.can_treat_patient(g.patient_id)) AS avg_duration_ms`,
+      );
+      return rows[0]!;
+    });
+    return c.json({
+      total_sessions: Number(summary.total_sessions),
+      active_patients: Number(summary.active_patients),
+      sessions_this_month: Number(summary.sessions_this_month),
+      avg_duration_ms: summary.avg_duration_ms ? Number(summary.avg_duration_ms) : null,
+    });
+  });
+
+  // Reports: sessions over time (design doc §5.9.2).
+  r.get("/reports/sessions-over-time", async (c) => {
+    const clinic = c.req.query("clinic");
+    const period = c.req.query("period") ?? "day";
+    const from = c.req.query("from");
+    const to = c.req.query("to");
+    if (clinic !== undefined && !UUID.test(clinic)) return c.json({ error: "invalid_clinic" }, 400);
+    if (!["day", "week", "month"].includes(period)) return c.json({ error: "invalid_period" }, 400);
+    const trunc = period === "day" ? "day" : period === "week" ? "week" : "month";
+    const defaultFrom = period === "month" ? "12 months" : period === "week" ? "12 weeks" : "30 days";
+    const data = await run(c, async (db) => {
+      const { rows } = await db.query<{ period: string; count: string }>(
+        `SELECT date_trunc($1, g.ended_at)::date AS period, count(*) AS count
+           FROM app.game_session g JOIN app.game_session_review r ON r.id = g.id
+          WHERE g.is_valid AND r.counts != false AND app.can_treat_patient(g.patient_id)
+            AND g.ended_at >= COALESCE($2::date, CURRENT_DATE - $4::interval)
+            AND g.ended_at < COALESCE($3::date, CURRENT_DATE + interval '1 day')
+          GROUP BY 1 ORDER BY 1`,
+        [trunc, from ?? null, to ?? null, defaultFrom],
+      );
+      return rows.map((r) => ({ period: r.period, count: Number(r.count) }));
+    });
+    return c.json({ data });
+  });
+
+  // Reports: activity breakdown (design doc §5.9.2).
+  r.get("/reports/activity-breakdown", async (c) => {
+    const clinic = c.req.query("clinic");
+    const from = c.req.query("from");
+    const to = c.req.query("to");
+    if (clinic !== undefined && !UUID.test(clinic)) return c.json({ error: "invalid_clinic" }, 400);
+    const data = await run(c, async (db) => {
+      const { rows } = await db.query<{ game_id: string; count: string; avg_accuracy: number | null }>(
+        `SELECT g.game_id, count(*) AS count, avg(g.accuracy)::float8 AS avg_accuracy
+           FROM app.game_session g JOIN app.game_session_review r ON r.id = g.id
+          WHERE g.is_valid AND r.counts != false AND app.can_treat_patient(g.patient_id)
+            AND ($1::date IS NULL OR g.ended_at >= $1::date)
+            AND ($2::date IS NULL OR g.ended_at < $2::date + interval '1 day')
+          GROUP BY g.game_id ORDER BY count DESC`,
+        [from ?? null, to ?? null],
+      );
+      return rows.map((r) => ({ game_id: r.game_id, count: Number(r.count), avg_accuracy: r.avg_accuracy }));
+    });
+    return c.json({ data });
+  });
+
   return r;
 }
 

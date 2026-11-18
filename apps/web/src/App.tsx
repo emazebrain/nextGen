@@ -36,6 +36,7 @@ import { OrgFormPage } from "./routes/admin/org-form.tsx";
 import { ClinicFormPage } from "./routes/admin/clinic-form.tsx";
 import { ClinicDetailPage } from "./routes/admin/clinic-detail.tsx";
 import { UserFormPage } from "./routes/admin/user-form.tsx";
+import { ReportsPage } from "./routes/reports.tsx";
 import { flush } from "./session/outbox.ts";
 
 /**
@@ -222,7 +223,7 @@ export const routes: RouteObject[] = [
       { path: "/library", element: <LibraryPage /> },
       { path: "/library/:gameId", element: <GamePage /> },
       { path: "/messages", element: <ComingSoonPage area="messages" /> },
-      { path: "/reports", element: <ComingSoonPage area="reports" /> },
+      { path: "/reports", element: <ReportsPage /> },
       { path: "/admin/videos", element: <VideosAdminPage /> },
       { path: "/admin/videos/:id", element: <VideoEditorPage /> },
       {

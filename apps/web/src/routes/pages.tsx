@@ -26,8 +26,8 @@ import {
   Play,
 } from "lucide-react";
 import { Alert, Avatar, Button, Card, Chip, DataList, EmptyState, MazeLoader, PageHeader, Segmented, type ChipTone, type Column } from "@emb/ui";
-import { useMe, usePatients, useToday, useReviewCount } from "../api/queries.ts";
-import { findGame, localText } from "../games/registry.ts";
+import { useMe, usePatients, useToday, useReviewCount, useReviewQueue, useReviewFromQueue, type ReviewQueueItem } from "../api/queries.ts";
+import { findGame, localText, GAMES } from "../games/registry.ts";
 import { fullName, LoadError, StatusChip, useAge } from "./shared.tsx";
 import { useT, usePrefs, locales, type Locale, type MessageId, type Motion, type Theme } from "../i18n/index.tsx";
 import { useClinic } from "../lib/clinic.tsx";
@@ -62,11 +62,7 @@ export function TodayPage() {
         eyebrow={intl.formatDate(new Date(), { weekday: "long", day: "numeric", month: "long" })}
         title={t("today.greeting", { part: dayPart(), name })}
       />
-      {reviewCount > 0 && (
-        <p className="today-review">
-          <Chip tone="warning">{t("today.review", { count: reviewCount })}</Chip>
-        </p>
-      )}
+      {reviewCount > 0 && <ReviewQueue clinicId={clinicId} count={reviewCount} />}
       <div className="today-grid">
         <Card as="section" className="today-next" labelledBy="next-up">
           <h2 id="next-up" className="app-cardtitle">
@@ -120,6 +116,82 @@ export function TodayPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+/** Cross-patient review queue for flagged sessions (design doc §5.9.1). */
+function ReviewQueue({ clinicId, count }: { clinicId: string | null; count: number }) {
+  const t = useT();
+  const intl = useIntl();
+  const { locale } = usePrefs();
+  const [expanded, setExpanded] = useState(false);
+  const queue = useReviewQueue(clinicId);
+  const review = useReviewFromQueue(clinicId);
+  const gameName = (id: string) => {
+    const g = findGame(id);
+    return g ? localText(g.manifest.name, locale) : id;
+  };
+  const date = (s: string) => intl.formatDate(new Date(s), { day: "numeric", month: "short" });
+
+  return (
+    <Card as="section" className="today-reviewq" labelledBy="review-queue">
+      <button
+        type="button"
+        className="today-reviewq__header"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        aria-controls="review-queue-list"
+      >
+        <Chip tone="warning">{t("today.review", { count })}</Chip>
+        <ChevronRight size={18} aria-hidden="true" className={`emb-flip-rtl today-reviewq__chevron${expanded ? " today-reviewq__chevron--open" : ""}`} />
+      </button>
+      {expanded && (
+        <div id="review-queue-list">
+          {queue.isPending ? (
+            <MazeLoader label={t("common.loading")} />
+          ) : queue.isError ? (
+            <LoadError error={queue.error} retry={() => void queue.refetch()} />
+          ) : queue.data.length === 0 ? (
+            <p className="app-muted">{t("today.attention.empty")}</p>
+          ) : (
+            <ul className="reviewq-list">
+              {queue.data.map((item) => (
+                <li key={item.id} className="reviewq-item">
+                  <Link to={`/patients/${item.patient_id}`} className="reviewq-item__info">
+                    <Avatar name={`${item.given_name} ${item.family_name}`} size={36} />
+                    <span className="reviewq-item__text">
+                      <bdi className="reviewq-item__name">{item.given_name} {item.family_name}</bdi>
+                      <span className="app-muted">
+                        {gameName(item.game_id)} · <span className="emb-tnum">{date(item.ended_at)}</span>
+                      </span>
+                    </span>
+                  </Link>
+                  <Chip tone="warning">{t("review.reason", { reason: item.review_reason })}</Chip>
+                  <span className="reviewq-item__actions">
+                    <Button
+                      variant="secondary"
+                      size="md"
+                      loading={review.isPending && review.variables?.id === item.id && review.variables?.decision === "accept"}
+                      onClick={() => review.mutate({ id: item.id, decision: "accept" })}
+                    >
+                      {t("review.accept")}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="md"
+                      loading={review.isPending && review.variables?.id === item.id && review.variables?.decision === "exclude"}
+                      onClick={() => review.mutate({ id: item.id, decision: "exclude" })}
+                    >
+                      {t("review.exclude")}
+                    </Button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -182,7 +254,6 @@ const soon: Record<string, { title: MessageId; body: MessageId; icon: ComponentT
   protocols: { title: "nav.protocols", body: "soon.protocols", icon: RouteIcon },
   library: { title: "nav.library", body: "soon.library", icon: BookOpen },
   messages: { title: "nav.messages", body: "soon.messages", icon: MessageSquare },
-  reports: { title: "nav.reports", body: "soon.reports", icon: BarChart3 },
 };
 
 export function ComingSoonPage({ area }: { area: keyof typeof soon }) {

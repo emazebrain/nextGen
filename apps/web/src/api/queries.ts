@@ -346,6 +346,107 @@ export function useProgression(patientId: string) {
   });
 }
 
+// ---------------------------------------------------------------- review queue (design doc §5.9.1)
+
+export interface ReviewQueueItem {
+  id: string;
+  game_id: string;
+  ended_at: string;
+  accuracy: number | null;
+  difficulty: number;
+  review_reason: string;
+  patient_id: string;
+  given_name: string;
+  family_name: string;
+}
+
+export function useReviewQueue(clinicId: string | null) {
+  return useQuery({
+    queryKey: ["reviewQueue", clinicId],
+    queryFn: ({ signal }) => {
+      const q = clinicId ? `?clinic=${clinicId}` : "";
+      return apiGet<{ items: ReviewQueueItem[] }>(`/v1/review-queue${q}`, { signal }).then((r) => r.items);
+    },
+    retry,
+  });
+}
+
+/** Accept or exclude a flagged result from the review queue. */
+export function useReviewFromQueue(clinicId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, decision }: { id: string; decision: "accept" | "exclude" }) => apiSend<{ decision: string }>("POST", `/v1/results/${id}/review`, { decision }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["reviewQueue"] });
+      void qc.invalidateQueries({ queryKey: ["today"] });
+      void qc.invalidateQueries({ queryKey: ["sessions"] });
+    },
+  });
+}
+
+// ---------------------------------------------------------------- reports (design doc §5.9.2)
+
+export interface ReportsSummary {
+  total_sessions: number;
+  active_patients: number;
+  sessions_this_month: number;
+  avg_duration_ms: number | null;
+}
+
+export function useReportsSummary(clinicId: string | null) {
+  return useQuery({
+    queryKey: ["reports", "summary", clinicId],
+    queryFn: ({ signal }) => {
+      const q = clinicId ? `?clinic=${clinicId}` : "";
+      return apiGet<ReportsSummary>(`/v1/reports/summary${q}`, { signal });
+    },
+    retry,
+    staleTime: 60_000,
+  });
+}
+
+export interface TimeSeriesPoint {
+  period: string;
+  count: number;
+}
+
+export function useSessionsOverTime(clinicId: string | null, period: "day" | "week" | "month", from?: string, to?: string) {
+  return useQuery({
+    queryKey: ["reports", "sessions-over-time", clinicId, period, from, to],
+    queryFn: ({ signal }) => {
+      const q = new URLSearchParams();
+      if (clinicId) q.set("clinic", clinicId);
+      q.set("period", period);
+      if (from) q.set("from", from);
+      if (to) q.set("to", to);
+      return apiGet<{ data: TimeSeriesPoint[] }>(`/v1/reports/sessions-over-time?${q}`, { signal }).then((r) => r.data);
+    },
+    retry,
+    staleTime: 60_000,
+  });
+}
+
+export interface ActivityBreakdown {
+  game_id: string;
+  count: number;
+  avg_accuracy: number | null;
+}
+
+export function useActivityBreakdown(clinicId: string | null, from?: string, to?: string) {
+  return useQuery({
+    queryKey: ["reports", "activity-breakdown", clinicId, from, to],
+    queryFn: ({ signal }) => {
+      const q = new URLSearchParams();
+      if (clinicId) q.set("clinic", clinicId);
+      if (from) q.set("from", from);
+      if (to) q.set("to", to);
+      return apiGet<{ data: ActivityBreakdown[] }>(`/v1/reports/activity-breakdown?${q}`, { signal }).then((r) => r.data);
+    },
+    retry,
+    staleTime: 60_000,
+  });
+}
+
 // ---------------------------------------------------------------- video library (ADR 0018)
 
 export function useBrainRegions(lang: string) {
