@@ -1105,5 +1105,20 @@
   "calendar.view.day": "Day",
   "calendar.view.week": "Week",
   "calendar.view.month": "Month",
-  "calendar.color": "Color"
+  "calendar.color": "Color",
+  "common.clear": "Clear",
+  "common.close": "Close",
+  "search.title": "Search",
+  "search.placeholder": "Search patients, protocols, pages…",
+  "search.shortcut": "Ctrl+K / ⌘K",
+  "search.hint": "Type to search patients, protocols, staff, or jump to a page.",
+  "search.noResults": "No results found.",
+  "search.navigate": "Navigate",
+  "search.select": "Select",
+  "search.close": "Close",
+  "search.group.patients": "Patients",
+  "search.group.protocols": "Protocols",
+  "search.group.staff": "Staff",
+  "search.group.actions": "Quick actions",
+  "search.group.pages": "Pages"
 }

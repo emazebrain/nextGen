@@ -3,7 +3,7 @@
  * in the account menu, four bottom tabs + More on phones, a clinic switcher
  * and help in the same place on every page (WCAG 3.2.6).
  */
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -21,6 +21,7 @@ import {
   UsersRound,
   Film,
   Building2,
+  Search,
 } from "lucide-react";
 import { AppShell, Avatar, Disclosure, Logo, SelectField, type ShellNavItem } from "@emb/ui";
 import { authClient } from "../api/auth.ts";
@@ -31,6 +32,7 @@ import { useIdleTimeout } from "../lib/idle.ts";
 import { useOptionalDevice } from "../device/session.tsx";
 import { OfflineBanner } from "../device/OfflineBanner.tsx";
 import { SyncStatus } from "../device/SyncStatus.tsx";
+import { CommandPalette, useCommandPaletteShortcut } from "./CommandPalette.tsx";
 
 const NAV: Array<{ id: string; path: string; label: MessageId; icon: ShellNavItem["icon"] }> = [
   { id: "today", path: "/today", label: "nav.today", icon: House },
@@ -78,6 +80,12 @@ export function ClinicShell({ me }: { me: Me }) {
   });
 
   useIdleTimeout(() => void signOut("idle"));
+
+  // Command palette (§4.3)
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const openPalette = useCallback(() => setPaletteOpen(true), []);
+  const closePalette = useCallback(() => setPaletteOpen(false), []);
+  useCommandPaletteShortcut(openPalette);
 
   // Move focus to the page on navigation so screen readers start at the new content.
   const first = useRef(true);
@@ -156,6 +164,17 @@ export function ClinicShell({ me }: { me: Me }) {
             ) : null}
           </div>
           <div className="app-topbar__end">
+            <button
+              type="button"
+              className="cmdpal-trigger"
+              onClick={openPalette}
+              aria-label={t("search.title")}
+              title={t("search.shortcut")}
+            >
+              <Search size={18} aria-hidden="true" />
+              <span className="cmdpal-trigger__label">{t("search.title")}</span>
+              <kbd className="cmdpal-trigger__kbd">⌘K</kbd>
+            </button>
             <SyncStatus />
             <Disclosure label={t("shell.help")} trigger={<CircleHelp size={22} aria-hidden="true" className="app-topbar__icon" />}>
               {() => (
@@ -200,6 +219,7 @@ export function ClinicShell({ me }: { me: Me }) {
     >
       <OfflineBanner />
       <Outlet />
+      <CommandPalette open={paletteOpen} onClose={closePalette} />
     </AppShell>
   );
 }

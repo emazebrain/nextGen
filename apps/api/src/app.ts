@@ -17,6 +17,7 @@ import { parentRoutes } from "./modules/parent/routes.ts";
 import { publicParentPortalRoutes } from "./modules/parent/public-routes.ts";
 import { messagingRoutes, parentMessagingRoutes } from "./modules/messaging/routes.ts";
 import { calendarRoutes } from "./modules/calendar/routes.ts";
+import { searchRoutes } from "./modules/search/routes.ts";
 import { deviceKey, type DeviceKey } from "./device-crypto.ts";
 import { localFileStore, type FileStore } from "./files.ts";
 import { createMailer, type Mailer } from "./email.ts";
@@ -128,6 +129,7 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
     v1.route("/org", orgAdminRoutes(deps.pool, deps.auth, mailer, deps.publicAppUrl));
     v1.route("/messages", messagingRoutes(deps.pool));
     v1.route("/calendar", calendarRoutes(deps.pool));
+    v1.route("/search", searchRoutes(deps.pool));
     app.route("/v1", v1);
 
     // Parent portal — authenticated but no MFA requirement (§5.10)

@@ -1105,5 +1105,20 @@
   "calendar.view.day": "יום",
   "calendar.view.week": "שבוע",
   "calendar.view.month": "חודש",
-  "calendar.color": "צבע"
+  "calendar.color": "צבע",
+  "common.clear": "נקה",
+  "common.close": "סגור",
+  "search.title": "חיפוש",
+  "search.placeholder": "חיפוש מטופלים, פרוטוקולים, דפים…",
+  "search.shortcut": "Ctrl+K / ⌘K",
+  "search.hint": "הקלד לחיפוש מטופלים, פרוטוקולים, צוות, או מעבר לדף.",
+  "search.noResults": "לא נמצאו תוצאות.",
+  "search.navigate": "ניווט",
+  "search.select": "בחירה",
+  "search.close": "סגירה",
+  "search.group.patients": "מטופלים",
+  "search.group.protocols": "פרוטוקולים",
+  "search.group.staff": "צוות",
+  "search.group.actions": "פעולות מהירות",
+  "search.group.pages": "דפים"
 }
