@@ -1100,5 +1100,9 @@
   "calendar.notes": "הערות (אופציונלי)",
   "calendar.invalidTime": "שעת הסיום חייבת להיות אחרי שעת ההתחלה.",
   "calendar.createAppt": "יצירת פגישה",
-  "calendar.createFailed": "לא ניתן ליצור את הפגישה. נסו שוב."
+  "calendar.createFailed": "לא ניתן ליצור את הפגישה. נסו שוב.",
+  "calendar.viewLabel": "תצוגת לוח שנה",
+  "calendar.view.day": "יום",
+  "calendar.view.week": "שבוע",
+  "calendar.view.month": "חודש"
 }

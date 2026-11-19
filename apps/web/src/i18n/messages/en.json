@@ -1100,5 +1100,9 @@
   "calendar.notes": "Notes (optional)",
   "calendar.invalidTime": "End time must be after start time.",
   "calendar.createAppt": "Create appointment",
-  "calendar.createFailed": "Could not create the appointment. Try again."
+  "calendar.createFailed": "Could not create the appointment. Try again.",
+  "calendar.viewLabel": "Calendar view",
+  "calendar.view.day": "Day",
+  "calendar.view.week": "Week",
+  "calendar.view.month": "Month"
 }
