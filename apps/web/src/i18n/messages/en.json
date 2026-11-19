@@ -1104,5 +1104,6 @@
   "calendar.viewLabel": "Calendar view",
   "calendar.view.day": "Day",
   "calendar.view.week": "Week",
-  "calendar.view.month": "Month"
+  "calendar.view.month": "Month",
+  "calendar.color": "Color"
 }

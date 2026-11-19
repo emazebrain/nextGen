@@ -18,6 +18,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const notFound = (c: Context) => c.json({ error: "not_found" }, 404);
 
+const APPOINTMENT_COLORS = ["blue", "green", "purple", "orange", "red", "teal", "pink", "yellow"] as const;
+
 const createAppointmentSchema = z.object({
   patient_id: z.string().uuid(),
   title: z.string().trim().max(255).optional(),
@@ -25,6 +27,7 @@ const createAppointmentSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   start_time: z.string().regex(/^\d{2}:\d{2}$/),
   end_time: z.string().regex(/^\d{2}:\d{2}$/),
+  color: z.enum(APPOINTMENT_COLORS).optional(),
 });
 
 const updateAppointmentSchema = z.object({
@@ -34,6 +37,7 @@ const updateAppointmentSchema = z.object({
   start_time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
   end_time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
   status: z.enum(["scheduled", "completed", "cancelled", "no_show"]).optional(),
+  color: z.enum(APPOINTMENT_COLORS).optional(),
 });
 
 const rescheduleSchema = z.object({
@@ -109,6 +113,11 @@ export function calendarRoutes(pool: pg.Pool) {
 
       let appointments: typeof sessions = [];
       if (hasApptTable) {
+        const hasColorCol = await db.query(
+          `SELECT 1 FROM information_schema.columns WHERE table_schema = 'app' AND table_name = 'appointment' AND column_name = 'color'`,
+        ).then((r) => r.rowCount! > 0);
+        const colorExpr = hasColorCol ? "ap.color" : "'blue'";
+
         const apptParams: unknown[] = [clinicId, from ?? null, to ?? null];
         const apptTherapistCond = therapistId && UUID_RE.test(therapistId)
           ? (apptParams.push(therapistId), `AND ap.created_by = $${apptParams.length}`)
@@ -124,7 +133,8 @@ export function calendarRoutes(pool: pg.Pool) {
                   '' AS assignment_id, '' AS assignment_name,
                   ap.title, ap.notes,
                   ap.created_by::text AS therapist_id,
-                  COALESCE(u.full_name, '') AS therapist_name
+                  COALESCE(u.full_name, '') AS therapist_name,
+                  ${colorExpr} AS color
              FROM app.appointment ap
              JOIN app.patient p ON p.id = ap.patient_id AND p.deleted_at IS NULL
              LEFT JOIN app.app_user u ON u.id = ap.created_by
@@ -201,9 +211,9 @@ export function calendarRoutes(pool: pg.Pool) {
 
       const id = uuidv7();
       await db.query(
-        `INSERT INTO app.appointment (id, clinic_id, patient_id, created_by, title, notes, date, start_time, end_time)
-         VALUES ($1, $2, $3, app.current_user_id(), $4, $5, $6::date, $7::time, $8::time)`,
-        [id, rows[0].clinic_id, patient_id, title ?? "", notes ?? "", date, start_time, end_time],
+        `INSERT INTO app.appointment (id, clinic_id, patient_id, created_by, title, notes, date, start_time, end_time, color)
+         VALUES ($1, $2, $3, app.current_user_id(), $4, $5, $6::date, $7::time, $8::time, $9)`,
+        [id, rows[0].clinic_id, patient_id, title ?? "", notes ?? "", date, start_time, end_time, body.data.color ?? "blue"],
       );
       return { id };
     });
@@ -240,6 +250,7 @@ export function calendarRoutes(pool: pg.Pool) {
       if (data.start_time !== undefined) { vals.push(data.start_time); sets.push(`start_time = $${vals.length}::time`); }
       if (data.end_time !== undefined) { vals.push(data.end_time); sets.push(`end_time = $${vals.length}::time`); }
       if (data.status !== undefined) { vals.push(data.status); sets.push(`status = $${vals.length}`); }
+      if (data.color !== undefined) { vals.push(data.color); sets.push(`color = $${vals.length}`); }
       if (!sets.length) return { ok: true };
 
       const { rowCount } = await db.query(

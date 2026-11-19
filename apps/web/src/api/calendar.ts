@@ -22,6 +22,7 @@ export interface CalendarEvent {
   notes: string;
   therapist_id: string;
   therapist_name: string;
+  color: string;
 }
 
 export interface CalendarTherapist {
@@ -42,6 +43,9 @@ export interface CalendarFilters {
   therapist?: string;
 }
 
+export const APPOINTMENT_COLORS = ["blue", "green", "purple", "orange", "red", "teal", "pink", "yellow"] as const;
+export type AppointmentColor = (typeof APPOINTMENT_COLORS)[number];
+
 export interface CreateAppointmentInput {
   patient_id: string;
   title?: string | undefined;
@@ -49,6 +53,7 @@ export interface CreateAppointmentInput {
   date: string;
   start_time: string;
   end_time: string;
+  color?: AppointmentColor | undefined;
 }
 
 const enc = encodeURIComponent;

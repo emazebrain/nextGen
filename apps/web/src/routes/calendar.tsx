@@ -14,6 +14,8 @@ import {
   useCreateAppointment,
   searchCalendarPatients,
   getExportUrl,
+  APPOINTMENT_COLORS,
+  type AppointmentColor,
   type CalendarEvent,
   type CalendarFilters,
   type CalendarPatient,
@@ -251,7 +253,7 @@ function WeekView({ events, from, isManager, onNewAppt, onEdit }: { events: Cale
               return (
                 <div key={d} className="cal-week__cell" onClick={() => onNewAppt(d, hour)}>
                   {cellEvents.map((ev) => (
-                    <div key={ev.id} className={`cal-week__event cal-event--${ev.kind}`} onClick={(e) => { e.stopPropagation(); onEdit(ev); }}>
+                    <div key={ev.id} className={`cal-week__event cal-event--${ev.kind} ${ev.kind === "appointment" && ev.color ? `cal-color--${ev.color}` : ""}`} onClick={(e) => { e.stopPropagation(); onEdit(ev); }}>
                       <bdi>{ev.patient_family_name.slice(0, 1)}. {ev.patient_given_name}</bdi>
                       {ev.start_time && <span className="cal-week__event-time">{ev.start_time.slice(0, 5)}</span>}
                     </div>
@@ -335,8 +337,10 @@ function EventCard({ event: ev, showTherapist, onEdit }: { event: CalendarEvent;
     ? `${ev.start_time.slice(0, 5)} – ${ev.end_time.slice(0, 5)}`
     : ev.start_time ? ev.start_time.slice(0, 5) : "";
 
+  const colorClass = isAppt && ev.color ? `cal-color--${ev.color}` : "";
+
   return (
-    <div className={`cal-event cal-event--${ev.kind}`} onClick={(e) => { e.stopPropagation(); onEdit(); }}>
+    <div className={`cal-event cal-event--${ev.kind} ${colorClass}`} onClick={(e) => { e.stopPropagation(); onEdit(); }}>
       <div className="cal-event__header">
         <span className="cal-event__patient"><bdi>{ev.patient_family_name}, {ev.patient_given_name}</bdi></span>
         {timeRange && <span className="cal-event__time">{timeRange}</span>}
@@ -378,6 +382,7 @@ function NewAppointmentDialog({ clinicId, date, hour, onClose }: { clinicId: str
   const [startTime, setStartTime] = useState(`${String(hour).padStart(2, "0")}:00`);
   const [endTime, setEndTime] = useState(`${String(hour + 1).padStart(2, "0")}:00`);
   const [notes, setNotes] = useState("");
+  const [color, setColor] = useState<AppointmentColor>("blue");
   const [error, setError] = useState("");
   const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -396,7 +401,7 @@ function NewAppointmentDialog({ clinicId, date, hour, onClose }: { clinicId: str
     if (!selectedPatient) { setError(t("calendar.selectPatient")); return; }
     if (startTime >= endTime) { setError(t("calendar.invalidTime")); return; }
     try {
-      await create.mutateAsync({ patient_id: selectedPatient.id, title: title || undefined, notes: notes || undefined, date: apptDate, start_time: startTime, end_time: endTime });
+      await create.mutateAsync({ patient_id: selectedPatient.id, title: title || undefined, notes: notes || undefined, date: apptDate, start_time: startTime, end_time: endTime, color });
       onClose();
     } catch { setError(t("calendar.createFailed")); }
   };
@@ -427,6 +432,14 @@ function NewAppointmentDialog({ clinicId, date, hour, onClose }: { clinicId: str
             <TextField label={t("calendar.endTime")} type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
           </div>
           <TextField label={t("calendar.notes")} value={notes} onChange={(e) => setNotes(e.target.value)} />
+          <div>
+            <label className="emb-field__label">{t("calendar.color")}</label>
+            <div className="cal-colors">
+              {APPOINTMENT_COLORS.map((c) => (
+                <button key={c} type="button" className={`cal-color-dot ${c === color ? "cal-color-dot--active" : ""}`} data-color={c} onClick={() => setColor(c)} aria-label={c} />
+              ))}
+            </div>
+          </div>
           <div className="pform__actions">
             <Button variant="secondary" onClick={onClose}>{t("common.cancel")}</Button>
             <Button type="submit" loading={create.isPending}>{t("calendar.createAppt")}</Button>
