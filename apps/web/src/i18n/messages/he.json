@@ -1040,5 +1040,13 @@
   "parent.register.invalid": "קישור ההזמנה לא תקף. בדקו את הקישור בדוא״ל שלכם.",
   "parent.register.successTitle": "החשבון נוצר!",
   "parent.register.successBody": "חשבון פורטל ההורים שלכם מוכן. התחברו כדי לראות את התקדמות ילדכם.",
-  "parent.register.signIn": "התחברות"
+  "parent.register.signIn": "התחברות",
+  "messages.title": "הודעות",
+  "messages.empty": "אין שיחות עדיין",
+  "messages.emptyHint": "התחילו שיחה מכרטיסיית המשפחה של מטופל.",
+  "messages.selectThread": "בחרו שיחה",
+  "messages.compose": "כתבו הודעה…",
+  "messages.send": "שלח",
+  "messages.about": "בנוגע ל-{name}",
+  "messages.unread": "{count, plural, one {הודעה אחת שלא נקראה} other {# הודעות שלא נקראו}}"
 }

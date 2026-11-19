@@ -15,6 +15,7 @@ import { orgAdminRoutes } from "./modules/org/routes.ts";
 import { publicConsentRoutes } from "./modules/consent/public-routes.ts";
 import { parentRoutes } from "./modules/parent/routes.ts";
 import { publicParentPortalRoutes } from "./modules/parent/public-routes.ts";
+import { messagingRoutes, parentMessagingRoutes } from "./modules/messaging/routes.ts";
 import { deviceKey, type DeviceKey } from "./device-crypto.ts";
 import { localFileStore, type FileStore } from "./files.ts";
 import { createMailer, type Mailer } from "./email.ts";
@@ -78,12 +79,14 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
     v1.route("/", offlineRoutes(deps.pool, deps.tickets ?? ticketSigner()));
     v1.route("/admin", adminRoutes(deps.pool, deps.auth, mailer, deps.publicAppUrl));
     v1.route("/org", orgAdminRoutes(deps.pool, deps.auth, mailer, deps.publicAppUrl));
+    v1.route("/messages", messagingRoutes(deps.pool));
     app.route("/v1", v1);
 
     // Parent portal — authenticated but no MFA requirement (§5.10)
     const parentV1 = new Hono<Env>();
     parentV1.use("*", requireParentSession(deps.auth));
     parentV1.route("/parent", parentRoutes(deps.pool));
+    parentV1.route("/parent/messages", parentMessagingRoutes(deps.pool));
     app.route("/v1", parentV1);
 
     // Public consent endpoints — outside /v1 (no auth required).

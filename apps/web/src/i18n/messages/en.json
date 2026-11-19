@@ -1040,5 +1040,13 @@
   "parent.register.invalid": "This invitation link is not valid. Check the link in your email.",
   "parent.register.successTitle": "Account created!",
   "parent.register.successBody": "Your parent portal account is ready. Sign in to see your child's progress.",
-  "parent.register.signIn": "Sign in"
+  "parent.register.signIn": "Sign in",
+  "messages.title": "Messages",
+  "messages.empty": "No conversations yet",
+  "messages.emptyHint": "Start a conversation from a patient's family tab.",
+  "messages.selectThread": "Select a conversation",
+  "messages.compose": "Type a message…",
+  "messages.send": "Send",
+  "messages.about": "About {name}",
+  "messages.unread": "{count, plural, one {# unread} other {# unread}}"
 }

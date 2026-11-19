@@ -49,6 +49,7 @@ import { ParentHomePage } from "./routes/parent/home.tsx";
 import { ParentProgressPage } from "./routes/parent/progress.tsx";
 import { ParentMessagesPage } from "./routes/parent/messages.tsx";
 import { ParentRegisterPage, ParentRegisterSuccessPage } from "./routes/parent/register.tsx";
+import { MessagesPage } from "./routes/messages.tsx";
 import { flush } from "./session/outbox.ts";
 
 /**
@@ -247,7 +248,7 @@ export const routes: RouteObject[] = [
       { path: "/patients/:id/assign", element: <AssignPage /> },
       { path: "/library", element: <LibraryPage /> },
       { path: "/library/:gameId", element: <GamePage /> },
-      { path: "/messages", element: <ComingSoonPage area="messages" /> },
+      { path: "/messages", element: <MessagesPage /> },
       { path: "/reports", element: <ReportsPage /> },
       { path: "/admin/videos", element: <VideosAdminPage /> },
       { path: "/admin/videos/:id", element: <VideoEditorPage /> },
