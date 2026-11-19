@@ -68,11 +68,16 @@ export function calendarRoutes(pool: pg.Pool) {
         ? (params.push(therapistId), `AND EXISTS (SELECT 1 FROM app.patient_care_team ct WHERE ct.patient_id = sub.patient_id AND ct.user_id = $${params.length} AND ct.ended_at IS NULL)`)
         : "";
 
-      // Protocol sessions
+      // Protocol sessions — planned_time column may not exist yet (migration 0027)
+      const hasTimeCol = await db.query(
+        `SELECT 1 FROM information_schema.columns WHERE table_schema = 'app' AND table_name = 'planned_session' AND column_name = 'planned_time'`,
+      ).then((r) => r.rowCount! > 0);
+      const timeExpr = hasTimeCol ? "ps.planned_time::text" : "NULL::text";
+
       const { rows: sessions } = await db.query(
         `SELECT 'session' AS kind, ps.id,
                 to_char(ps.planned_date, 'YYYY-MM-DD') AS date,
-                ps.planned_time::text AS start_time,
+                ${timeExpr} AS start_time,
                 NULL::text AS end_time,
                 ps.seq, ps.week, ps.location, ps.status,
                 p.id AS patient_id, p.given_name AS patient_given_name, p.family_name AS patient_family_name,
@@ -97,33 +102,41 @@ export function calendarRoutes(pool: pg.Pool) {
         params,
       );
 
-      // Appointments
-      const apptParams: unknown[] = [clinicId, from ?? null, to ?? null];
-      const apptTherapistCond = therapistId && UUID_RE.test(therapistId)
-        ? (apptParams.push(therapistId), `AND ap.created_by = $${apptParams.length}`)
-        : "";
+      // Appointments — table may not exist yet (migration 0028)
+      const hasApptTable = await db.query(
+        `SELECT 1 FROM information_schema.tables WHERE table_schema = 'app' AND table_name = 'appointment'`,
+      ).then((r) => r.rowCount! > 0);
 
-      const { rows: appointments } = await db.query(
-        `SELECT 'appointment' AS kind, ap.id,
-                to_char(ap.date, 'YYYY-MM-DD') AS date,
-                ap.start_time::text AS start_time,
-                ap.end_time::text AS end_time,
-                0 AS seq, 0 AS week, 'clinic' AS location, ap.status,
-                p.id AS patient_id, p.given_name AS patient_given_name, p.family_name AS patient_family_name,
-                '' AS assignment_id, '' AS assignment_name,
-                ap.title, ap.notes,
-                ap.created_by::text AS therapist_id,
-                COALESCE(u.full_name, '') AS therapist_name
-           FROM app.appointment ap
-           JOIN app.patient p ON p.id = ap.patient_id AND p.deleted_at IS NULL
-           LEFT JOIN app.app_user u ON u.id = ap.created_by
-          WHERE ap.clinic_id = $1
-            AND ap.status = 'scheduled'
-            AND ap.date >= COALESCE($2::date, current_date - 7)
-            AND ap.date <= COALESCE($3::date, current_date + 30)
-            ${apptTherapistCond}`,
-        apptParams,
-      );
+      let appointments: typeof sessions = [];
+      if (hasApptTable) {
+        const apptParams: unknown[] = [clinicId, from ?? null, to ?? null];
+        const apptTherapistCond = therapistId && UUID_RE.test(therapistId)
+          ? (apptParams.push(therapistId), `AND ap.created_by = $${apptParams.length}`)
+          : "";
+
+        const r = await db.query(
+          `SELECT 'appointment' AS kind, ap.id,
+                  to_char(ap.date, 'YYYY-MM-DD') AS date,
+                  ap.start_time::text AS start_time,
+                  ap.end_time::text AS end_time,
+                  0 AS seq, 0 AS week, 'clinic' AS location, ap.status,
+                  p.id AS patient_id, p.given_name AS patient_given_name, p.family_name AS patient_family_name,
+                  '' AS assignment_id, '' AS assignment_name,
+                  ap.title, ap.notes,
+                  ap.created_by::text AS therapist_id,
+                  COALESCE(u.full_name, '') AS therapist_name
+             FROM app.appointment ap
+             JOIN app.patient p ON p.id = ap.patient_id AND p.deleted_at IS NULL
+             LEFT JOIN app.app_user u ON u.id = ap.created_by
+            WHERE ap.clinic_id = $1
+              AND ap.status = 'scheduled'
+              AND ap.date >= COALESCE($2::date, current_date - 7)
+              AND ap.date <= COALESCE($3::date, current_date + 30)
+              ${apptTherapistCond}`,
+          apptParams,
+        );
+        appointments = r.rows;
+      }
 
       // Merge and sort
       const all = [...sessions, ...appointments].sort((a, b) => {
@@ -253,10 +266,22 @@ export function calendarRoutes(pool: pg.Pool) {
       const newDate = new Date(planned_date + "T00:00:00Z");
       const daysDelta = Math.round((newDate.getTime() - oldDate.getTime()) / (24 * 60 * 60 * 1000));
 
-      await db.query(
-        `UPDATE app.planned_session SET planned_date = $2::date, planned_time = $3::time WHERE id = $1`,
-        [id, planned_date, planned_time ?? null],
-      );
+      // planned_time column may not exist yet (migration 0027)
+      const hasTime = await db.query(
+        `SELECT 1 FROM information_schema.columns WHERE table_schema = 'app' AND table_name = 'planned_session' AND column_name = 'planned_time'`,
+      ).then((r) => r.rowCount! > 0);
+
+      if (hasTime) {
+        await db.query(
+          `UPDATE app.planned_session SET planned_date = $2::date, planned_time = $3::time WHERE id = $1`,
+          [id, planned_date, planned_time ?? null],
+        );
+      } else {
+        await db.query(
+          `UPDATE app.planned_session SET planned_date = $2::date WHERE id = $1`,
+          [id, planned_date],
+        );
+      }
 
       let shifted = 0;
       if (shift_subsequent && daysDelta !== 0) {
@@ -327,15 +352,28 @@ export function calendarRoutes(pool: pg.Pool) {
         }
       }
 
+      // Check which features are available
+      const hasTimeCol = await db.query(
+        `SELECT 1 FROM information_schema.columns WHERE table_schema = 'app' AND table_name = 'planned_session' AND column_name = 'planned_time'`,
+      ).then((r) => r.rowCount! > 0);
+      const hasApptTable = await db.query(
+        `SELECT 1 FROM information_schema.tables WHERE table_schema = 'app' AND table_name = 'appointment'`,
+      ).then((r) => r.rowCount! > 0);
+
+      const stExpr = hasTimeCol ? "ps.planned_time" : "NULL::time";
+      const parts = [
+        `SELECT ps.id, ps.planned_date AS d, ${stExpr} AS st, NULL::time AS et, ps.seq, ps.location, 'session' AS kind
+           FROM app.planned_session ps WHERE ps.clinic_id = $1 AND ps.status IN ('planned', 'in_progress')`,
+      ];
+      if (hasApptTable) {
+        parts.push(
+          `SELECT ap.id, ap.date AS d, ap.start_time AS st, ap.end_time AS et, 0 AS seq, 'clinic' AS location, 'appointment' AS kind
+             FROM app.appointment ap WHERE ap.clinic_id = $1 AND ap.status = 'scheduled'`,
+        );
+      }
+
       const { rows } = await db.query(
-        `SELECT * FROM (
-           SELECT ps.id, ps.planned_date AS d, ps.planned_time AS st, NULL::time AS et, ps.seq, ps.location, 'session' AS kind
-             FROM app.planned_session ps WHERE ps.clinic_id = $1 AND ps.status IN ('planned', 'in_progress')
-           UNION ALL
-           SELECT ap.id, ap.date AS d, ap.start_time AS st, ap.end_time AS et, 0 AS seq, 'clinic' AS location, 'appointment' AS kind
-             FROM app.appointment ap WHERE ap.clinic_id = $1 AND ap.status = 'scheduled'
-         ) sub WHERE ${dateFilter}
-         ORDER BY sub.d, sub.st NULLS LAST`,
+        `SELECT * FROM (${parts.join(" UNION ALL ")}) sub WHERE ${dateFilter} ORDER BY sub.d, sub.st NULLS LAST`,
         params,
       );
       return rows;

@@ -96,7 +96,7 @@ export function orgAdminRoutes(pool: pg.Pool, auth: Auth, mailer: Mailer, public
   r.get("/stats", async (c) => {
     const orgId = c.get("orgId");
     const stats = await run(c, async (db) => {
-      const [clinics, staff, patients, sessions, appointments] = await Promise.all([
+      const [clinics, staff, patients, sessions] = await Promise.all([
         db.query<{ total: number; active: number }>(
           `SELECT count(*)::int AS total,
                   count(*) FILTER (WHERE status = 'active')::int AS active
@@ -129,19 +129,29 @@ export function orgAdminRoutes(pool: pg.Pool, auth: Auth, mailer: Mailer, public
              JOIN app.clinic c ON c.id = ps.clinic_id AND c.organization_id = $1`,
           [orgId],
         ),
-        db.query<{ upcoming: number }>(
+      ]);
+
+      // appointment table may not exist yet
+      let apptUpcoming = 0;
+      const hasAppt = await db.query(
+        `SELECT 1 FROM information_schema.tables WHERE table_schema = 'app' AND table_name = 'appointment'`,
+      ).then((r) => r.rowCount! > 0);
+      if (hasAppt) {
+        const r = await db.query<{ upcoming: number }>(
           `SELECT count(*) FILTER (WHERE ap.status = 'scheduled' AND ap.date >= current_date)::int AS upcoming
              FROM app.appointment ap
              JOIN app.clinic c ON c.id = ap.clinic_id AND c.organization_id = $1`,
           [orgId],
-        ),
-      ]);
+        );
+        apptUpcoming = r.rows[0]?.upcoming ?? 0;
+      }
+
       return {
         clinics: clinics.rows[0] ?? { total: 0, active: 0 },
         staff: staff.rows[0] ?? { total: 0, active: 0, invited: 0 },
         patients: patients.rows[0] ?? { total: 0, active: 0, pending: 0 },
         sessions: {
-          upcoming: (sessions.rows[0]?.upcoming ?? 0) + (appointments.rows[0]?.upcoming ?? 0),
+          upcoming: (sessions.rows[0]?.upcoming ?? 0) + apptUpcoming,
           completed_this_week: sessions.rows[0]?.completed_this_week ?? 0,
         },
       };
@@ -173,10 +183,15 @@ export function orgAdminRoutes(pool: pg.Pool, auth: Auth, mailer: Mailer, public
         therapistCond = `AND EXISTS (SELECT 1 FROM app.patient_care_team ct WHERE ct.patient_id = ps.patient_id AND ct.user_id = $${params.length} AND ct.ended_at IS NULL)`;
       }
 
+      const hasTimeCol = await db.query(
+        `SELECT 1 FROM information_schema.columns WHERE table_schema = 'app' AND table_name = 'planned_session' AND column_name = 'planned_time'`,
+      ).then((r) => r.rowCount! > 0);
+      const timeExpr = hasTimeCol ? "ps.planned_time::text" : "NULL::text";
+
       const { rows: sessions } = await db.query(
         `SELECT 'session' AS kind, ps.id,
                 to_char(ps.planned_date, 'YYYY-MM-DD') AS date,
-                ps.planned_time::text AS start_time,
+                ${timeExpr} AS start_time,
                 NULL::text AS end_time,
                 ps.seq, ps.week, ps.location, ps.status,
                 p.id AS patient_id, p.given_name AS patient_given_name, p.family_name AS patient_family_name,
@@ -201,40 +216,48 @@ export function orgAdminRoutes(pool: pg.Pool, auth: Auth, mailer: Mailer, public
         params,
       );
 
-      const apptParams: unknown[] = [orgId, from ?? null, to ?? null];
-      let apptClinicCond = "";
-      if (clinicId) {
-        apptParams.push(clinicId);
-        apptClinicCond = `AND ap.clinic_id = $${apptParams.length}`;
-      }
-      let apptTherapistCond = "";
-      if (therapistId && UUID_RE.test(therapistId)) {
-        apptParams.push(therapistId);
-        apptTherapistCond = `AND ap.created_by = $${apptParams.length}`;
-      }
+      const hasApptTable = await db.query(
+        `SELECT 1 FROM information_schema.tables WHERE table_schema = 'app' AND table_name = 'appointment'`,
+      ).then((r) => r.rowCount! > 0);
 
-      const { rows: appointments } = await db.query(
-        `SELECT 'appointment' AS kind, ap.id,
-                to_char(ap.date, 'YYYY-MM-DD') AS date,
-                ap.start_time::text AS start_time,
-                ap.end_time::text AS end_time,
-                0 AS seq, 0 AS week, 'clinic' AS location, ap.status,
-                p.id AS patient_id, p.given_name AS patient_given_name, p.family_name AS patient_family_name,
-                '' AS assignment_id, '' AS assignment_name,
-                ap.title, ap.notes,
-                ap.created_by::text AS therapist_id,
-                COALESCE(u.full_name, '') AS therapist_name,
-                cl.name AS clinic_name, cl.id AS clinic_id
-           FROM app.appointment ap
-           JOIN app.clinic cl ON cl.id = ap.clinic_id AND cl.organization_id = $1 AND cl.deleted_at IS NULL
-           JOIN app.patient p ON p.id = ap.patient_id AND p.deleted_at IS NULL
-           LEFT JOIN app.app_user u ON u.id = ap.created_by
-          WHERE ap.status = 'scheduled'
-            AND ap.date >= COALESCE($2::date, current_date - 7)
-            AND ap.date <= COALESCE($3::date, current_date + 30)
-            ${apptClinicCond} ${apptTherapistCond}`,
-        apptParams,
-      );
+      let appointments: typeof sessions = [];
+      if (hasApptTable) {
+        const apptParams: unknown[] = [orgId, from ?? null, to ?? null];
+        let apptClinicCond = "";
+        if (clinicId) {
+          apptParams.push(clinicId);
+          apptClinicCond = `AND ap.clinic_id = $${apptParams.length}`;
+        }
+        let apptTherapistCond = "";
+        if (therapistId && UUID_RE.test(therapistId)) {
+          apptParams.push(therapistId);
+          apptTherapistCond = `AND ap.created_by = $${apptParams.length}`;
+        }
+
+        const r = await db.query(
+          `SELECT 'appointment' AS kind, ap.id,
+                  to_char(ap.date, 'YYYY-MM-DD') AS date,
+                  ap.start_time::text AS start_time,
+                  ap.end_time::text AS end_time,
+                  0 AS seq, 0 AS week, 'clinic' AS location, ap.status,
+                  p.id AS patient_id, p.given_name AS patient_given_name, p.family_name AS patient_family_name,
+                  '' AS assignment_id, '' AS assignment_name,
+                  ap.title, ap.notes,
+                  ap.created_by::text AS therapist_id,
+                  COALESCE(u.full_name, '') AS therapist_name,
+                  cl.name AS clinic_name, cl.id AS clinic_id
+             FROM app.appointment ap
+             JOIN app.clinic cl ON cl.id = ap.clinic_id AND cl.organization_id = $1 AND cl.deleted_at IS NULL
+             JOIN app.patient p ON p.id = ap.patient_id AND p.deleted_at IS NULL
+             LEFT JOIN app.app_user u ON u.id = ap.created_by
+            WHERE ap.status = 'scheduled'
+              AND ap.date >= COALESCE($2::date, current_date - 7)
+              AND ap.date <= COALESCE($3::date, current_date + 30)
+              ${apptClinicCond} ${apptTherapistCond}`,
+          apptParams,
+        );
+        appointments = r.rows;
+      }
 
       return [...sessions, ...appointments].sort((a, b) => {
         const d = a.date.localeCompare(b.date);
