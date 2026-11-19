@@ -52,6 +52,35 @@ export interface CreateStaffInput {
   clinic_id: string;
 }
 
+export interface OrgPatient {
+  id: string;
+  clinic_id: string;
+  given_name: string;
+  family_name: string;
+  date_of_birth: string;
+  status: string;
+  has_alert: boolean;
+  archived: boolean;
+  clinic_name: string;
+}
+export interface PatientFilters {
+  clinic_id?: string;
+  archived?: "0" | "1";
+}
+export interface CreateOrgPatientInput {
+  clinic_id: string;
+  given_name: string;
+  family_name: string;
+  date_of_birth: string;
+  preferred_locale: string;
+  sex?: string | null;
+  handedness?: string | null;
+  alert?: string | null;
+  colour_vision_deficiency?: boolean;
+  therapist_id?: string;
+  allow_duplicate?: boolean;
+}
+
 const enc = encodeURIComponent;
 
 export const getOrgOverview = (signal?: AbortSignal) =>
@@ -83,6 +112,14 @@ export const patchOrgStaff = (id: string, data: Partial<{ full_name: string; sta
 export const resendOrgInvite = (id: string) =>
   apiSend<{ sent: boolean }>("POST", `/v1/org/staff/${enc(id)}/resend-invite`);
 
+export const listOrgPatients = (filters: PatientFilters, signal?: AbortSignal) => {
+  const q = new URLSearchParams(Object.entries(filters).filter(([, v]) => v) as Array<[string, string]>).toString();
+  return apiGet<{ patients: OrgPatient[] }>(`/v1/org/patients${q ? `?${q}` : ""}`, signal ? { signal } : {}).then((r) => r.patients);
+};
+
+export const createOrgPatient = (data: CreateOrgPatientInput) =>
+  apiSend<{ id: string }>("POST", "/v1/org/patients", data);
+
 // ---------------------------------------------------------------- hooks
 
 const orgKey = ["org"] as const;
@@ -98,6 +135,9 @@ export const useOrgClinic = (id: string) =>
 
 export const useOrgStaff = (filters: StaffFilters = {}) =>
   useQuery({ queryKey: [...orgKey, "staff", filters], queryFn: ({ signal }) => listOrgStaff(filters, signal) });
+
+export const useOrgPatients = (filters: PatientFilters = {}) =>
+  useQuery({ queryKey: [...orgKey, "patients", filters], queryFn: ({ signal }) => listOrgPatients(filters, signal) });
 
 export function useOrgMutation<In, Out>(fn: (input: In) => Promise<Out>) {
   const qc = useQueryClient();

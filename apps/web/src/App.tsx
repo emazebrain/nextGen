@@ -42,6 +42,8 @@ import { ManageOverviewPage } from "./routes/manage/overview.tsx";
 import { ManageClinicDetailPage } from "./routes/manage/clinic-detail.tsx";
 import { ManageClinicFormPage } from "./routes/manage/clinic-form.tsx";
 import { ManageStaffFormPage } from "./routes/manage/staff-form.tsx";
+import { ManagePatientsPage } from "./routes/manage/patients.tsx";
+import { ManagePatientFormPage } from "./routes/manage/patient-form.tsx";
 import { flush } from "./session/outbox.ts";
 
 /**
@@ -241,6 +243,8 @@ export const routes: RouteObject[] = [
           { path: "/manage/clinics/:id", element: <ManageClinicDetailPage /> },
           { path: "/manage/clinics/:id/edit", element: <ManageClinicFormPage /> },
           { path: "/manage/staff/new", element: <ManageStaffFormPage /> },
+          { path: "/manage/patients", element: <ManagePatientsPage /> },
+          { path: "/manage/patients/new", element: <ManagePatientFormPage /> },
         ],
       },
       {

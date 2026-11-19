@@ -21,7 +21,10 @@ import {
   createStaffSchema,
   patchStaffSchema,
   listStaffQuery,
+  listOrgPatientsQuery,
+  createOrgPatientSchema,
 } from "./schemas.ts";
+import { uuidv7 } from "../../ids.ts";
 
 const CLINIC_COLS = `id, organization_id, name, country_code, timezone, status, created_at`;
 const USER_COLS = `id, email, full_name, status, created_at`;
@@ -303,6 +306,99 @@ export function orgAdminRoutes(pool: pg.Pool, auth: Auth, mailer: Mailer, public
     if (input.full_name !== undefined) await ctx.internalAdapter.updateUser(id, { name: input.full_name });
     if (input.status === "disabled") await ctx.internalAdapter.deleteUserSessions(id);
     return c.json({ user: outcome.user });
+  });
+
+  // ── Patients ────────────────────────────────────────────────────────
+
+  r.get("/patients", async (c) => {
+    const orgId = c.get("orgId");
+    const q = listOrgPatientsQuery.safeParse(c.req.query());
+    if (!q.success) return invalid(c);
+    const { clinic_id, archived } = q.data;
+    const patients = await run(c, async (db) => {
+      // Verify clinic belongs to this org when filtering
+      if (clinic_id) {
+        const clinicCheck = await db.query(
+          `SELECT 1 FROM app.clinic WHERE id = $1 AND organization_id = $2 AND deleted_at IS NULL`,
+          [clinic_id, orgId],
+        );
+        if (!clinicCheck.rows[0]) return [];
+      }
+      const { rows } = await db.query(
+        `SELECT p.id, p.clinic_id, p.given_name, p.family_name,
+                to_char(p.date_of_birth, 'YYYY-MM-DD') AS date_of_birth,
+                p.status, p.alert IS NOT NULL AND p.alert <> '' AS has_alert,
+                p.deleted_at IS NOT NULL AS archived,
+                cl.name AS clinic_name
+           FROM app.patient p
+           JOIN app.clinic cl ON cl.id = p.clinic_id
+          WHERE cl.organization_id = $1
+            AND (p.deleted_at IS NOT NULL) = $2
+            AND ($3::uuid IS NULL OR p.clinic_id = $3)
+          ORDER BY p.family_name, p.given_name
+          LIMIT 1000`,
+        [orgId, archived === "1", clinic_id ?? null],
+      );
+      return rows;
+    });
+    return c.json({ patients });
+  });
+
+  r.post("/patients", async (c) => {
+    const orgId = c.get("orgId");
+    const input = await body(c, createOrgPatientSchema);
+    if (!input) return invalid(c);
+
+    const result = await run(c, async (db) => {
+      // Verify clinic belongs to this org
+      const clinicCheck = await db.query(
+        `SELECT 1 FROM app.clinic WHERE id = $1 AND organization_id = $2 AND deleted_at IS NULL`,
+        [input.clinic_id, orgId],
+      );
+      if (!clinicCheck.rows[0]) return { error: "clinic_not_in_organization" as const };
+
+      // Verify therapist belongs to the same clinic (if provided)
+      const therapistId = input.therapist_id ?? c.get("user").id;
+      if (input.therapist_id) {
+        const therapistCheck = await db.query(
+          `SELECT 1 FROM app.membership
+            WHERE user_id = $1 AND clinic_id = $2 AND status = 'active'
+              AND role IN ('therapist', 'clinic_manager', 'org_admin')`,
+          [input.therapist_id, input.clinic_id],
+        );
+        if (!therapistCheck.rows[0]) return { error: "therapist_not_in_clinic" as const };
+      }
+
+      // Duplicate check
+      if (!input.allow_duplicate) {
+        const dup = await db.query<{ d: boolean }>(
+          `SELECT app.patient_duplicate_exists($1,$2,$3,$4) AS d`,
+          [input.clinic_id, input.given_name, input.family_name, input.date_of_birth],
+        );
+        if (dup.rows[0]?.d) return { error: "possible_duplicate" as const };
+      }
+
+      const id = uuidv7();
+      await db.query(
+        `INSERT INTO app.patient (id, clinic_id, given_name, family_name, date_of_birth, preferred_locale, sex, handedness, alert, colour_vision_deficiency, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        [id, input.clinic_id, input.given_name, input.family_name, input.date_of_birth, input.preferred_locale,
+         input.sex ?? null, input.handedness ?? null, input.alert || null, input.colour_vision_deficiency ?? false, c.get("user").id],
+      );
+      await db.query(
+        `INSERT INTO app.patient_care_team (patient_id, user_id, role) VALUES ($1,$2,'primary')`,
+        [id, therapistId],
+      );
+      return { id };
+    });
+
+    if ("error" in result) {
+      if (result.error === "possible_duplicate") return c.json({ error: result.error }, 409);
+      if (result.error === "clinic_not_in_organization") return c.json({ error: result.error }, 400);
+      if (result.error === "therapist_not_in_clinic") return c.json({ error: result.error }, 400);
+      return c.json({ error: result.error }, 400);
+    }
+    return c.json(result, 201);
   });
 
   r.post("/staff/:id/resend-invite", async (c) => {

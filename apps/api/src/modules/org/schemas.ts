@@ -42,3 +42,22 @@ export const listStaffQuery = z.object({
   clinic_id: z.string().uuid().optional(),
   status: z.enum(["active", "invited", "disabled"]).optional(),
 });
+
+export const listOrgPatientsQuery = z.object({
+  clinic_id: z.string().uuid().optional(),
+  archived: z.enum(["0", "1"]).optional(),
+});
+
+export const createOrgPatientSchema = z.object({
+  clinic_id: z.string().uuid(),
+  given_name: z.string().trim().min(1).max(255),
+  family_name: z.string().trim().min(1).max(255),
+  date_of_birth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  preferred_locale: z.string().min(2).max(10),
+  sex: z.enum(["female", "male", "other", "undisclosed"]).nullable().optional(),
+  handedness: z.enum(["left", "right", "mixed"]).nullable().optional(),
+  alert: z.string().trim().max(500).nullable().optional(),
+  colour_vision_deficiency: z.boolean().optional(),
+  therapist_id: z.string().uuid().optional(),
+  allow_duplicate: z.boolean().optional(),
+});
