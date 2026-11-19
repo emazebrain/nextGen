@@ -130,6 +130,46 @@ export const listOrgPatients = (filters: PatientFilters, signal?: AbortSignal) =
 export const createOrgPatient = (data: CreateOrgPatientInput) =>
   apiSend<{ id: string }>("POST", "/v1/org/patients", data);
 
+export interface OrgCalendarEvent {
+  kind: "session" | "appointment";
+  id: string;
+  date: string;
+  start_time: string | null;
+  end_time: string | null;
+  seq: number;
+  week: number;
+  location: string;
+  status: string;
+  patient_id: string;
+  patient_given_name: string;
+  patient_family_name: string;
+  assignment_id: string;
+  assignment_name: string;
+  title: string;
+  notes: string;
+  therapist_id: string;
+  therapist_name: string;
+  clinic_name: string;
+  clinic_id: string;
+}
+
+export interface OrgCalendarFilters {
+  clinic?: string;
+  from?: string;
+  to?: string;
+  therapist?: string;
+}
+
+export const listOrgCalendarEvents = (filters: OrgCalendarFilters, signal?: AbortSignal) => {
+  const parts: string[] = [];
+  if (filters.clinic) parts.push(`clinic=${enc(filters.clinic)}`);
+  if (filters.from) parts.push(`from=${enc(filters.from)}`);
+  if (filters.to) parts.push(`to=${enc(filters.to)}`);
+  if (filters.therapist) parts.push(`therapist=${enc(filters.therapist)}`);
+  const q = parts.length ? `?${parts.join("&")}` : "";
+  return apiGet<{ events: OrgCalendarEvent[] }>(`/v1/org/calendar/events${q}`, signal ? { signal } : {}).then((r) => r.events);
+};
+
 // ---------------------------------------------------------------- hooks
 
 const orgKey = ["org"] as const;
@@ -151,6 +191,9 @@ export const useOrgStaff = (filters: StaffFilters = {}) =>
 
 export const useOrgPatients = (filters: PatientFilters = {}) =>
   useQuery({ queryKey: [...orgKey, "patients", filters], queryFn: ({ signal }) => listOrgPatients(filters, signal) });
+
+export const useOrgCalendarEvents = (filters: OrgCalendarFilters) =>
+  useQuery({ queryKey: [...orgKey, "calendar", filters], queryFn: ({ signal }) => listOrgCalendarEvents(filters, signal) });
 
 export function useOrgMutation<In, Out>(fn: (input: In) => Promise<Out>) {
   const qc = useQueryClient();

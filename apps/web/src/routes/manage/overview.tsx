@@ -68,6 +68,10 @@ export function ManageOverviewPage() {
           <Users size={20} aria-hidden="true" />
           <span>{t("manage.patients.title")}</span>
         </Link>
+        <Link to="/manage/calendar" className="manage-nav__item">
+          <CalendarDays size={20} aria-hidden="true" />
+          <span>{t("manage.calendar.title")}</span>
+        </Link>
       </nav>
 
       {/* Stats grid */}

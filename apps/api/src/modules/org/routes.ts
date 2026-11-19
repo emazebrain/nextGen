@@ -37,6 +37,7 @@ async function body<S extends z.ZodTypeAny>(c: C, schema: S): Promise<z.output<S
   return parsed.success ? (parsed.data as z.output<S>) : null;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const invalid = (c: C) => c.json({ error: "invalid" }, 400);
 const notFound = (c: C) => c.json({ error: "not_found" }, 404);
 const isUnique = (err: unknown) => (err as { code?: string }).code === "23505";
@@ -146,6 +147,103 @@ export function orgAdminRoutes(pool: pg.Pool, auth: Auth, mailer: Mailer, public
       };
     });
     return c.json(stats);
+  });
+
+  // ── Calendar (org-wide) ────────────────────────────────────────────
+
+  r.get("/calendar/events", async (c) => {
+    const orgId = c.get("orgId");
+    const clinicId = c.req.query("clinic"); // optional: filter by one clinic
+    const from = c.req.query("from");
+    const to = c.req.query("to");
+    const therapistId = c.req.query("therapist");
+
+    if (clinicId && !UUID_RE.test(clinicId)) return invalid(c);
+
+    const events = await run(c, async (db) => {
+      const params: unknown[] = [orgId, from ?? null, to ?? null];
+      let clinicCond = "";
+      if (clinicId) {
+        params.push(clinicId);
+        clinicCond = `AND ps.clinic_id = $${params.length}`;
+      }
+      let therapistCond = "";
+      if (therapistId && UUID_RE.test(therapistId)) {
+        params.push(therapistId);
+        therapistCond = `AND EXISTS (SELECT 1 FROM app.patient_care_team ct WHERE ct.patient_id = ps.patient_id AND ct.user_id = $${params.length} AND ct.ended_at IS NULL)`;
+      }
+
+      const { rows: sessions } = await db.query(
+        `SELECT 'session' AS kind, ps.id,
+                to_char(ps.planned_date, 'YYYY-MM-DD') AS date,
+                ps.planned_time::text AS start_time,
+                NULL::text AS end_time,
+                ps.seq, ps.week, ps.location, ps.status,
+                p.id AS patient_id, p.given_name AS patient_given_name, p.family_name AS patient_family_name,
+                a.id AS assignment_id, a.name AS assignment_name,
+                '' AS title, '' AS notes,
+                COALESCE(pct.user_id::text, '') AS therapist_id,
+                COALESCE(u.full_name, '') AS therapist_name,
+                cl.name AS clinic_name, cl.id AS clinic_id
+           FROM app.planned_session ps
+           JOIN app.clinic cl ON cl.id = ps.clinic_id AND cl.organization_id = $1 AND cl.deleted_at IS NULL
+           JOIN app.patient p ON p.id = ps.patient_id AND p.deleted_at IS NULL
+           JOIN app.protocol_assignment a ON a.id = ps.assignment_id
+           LEFT JOIN LATERAL (
+             SELECT ct2.user_id FROM app.patient_care_team ct2
+              WHERE ct2.patient_id = ps.patient_id AND ct2.role = 'primary' AND ct2.ended_at IS NULL LIMIT 1
+           ) pct ON true
+           LEFT JOIN app.app_user u ON u.id = pct.user_id
+          WHERE ps.status IN ('planned', 'in_progress')
+            AND ps.planned_date >= COALESCE($2::date, current_date - 7)
+            AND ps.planned_date <= COALESCE($3::date, current_date + 30)
+            ${clinicCond} ${therapistCond}`,
+        params,
+      );
+
+      const apptParams: unknown[] = [orgId, from ?? null, to ?? null];
+      let apptClinicCond = "";
+      if (clinicId) {
+        apptParams.push(clinicId);
+        apptClinicCond = `AND ap.clinic_id = $${apptParams.length}`;
+      }
+      let apptTherapistCond = "";
+      if (therapistId && UUID_RE.test(therapistId)) {
+        apptParams.push(therapistId);
+        apptTherapistCond = `AND ap.created_by = $${apptParams.length}`;
+      }
+
+      const { rows: appointments } = await db.query(
+        `SELECT 'appointment' AS kind, ap.id,
+                to_char(ap.date, 'YYYY-MM-DD') AS date,
+                ap.start_time::text AS start_time,
+                ap.end_time::text AS end_time,
+                0 AS seq, 0 AS week, 'clinic' AS location, ap.status,
+                p.id AS patient_id, p.given_name AS patient_given_name, p.family_name AS patient_family_name,
+                '' AS assignment_id, '' AS assignment_name,
+                ap.title, ap.notes,
+                ap.created_by::text AS therapist_id,
+                COALESCE(u.full_name, '') AS therapist_name,
+                cl.name AS clinic_name, cl.id AS clinic_id
+           FROM app.appointment ap
+           JOIN app.clinic cl ON cl.id = ap.clinic_id AND cl.organization_id = $1 AND cl.deleted_at IS NULL
+           JOIN app.patient p ON p.id = ap.patient_id AND p.deleted_at IS NULL
+           LEFT JOIN app.app_user u ON u.id = ap.created_by
+          WHERE ap.status = 'scheduled'
+            AND ap.date >= COALESCE($2::date, current_date - 7)
+            AND ap.date <= COALESCE($3::date, current_date + 30)
+            ${apptClinicCond} ${apptTherapistCond}`,
+        apptParams,
+      );
+
+      return [...sessions, ...appointments].sort((a, b) => {
+        const d = a.date.localeCompare(b.date);
+        if (d !== 0) return d;
+        return (a.start_time ?? "99:99").localeCompare(b.start_time ?? "99:99");
+      });
+    });
+
+    return c.json({ events });
   });
 
   // ── Clinics ────────────────────────────────────────────────────────
