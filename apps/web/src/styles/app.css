@@ -2127,7 +2127,7 @@ a.gamecard:hover {
 }
 
 /* ------------------------------------------------------------ Calendar */
-.calendar-controls {
+.cal-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -2135,76 +2135,141 @@ a.gamecard:hover {
   gap: var(--space-3);
   margin-block-end: var(--space-4);
 }
-.calendar-nav {
+.cal-toolbar__nav {
   display: flex;
   align-items: center;
   gap: var(--space-2);
 }
-.calendar-date {
+.cal-toolbar__date {
   font-size: var(--text-base);
   font-weight: 600;
   background: none;
   border: none;
   cursor: pointer;
-  padding: var(--space-1) var(--space-2);
+  padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
 }
-.calendar-date:hover {
-  background: var(--surface-hover);
-}
-.calendar-filters {
+.cal-toolbar__date:hover { background: var(--surface-hover); }
+.cal-toolbar__date--today { color: var(--accent); }
+.cal-toolbar__actions {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-}
-.calendar-day {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-.calendar-slot {
-  display: grid;
-  grid-template-columns: 80px 1fr;
-  gap: var(--space-3);
-  align-items: start;
-  padding-block: var(--space-2);
-  border-block-start: 1px solid var(--border);
-}
-.calendar-slot__time {
-  font-size: var(--text-sm);
-  font-weight: 600;
-  color: var(--text-secondary);
-  padding-block-start: var(--space-2);
-  text-align: end;
-}
-.calendar-slot__sessions {
-  display: flex;
-  flex-direction: column;
   gap: var(--space-2);
 }
-.calendar-session {
-  padding: var(--space-3) !important;
-}
-.calendar-session__header {
+
+/* Unscheduled strip */
+.cal-unscheduled {
   display: flex;
   align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  margin-block-end: var(--space-2);
+  background: var(--surface-raised);
+  border-radius: var(--radius-sm);
+}
+.cal-unscheduled__label {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.cal-unscheduled__items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.cal-chip {
+  display: inline-flex;
+  flex-direction: column;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  text-align: start;
+}
+.cal-chip:hover { border-color: var(--accent); }
+.cal-chip__label { color: var(--text-secondary); }
+.cal-chip__therapist { color: var(--text-secondary); font-style: italic; }
+
+/* Time grid — Google Calendar style */
+.cal-grid {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.cal-row {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  min-block-size: 60px;
+  border-block-end: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.cal-row:last-child { border-block-end: none; }
+.cal-row:hover { background: var(--surface-hover); }
+.cal-row__time {
+  display: flex;
+  align-items: start;
+  justify-content: end;
+  padding: var(--space-2) var(--space-2) 0 0;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  border-inline-end: 1px solid var(--border);
+  user-select: none;
+}
+.cal-row__slot {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px var(--space-2);
+  min-block-size: 58px;
+}
+.cal-row__slot--has-events {
+  background: transparent;
+}
+
+/* Event cards inside the grid */
+.cal-event {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  border-inline-start: 3px solid;
+  transition: box-shadow 0.1s;
+}
+.cal-event:hover { box-shadow: 0 1px 4px rgba(0,0,0,0.12); }
+.cal-event--session {
+  background: var(--accent-subtle, #e8f0fe);
+  border-color: var(--accent);
+}
+.cal-event--appointment {
+  background: var(--success-subtle, #e6f4ea);
+  border-color: var(--success, #34a853);
+}
+.cal-event__header {
+  display: flex;
+  align-items: baseline;
   justify-content: space-between;
   gap: var(--space-2);
-  margin-block-end: var(--space-1);
 }
-.calendar-session__patient {
-  font-weight: 600;
+.cal-event__patient { font-weight: 600; font-size: var(--text-sm); }
+.cal-event__time { font-size: var(--text-xs); color: var(--text-secondary); white-space: nowrap; }
+.cal-event__detail { font-size: var(--text-xs); color: var(--text-secondary); margin-block-start: 1px; }
+.cal-event__start {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-xs);
+  color: var(--accent);
+  text-decoration: none;
+  margin-block-start: 2px;
 }
-.calendar-session__info {
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  margin: 0 0 var(--space-2);
-}
-.calendar-session__actions {
-  display: flex;
-  gap: var(--space-2);
-}
+.cal-event__start:hover { text-decoration: underline; }
+
+/* Dialogs (shared with reschedule + new appointment) */
 .calendar-overlay {
   position: fixed;
   inset: 0;
@@ -2215,18 +2280,14 @@ a.gamecard:hover {
   z-index: 100;
   padding: var(--space-4);
 }
-.calendar-dialog {
-  inline-size: min(480px, 100%);
-}
+.calendar-dialog { inline-size: min(520px, 100%); }
 .calendar-dialog__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-block-end: var(--space-2);
 }
-.calendar-dialog__header h3 {
-  margin: 0;
-}
+.calendar-dialog__header h3 { margin: 0; }
 .calendar-dialog__shift {
   display: flex;
   align-items: center;
@@ -2234,14 +2295,39 @@ a.gamecard:hover {
   font-size: var(--text-sm);
   cursor: pointer;
 }
-.calendar-dialog__shift input {
+.calendar-dialog__shift input { margin: 0; }
+
+/* Patient search dropdown */
+.cal-patient-search { position: relative; }
+.cal-patient-results {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: 100%;
+  z-index: 10;
+  list-style: none;
   margin: 0;
+  padding: var(--space-1) 0;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  max-block-size: 200px;
+  overflow-y: auto;
 }
+.cal-patient-option {
+  display: block;
+  inline-size: 100%;
+  text-align: start;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: var(--text-sm);
+}
+.cal-patient-option:hover { background: var(--surface-hover); }
+
 @media (max-width: 640px) {
-  .calendar-slot {
-    grid-template-columns: 1fr;
-  }
-  .calendar-slot__time {
-    text-align: start;
-  }
+  .cal-row { grid-template-columns: 48px 1fr; min-block-size: 48px; }
+  .cal-toolbar { flex-direction: column; align-items: stretch; }
+  .cal-toolbar__actions { justify-content: flex-end; }
 }

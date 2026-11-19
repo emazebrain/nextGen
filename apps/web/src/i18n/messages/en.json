@@ -1069,5 +1069,21 @@
   "calendar.newTime": "Time",
   "calendar.shiftSubsequent": "Move all later sessions in this program by the same number of days",
   "calendar.confirmReschedule": "Reschedule",
-  "calendar.rescheduleFailed": "Could not reschedule. Try again."
+  "calendar.rescheduleFailed": "Could not reschedule. Try again.",
+  "calendar.today": "Today",
+  "calendar.newAppt": "New appointment",
+  "calendar.newApptTitle": "New appointment",
+  "calendar.appointment": "Appointment",
+  "calendar.unscheduled": "Unscheduled",
+  "calendar.patient": "Patient",
+  "calendar.searchPatient": "Search by name…",
+  "calendar.selectPatient": "Select a patient.",
+  "calendar.apptTitle": "Title (optional)",
+  "calendar.apptTitleHint": "e.g. Progress review, Initial assessment",
+  "calendar.startTime": "Start",
+  "calendar.endTime": "End",
+  "calendar.notes": "Notes (optional)",
+  "calendar.invalidTime": "End time must be after start time.",
+  "calendar.createAppt": "Create appointment",
+  "calendar.createFailed": "Could not create the appointment. Try again."
 }

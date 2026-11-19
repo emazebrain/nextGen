@@ -1,37 +1,40 @@
 /**
  * Calendar API (design doc §5.13).
- * Day/range view of planned sessions, reschedule, iCal export.
+ * Returns a unified view of planned sessions + appointments.
+ * Supports creating ad-hoc appointments and rescheduling sessions.
  *
  * Visibility follows role:
  *  - Therapist: own patients (via care_team, enforced by RLS)
- *  - Clinic manager / org admin: all patients in the clinic, filterable by therapist
+ *  - Clinic manager / org admin: all in the clinic, filterable by therapist
  */
 import { Hono, type Context } from "hono";
 import type pg from "pg";
 import { z } from "zod";
 import { withUser, type Env } from "../../context.ts";
+import { uuidv7 } from "../../ids.ts";
 import { parseBody } from "../../validate.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const notFound = (c: Context) => c.json({ error: "not_found" }, 404);
 
-export interface CalendarSession {
-  id: string;
-  planned_date: string;
-  planned_time: string | null;
-  seq: number;
-  week: number;
-  location: string;
-  status: string;
-  patient_id: string;
-  patient_given_name: string;
-  patient_family_name: string;
-  assignment_id: string;
-  assignment_name: string;
-  therapist_id: string;
-  therapist_name: string;
-}
+const createAppointmentSchema = z.object({
+  patient_id: z.string().uuid(),
+  title: z.string().trim().max(255).optional(),
+  notes: z.string().trim().max(2000).optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  start_time: z.string().regex(/^\d{2}:\d{2}$/),
+  end_time: z.string().regex(/^\d{2}:\d{2}$/),
+});
+
+const updateAppointmentSchema = z.object({
+  title: z.string().trim().max(255).optional(),
+  notes: z.string().trim().max(2000).optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  start_time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  end_time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  status: z.enum(["scheduled", "completed", "cancelled", "no_show"]).optional(),
+});
 
 const rescheduleSchema = z.object({
   planned_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -46,65 +49,36 @@ export function calendarRoutes(pool: pg.Pool) {
     withUser(pool, c.get("user").id, c.get("requestId"), fn);
 
   /**
-   * GET /sessions — planned sessions for a date range.
-   * Query params:
-   *   clinic (required) — which clinic
-   *   from, to — date range (defaults to today)
-   *   therapist — filter by therapist (care_team user_id)
-   *   status — filter by status (default: planned,in_progress)
+   * GET /events — unified calendar events (sessions + appointments) for a date range.
+   * Returns both types with a `kind` discriminator.
    */
-  app.get("/sessions", async (c) => {
+  app.get("/events", async (c) => {
     const clinicId = c.req.query("clinic");
     const from = c.req.query("from");
     const to = c.req.query("to");
     const therapistId = c.req.query("therapist");
-    const statusFilter = c.req.query("status");
 
     if (!clinicId || !UUID_RE.test(clinicId)) return c.json({ error: "clinic_required" }, 400);
     if (from && !DATE_RE.test(from)) return c.json({ error: "invalid_from" }, 400);
     if (to && !DATE_RE.test(to)) return c.json({ error: "invalid_to" }, 400);
-    if (therapistId && !UUID_RE.test(therapistId)) return c.json({ error: "invalid_therapist" }, 400);
 
-    const statuses = statusFilter
-      ? statusFilter.split(",").filter((s) => ["planned", "in_progress", "done", "missed", "skipped", "cancelled"].includes(s))
-      : ["planned", "in_progress"];
+    const events = await run(c, async (db) => {
+      const params: unknown[] = [clinicId, from ?? null, to ?? null];
+      const therapistCond = therapistId && UUID_RE.test(therapistId)
+        ? (params.push(therapistId), `AND EXISTS (SELECT 1 FROM app.patient_care_team ct WHERE ct.patient_id = sub.patient_id AND ct.user_id = $${params.length} AND ct.ended_at IS NULL)`)
+        : "";
 
-    const sessions = await run(c, async (db) => {
-      const params: unknown[] = [clinicId];
-      const conditions = [`ps.clinic_id = $1`];
-
-      // Date range
-      if (from) {
-        params.push(from);
-        conditions.push(`ps.planned_date >= $${params.length}::date`);
-      } else {
-        conditions.push(`ps.planned_date >= current_date`);
-      }
-      if (to) {
-        params.push(to);
-        conditions.push(`ps.planned_date <= $${params.length}::date`);
-      } else if (!from) {
-        conditions.push(`ps.planned_date <= current_date`);
-      }
-
-      // Status filter
-      params.push(statuses);
-      conditions.push(`ps.status = ANY($${params.length}::text[])`);
-
-      // Therapist filter: only show sessions where this therapist is on the care team
-      if (therapistId) {
-        params.push(therapistId);
-        conditions.push(`EXISTS (SELECT 1 FROM app.patient_care_team ct WHERE ct.patient_id = ps.patient_id AND ct.user_id = $${params.length} AND ct.ended_at IS NULL)`);
-      }
-
-      const { rows } = await db.query<CalendarSession>(
-        `SELECT ps.id,
-                to_char(ps.planned_date, 'YYYY-MM-DD') AS planned_date,
-                ps.planned_time::text AS planned_time,
+      // Protocol sessions
+      const { rows: sessions } = await db.query(
+        `SELECT 'session' AS kind, ps.id,
+                to_char(ps.planned_date, 'YYYY-MM-DD') AS date,
+                ps.planned_time::text AS start_time,
+                NULL::text AS end_time,
                 ps.seq, ps.week, ps.location, ps.status,
                 p.id AS patient_id, p.given_name AS patient_given_name, p.family_name AS patient_family_name,
                 a.id AS assignment_id, a.name AS assignment_name,
-                COALESCE(ct.user_id, '00000000-0000-0000-0000-000000000000'::uuid) AS therapist_id,
+                '' AS title, '' AS notes,
+                COALESCE(ct.user_id::text, '') AS therapist_id,
                 COALESCE(u.full_name, '') AS therapist_name
            FROM app.planned_session ps
            JOIN app.patient p ON p.id = ps.patient_id AND p.deleted_at IS NULL
@@ -115,14 +89,55 @@ export function calendarRoutes(pool: pg.Pool) {
               LIMIT 1
            ) ct ON true
            LEFT JOIN app.app_user u ON u.id = ct.user_id
-          WHERE ${conditions.join(" AND ")}
-          ORDER BY ps.planned_date, ps.planned_time NULLS LAST, p.family_name, p.given_name`,
+          WHERE ps.clinic_id = $1
+            AND ps.status IN ('planned', 'in_progress')
+            AND ps.planned_date >= COALESCE($2::date, current_date - 7)
+            AND ps.planned_date <= COALESCE($3::date, current_date + 30)
+            ${therapistCond.replace(/sub\.patient_id/g, "ps.patient_id")}`,
         params,
       );
-      return rows;
+
+      // Appointments
+      const apptParams: unknown[] = [clinicId, from ?? null, to ?? null];
+      const apptTherapistCond = therapistId && UUID_RE.test(therapistId)
+        ? (apptParams.push(therapistId), `AND ap.created_by = $${apptParams.length}`)
+        : "";
+
+      const { rows: appointments } = await db.query(
+        `SELECT 'appointment' AS kind, ap.id,
+                to_char(ap.date, 'YYYY-MM-DD') AS date,
+                ap.start_time::text AS start_time,
+                ap.end_time::text AS end_time,
+                0 AS seq, 0 AS week, 'clinic' AS location, ap.status,
+                p.id AS patient_id, p.given_name AS patient_given_name, p.family_name AS patient_family_name,
+                '' AS assignment_id, '' AS assignment_name,
+                ap.title, ap.notes,
+                ap.created_by::text AS therapist_id,
+                COALESCE(u.full_name, '') AS therapist_name
+           FROM app.appointment ap
+           JOIN app.patient p ON p.id = ap.patient_id AND p.deleted_at IS NULL
+           LEFT JOIN app.app_user u ON u.id = ap.created_by
+          WHERE ap.clinic_id = $1
+            AND ap.status = 'scheduled'
+            AND ap.date >= COALESCE($2::date, current_date - 7)
+            AND ap.date <= COALESCE($3::date, current_date + 30)
+            ${apptTherapistCond}`,
+        apptParams,
+      );
+
+      // Merge and sort
+      const all = [...sessions, ...appointments].sort((a, b) => {
+        const dateComp = a.date.localeCompare(b.date);
+        if (dateComp !== 0) return dateComp;
+        const aTime = a.start_time ?? "99:99";
+        const bTime = b.start_time ?? "99:99";
+        return aTime.localeCompare(bTime);
+      });
+
+      return all;
     });
 
-    return c.json({ sessions });
+    return c.json({ events });
   });
 
   /**
@@ -148,8 +163,71 @@ export function calendarRoutes(pool: pg.Pool) {
   });
 
   /**
-   * PATCH /sessions/:id — reschedule a session.
-   * Optionally shifts all subsequent sessions in the same assignment by the same delta.
+   * POST /appointments — create an ad-hoc appointment.
+   */
+  app.post("/appointments", async (c) => {
+    const body = await parseBody(c, createAppointmentSchema);
+    if (!body.ok) return body.response;
+    const { patient_id, title, notes, date, start_time, end_time } = body.data;
+
+    if (start_time >= end_time) return c.json({ error: "invalid_time_range" }, 400);
+
+    const result = await run(c, async (db) => {
+      // Verify patient exists and get clinic
+      const { rows } = await db.query(
+        `SELECT clinic_id FROM app.patient WHERE id = $1 AND deleted_at IS NULL`,
+        [patient_id],
+      );
+      if (!rows[0]) return { error: "not_found" as const };
+
+      const id = uuidv7();
+      await db.query(
+        `INSERT INTO app.appointment (id, clinic_id, patient_id, created_by, title, notes, date, start_time, end_time)
+         VALUES ($1, $2, $3, app.current_user_id(), $4, $5, $6::date, $7::time, $8::time)`,
+        [id, rows[0].clinic_id, patient_id, title ?? "", notes ?? "", date, start_time, end_time],
+      );
+      return { id };
+    });
+
+    if ("error" in result) return notFound(c);
+    return c.json(result, 201);
+  });
+
+  /**
+   * PATCH /appointments/:id — update an appointment.
+   */
+  app.patch("/appointments/:id", async (c) => {
+    const id = c.req.param("id");
+    if (!UUID_RE.test(id)) return notFound(c);
+
+    const body = await parseBody(c, updateAppointmentSchema);
+    if (!body.ok) return body.response;
+    const data = body.data;
+
+    const result = await run(c, async (db) => {
+      const sets: string[] = [];
+      const vals: unknown[] = [id];
+      if (data.title !== undefined) { vals.push(data.title); sets.push(`title = $${vals.length}`); }
+      if (data.notes !== undefined) { vals.push(data.notes); sets.push(`notes = $${vals.length}`); }
+      if (data.date !== undefined) { vals.push(data.date); sets.push(`date = $${vals.length}::date`); }
+      if (data.start_time !== undefined) { vals.push(data.start_time); sets.push(`start_time = $${vals.length}::time`); }
+      if (data.end_time !== undefined) { vals.push(data.end_time); sets.push(`end_time = $${vals.length}::time`); }
+      if (data.status !== undefined) { vals.push(data.status); sets.push(`status = $${vals.length}`); }
+      if (!sets.length) return { ok: true };
+
+      const { rowCount } = await db.query(
+        `UPDATE app.appointment SET ${sets.join(", ")} WHERE id = $1`,
+        vals,
+      );
+      return rowCount ? { ok: true } : { error: "not_found" as const };
+    });
+
+    if ("error" in result) return notFound(c);
+    return c.json(result);
+  });
+
+  /**
+   * PATCH /sessions/:id — reschedule a protocol session.
    */
   app.patch("/sessions/:id", async (c) => {
     const id = c.req.param("id");
@@ -160,9 +238,8 @@ export function calendarRoutes(pool: pg.Pool) {
     const { planned_date, planned_time, shift_subsequent } = body.data;
 
     const result = await run(c, async (db) => {
-      // Load the current session
       const { rows } = await db.query(
-        `SELECT ps.id, ps.planned_date, ps.assignment_id, ps.seq, ps.clinic_id,
+        `SELECT ps.id, ps.planned_date, ps.assignment_id, ps.seq,
                 app.can_treat_patient(ps.patient_id) AS can_treat
            FROM app.planned_session ps
           WHERE ps.id = $1 AND ps.status IN ('planned', 'in_progress')`,
@@ -176,13 +253,11 @@ export function calendarRoutes(pool: pg.Pool) {
       const newDate = new Date(planned_date + "T00:00:00Z");
       const daysDelta = Math.round((newDate.getTime() - oldDate.getTime()) / (24 * 60 * 60 * 1000));
 
-      // Update this session
       await db.query(
         `UPDATE app.planned_session SET planned_date = $2::date, planned_time = $3::time WHERE id = $1`,
         [id, planned_date, planned_time ?? null],
       );
 
-      // Shift subsequent sessions if requested
       let shifted = 0;
       if (shift_subsequent && daysDelta !== 0) {
         const { rowCount } = await db.query(
@@ -205,8 +280,31 @@ export function calendarRoutes(pool: pg.Pool) {
   });
 
   /**
-   * GET /export.ics — iCal export for a date range.
-   * No patient data in event titles (CLAUDE.md rule 7): "Session – N."
+   * GET /patients — search patients for appointment creation.
+   */
+  app.get("/patients", async (c) => {
+    const clinicId = c.req.query("clinic");
+    const q = c.req.query("q");
+    if (!clinicId || !UUID_RE.test(clinicId)) return c.json({ error: "clinic_required" }, 400);
+
+    const patients = await run(c, async (db) => {
+      const { rows } = await db.query(
+        `SELECT p.id, p.given_name, p.family_name
+           FROM app.patient p
+          WHERE p.clinic_id = $1 AND p.deleted_at IS NULL AND p.status = 'active'
+            AND ($2::text IS NULL OR p.given_name ILIKE '%' || $2 || '%' OR p.family_name ILIKE '%' || $2 || '%')
+          ORDER BY p.family_name, p.given_name
+          LIMIT 20`,
+        [clinicId, q || null],
+      );
+      return rows;
+    });
+
+    return c.json({ patients });
+  });
+
+  /**
+   * GET /export.ics — iCal export. No patient data in titles (CLAUDE.md rule 7).
    */
   app.get("/export.ics", async (c) => {
     const clinicId = c.req.query("clinic");
@@ -215,33 +313,34 @@ export function calendarRoutes(pool: pg.Pool) {
 
     if (!clinicId || !UUID_RE.test(clinicId)) return c.json({ error: "clinic_required" }, 400);
 
-    const sessions = await run(c, async (db) => {
+    const items = await run(c, async (db) => {
       const params: unknown[] = [clinicId];
-      let dateFilter = "ps.planned_date >= current_date AND ps.planned_date <= current_date + 90";
+      let dateFilter = "sub.d >= current_date AND sub.d <= current_date + 90";
       if (from && DATE_RE.test(from)) {
         params.push(from);
-        dateFilter = `ps.planned_date >= $${params.length}::date`;
+        dateFilter = `sub.d >= $${params.length}::date`;
         if (to && DATE_RE.test(to)) {
           params.push(to);
-          dateFilter += ` AND ps.planned_date <= $${params.length}::date`;
+          dateFilter += ` AND sub.d <= $${params.length}::date`;
         } else {
-          dateFilter += ` AND ps.planned_date <= $${params.length}::date + 90`;
+          dateFilter += ` AND sub.d <= $${params.length}::date + 90`;
         }
       }
 
       const { rows } = await db.query(
-        `SELECT ps.id, to_char(ps.planned_date, 'YYYYMMDD') AS date_compact,
-                ps.planned_time, ps.seq, ps.location
-           FROM app.planned_session ps
-          WHERE ps.clinic_id = $1 AND ps.status IN ('planned', 'in_progress')
-            AND ${dateFilter}
-          ORDER BY ps.planned_date, ps.planned_time NULLS LAST`,
+        `SELECT * FROM (
+           SELECT ps.id, ps.planned_date AS d, ps.planned_time AS st, NULL::time AS et, ps.seq, ps.location, 'session' AS kind
+             FROM app.planned_session ps WHERE ps.clinic_id = $1 AND ps.status IN ('planned', 'in_progress')
+           UNION ALL
+           SELECT ap.id, ap.date AS d, ap.start_time AS st, ap.end_time AS et, 0 AS seq, 'clinic' AS location, 'appointment' AS kind
+             FROM app.appointment ap WHERE ap.clinic_id = $1 AND ap.status = 'scheduled'
+         ) sub WHERE ${dateFilter}
+         ORDER BY sub.d, sub.st NULLS LAST`,
         params,
       );
       return rows;
     });
 
-    // Build iCal
     const lines = [
       "BEGIN:VCALENDAR",
       "VERSION:2.0",
@@ -250,25 +349,27 @@ export function calendarRoutes(pool: pg.Pool) {
       "METHOD:PUBLISH",
     ];
 
-    for (const s of sessions) {
-      const timeStr = s.planned_time
-        ? `${s.date_compact}T${String(s.planned_time).replace(/:/g, "")}00`
-        : `${s.date_compact}`;
-      const isAllDay = !s.planned_time;
+    for (const s of items) {
+      const dc = (s.d as Date).toISOString().slice(0, 10).replace(/-/g, "");
+      const st = s.st ? String(s.st).replace(/:/g, "") : null;
+      const et = s.et ? String(s.et).replace(/:/g, "") : null;
 
       lines.push("BEGIN:VEVENT");
       lines.push(`UID:${s.id}@emb`);
-      if (isAllDay) {
-        lines.push(`DTSTART;VALUE=DATE:${s.date_compact}`);
+      if (st) {
+        lines.push(`DTSTART:${dc}T${st.padEnd(6, "0")}`);
+        if (et) {
+          lines.push(`DTEND:${dc}T${et.padEnd(6, "0")}`);
+        } else {
+          // Default 1h for sessions
+          const h = parseInt(st.slice(0, 2), 10);
+          lines.push(`DTEND:${dc}T${String(h + 1).padStart(2, "0")}${st.slice(2).padEnd(4, "0")}`);
+        }
       } else {
-        lines.push(`DTSTART:${timeStr}`);
-        // 1-hour default duration
-        const hour = parseInt(String(s.planned_time).slice(0, 2), 10);
-        const endHour = String(hour + 1).padStart(2, "0");
-        lines.push(`DTEND:${s.date_compact}T${endHour}${String(s.planned_time).slice(3).replace(/:/g, "")}00`);
+        lines.push(`DTSTART;VALUE=DATE:${dc}`);
       }
-      // No patient data in titles (CLAUDE.md rule 7)
-      lines.push(`SUMMARY:Session – ${s.seq}.`);
+      // No patient data (CLAUDE.md rule 7)
+      lines.push(`SUMMARY:${s.kind === "appointment" ? "Appointment" : `Session – ${s.seq}.`}`);
       lines.push(`LOCATION:${s.location === "home" ? "Home" : "Clinic"}`);
       lines.push("END:VEVENT");
     }

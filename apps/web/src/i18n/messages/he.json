@@ -1069,5 +1069,21 @@
   "calendar.newTime": "שעה",
   "calendar.shiftSubsequent": "הזז את כל המפגשים הבאים בתוכנית באותו מספר ימים",
   "calendar.confirmReschedule": "שנה מועד",
-  "calendar.rescheduleFailed": "לא ניתן לשנות את המועד. נסו שוב."
+  "calendar.rescheduleFailed": "לא ניתן לשנות את המועד. נסו שוב.",
+  "calendar.today": "היום",
+  "calendar.newAppt": "פגישה חדשה",
+  "calendar.newApptTitle": "פגישה חדשה",
+  "calendar.appointment": "פגישה",
+  "calendar.unscheduled": "ללא שעה",
+  "calendar.patient": "מטופל/ת",
+  "calendar.searchPatient": "חיפוש לפי שם…",
+  "calendar.selectPatient": "בחרו מטופל/ת.",
+  "calendar.apptTitle": "כותרת (אופציונלי)",
+  "calendar.apptTitleHint": "למשל: סקירת התקדמות, הערכה ראשונית",
+  "calendar.startTime": "התחלה",
+  "calendar.endTime": "סיום",
+  "calendar.notes": "הערות (אופציונלי)",
+  "calendar.invalidTime": "שעת הסיום חייבת להיות אחרי שעת ההתחלה.",
+  "calendar.createAppt": "יצירת פגישה",
+  "calendar.createFailed": "לא ניתן ליצור את הפגישה. נסו שוב."
 }

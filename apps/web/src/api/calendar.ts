@@ -2,10 +2,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiSend } from "./http.ts";
 
-export interface CalendarSession {
+/** A unified calendar event — either a protocol session or an appointment. */
+export interface CalendarEvent {
+  kind: "session" | "appointment";
   id: string;
-  planned_date: string;
-  planned_time: string | null;
+  date: string;
+  start_time: string | null;
+  end_time: string | null;
   seq: number;
   week: number;
   location: string;
@@ -15,6 +18,8 @@ export interface CalendarSession {
   patient_family_name: string;
   assignment_id: string;
   assignment_name: string;
+  title: string;
+  notes: string;
   therapist_id: string;
   therapist_name: string;
 }
@@ -24,12 +29,26 @@ export interface CalendarTherapist {
   full_name: string;
 }
 
+export interface CalendarPatient {
+  id: string;
+  given_name: string;
+  family_name: string;
+}
+
 export interface CalendarFilters {
   clinic: string;
   from?: string;
   to?: string;
   therapist?: string;
-  status?: string;
+}
+
+export interface CreateAppointmentInput {
+  patient_id: string;
+  title?: string | undefined;
+  notes?: string | undefined;
+  date: string;
+  start_time: string;
+  end_time: string;
 }
 
 const enc = encodeURIComponent;
@@ -39,15 +58,23 @@ function buildQuery(filters: CalendarFilters): string {
   if (filters.from) parts.push(`from=${enc(filters.from)}`);
   if (filters.to) parts.push(`to=${enc(filters.to)}`);
   if (filters.therapist) parts.push(`therapist=${enc(filters.therapist)}`);
-  if (filters.status) parts.push(`status=${enc(filters.status)}`);
   return parts.join("&");
 }
 
-export const listCalendarSessions = (filters: CalendarFilters, signal?: AbortSignal) =>
-  apiGet<{ sessions: CalendarSession[] }>(`/v1/calendar/sessions?${buildQuery(filters)}`, signal ? { signal } : {}).then((r) => r.sessions);
+export const listCalendarEvents = (filters: CalendarFilters, signal?: AbortSignal) =>
+  apiGet<{ events: CalendarEvent[] }>(`/v1/calendar/events?${buildQuery(filters)}`, signal ? { signal } : {}).then((r) => r.events);
 
 export const listCalendarTherapists = (clinicId: string, signal?: AbortSignal) =>
   apiGet<{ therapists: CalendarTherapist[] }>(`/v1/calendar/therapists?clinic=${enc(clinicId)}`, signal ? { signal } : {}).then((r) => r.therapists);
+
+export const searchCalendarPatients = (clinicId: string, q: string, signal?: AbortSignal) =>
+  apiGet<{ patients: CalendarPatient[] }>(`/v1/calendar/patients?clinic=${enc(clinicId)}&q=${enc(q)}`, signal ? { signal } : {}).then((r) => r.patients);
+
+export const createAppointment = (data: CreateAppointmentInput) =>
+  apiSend<{ id: string }>("POST", "/v1/calendar/appointments", data);
+
+export const updateAppointment = (id: string, data: Partial<CreateAppointmentInput & { status: string }>) =>
+  apiSend<{ ok: boolean }>("PATCH", `/v1/calendar/appointments/${enc(id)}`, data);
 
 export const rescheduleSession = (sessionId: string, data: { planned_date: string; planned_time?: string | null; shift_subsequent?: boolean }) =>
   apiSend<{ ok: boolean; shifted: number }>("PATCH", `/v1/calendar/sessions/${enc(sessionId)}`, data);
@@ -63,10 +90,10 @@ export const getExportUrl = (clinicId: string, from?: string, to?: string) => {
 
 const calKey = ["calendar"] as const;
 
-export const useCalendarSessions = (filters: CalendarFilters) =>
+export const useCalendarEvents = (filters: CalendarFilters) =>
   useQuery({
-    queryKey: [...calKey, "sessions", filters],
-    queryFn: ({ signal }) => listCalendarSessions(filters, signal),
+    queryKey: [...calKey, "events", filters],
+    queryFn: ({ signal }) => listCalendarEvents(filters, signal),
     enabled: !!filters.clinic,
   });
 
@@ -76,6 +103,14 @@ export const useCalendarTherapists = (clinicId: string) =>
     queryFn: ({ signal }) => listCalendarTherapists(clinicId, signal),
     enabled: !!clinicId,
   });
+
+export function useCreateAppointment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateAppointmentInput) => createAppointment(data),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: calKey }),
+  });
+}
 
 export function useReschedule() {
   const qc = useQueryClient();
