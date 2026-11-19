@@ -186,6 +186,12 @@ export function calendarRoutes(pool: pg.Pool) {
     if (start_time >= end_time) return c.json({ error: "invalid_time_range" }, 400);
 
     const result = await run(c, async (db) => {
+      // Check if appointment table exists (migration 0028)
+      const hasTable = await db.query(
+        `SELECT 1 FROM information_schema.tables WHERE table_schema = 'app' AND table_name = 'appointment'`,
+      ).then((r) => r.rowCount! > 0);
+      if (!hasTable) return { error: "not_available" as const };
+
       // Verify patient exists and get clinic
       const { rows } = await db.query(
         `SELECT clinic_id FROM app.patient WHERE id = $1 AND deleted_at IS NULL`,
@@ -202,7 +208,10 @@ export function calendarRoutes(pool: pg.Pool) {
       return { id };
     });
 
-    if ("error" in result) return notFound(c);
+    if ("error" in result) {
+      if (result.error === "not_available") return c.json({ error: "not_available", message: "Appointments feature is being deployed. Try again in a few minutes." }, 503);
+      return notFound(c);
+    }
     return c.json(result, 201);
   });
 
@@ -218,6 +227,11 @@ export function calendarRoutes(pool: pg.Pool) {
     const data = body.data;
 
     const result = await run(c, async (db) => {
+      const hasTable = await db.query(
+        `SELECT 1 FROM information_schema.tables WHERE table_schema = 'app' AND table_name = 'appointment'`,
+      ).then((r) => r.rowCount! > 0);
+      if (!hasTable) return { error: "not_available" as const };
+
       const sets: string[] = [];
       const vals: unknown[] = [id];
       if (data.title !== undefined) { vals.push(data.title); sets.push(`title = $${vals.length}`); }
@@ -235,7 +249,10 @@ export function calendarRoutes(pool: pg.Pool) {
       return rowCount ? { ok: true } : { error: "not_found" as const };
     });
 
-    if ("error" in result) return notFound(c);
+    if ("error" in result) {
+      if (result.error === "not_available") return c.json({ error: "not_available", message: "Appointments feature is being deployed." }, 503);
+      return notFound(c);
+    }
     return c.json(result);
   });
 

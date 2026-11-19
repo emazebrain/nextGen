@@ -63,6 +63,21 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
 
   app.get("/health", (c) => c.json({ status: "ok", cell: info.cell, version: info.version }));
 
+  // Diagnostic: which migrations have been applied
+  if (deps) {
+    app.get("/health/migrations", async (c) => {
+      const client = await deps.pool.connect();
+      try {
+        const { rows } = await client.query<{ name: string; applied_at: string }>(
+          "SELECT name, applied_at::text FROM public.schema_migrations ORDER BY name",
+        );
+        return c.json({ migrations: rows });
+      } finally {
+        client.release();
+      }
+    });
+  }
+
   if (deps) {
     app.on(["GET", "POST"], "/api/auth/*", (c) => deps.auth.handler(c.req.raw));
 
