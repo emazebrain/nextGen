@@ -77,6 +77,22 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
       }
     });
 
+    app.get("/health/schema", async (c) => {
+      const client = await deps.pool.connect();
+      try {
+        const { rows } = await client.query(`
+          SELECT current_user AS connected_as,
+                 session_user AS session_user,
+                 (SELECT nspowner::regrole::text FROM pg_namespace WHERE nspname = 'app') AS app_schema_owner,
+                 has_schema_privilege(current_user, 'app', 'USAGE') AS has_usage,
+                 has_schema_privilege(current_user, 'app', 'CREATE') AS has_create
+        `);
+        return c.json(rows[0] ?? {});
+      } finally {
+        client.release();
+      }
+    });
+
     app.post("/health/migrate", async (c) => {
       const pg = await import("pg");
       const { migrate } = await import("@emb/db");

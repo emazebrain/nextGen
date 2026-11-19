@@ -18,6 +18,44 @@ export async function migrate(client: pg.Client, dir = MIGRATIONS_DIR): Promise<
   const done = new Set(
     (await client.query<{ name: string }>("SELECT name FROM public.schema_migrations")).rows.map((r) => r.name),
   );
+  // Ensure the migration runner can access the app schema.
+  // On Supabase, the postgres role sometimes loses direct schema access after
+  // platform updates. We SET ROLE to the schema owner, grant access to the
+  // connected user, then reset.
+  try {
+    await client.query(`
+      DO $$
+      DECLARE
+        v_owner text;
+        v_me    text := current_user;
+      BEGIN
+        SELECT nspowner::regrole::text INTO v_owner
+          FROM pg_namespace WHERE nspname = 'app';
+        IF v_owner IS NULL THEN RETURN; END IF;
+        IF v_owner = v_me THEN RETURN; END IF;
+        -- Become the schema owner to grant access
+        BEGIN
+          EXECUTE format('SET LOCAL ROLE %I', v_owner);
+          EXECUTE format('GRANT ALL ON SCHEMA app TO %I', v_me);
+          EXECUTE format('GRANT ALL ON ALL TABLES IN SCHEMA app TO %I', v_me);
+          EXECUTE format('GRANT ALL ON ALL FUNCTIONS IN SCHEMA app TO %I', v_me);
+          EXECUTE format('GRANT ALL ON ALL SEQUENCES IN SCHEMA app TO %I', v_me);
+          RESET ROLE;
+        EXCEPTION WHEN OTHERS THEN
+          RESET ROLE;
+          -- Last resort: try direct grant
+          BEGIN
+            EXECUTE format('GRANT ALL ON SCHEMA app TO %I', v_me);
+          EXCEPTION WHEN OTHERS THEN
+            RAISE NOTICE 'migrate: cannot grant schema app to %: %', v_me, SQLERRM;
+          END;
+        END;
+      END $$;
+    `);
+  } catch {
+    // Best-effort; if we can't grant, the migration will fail with a clear error
+  }
+
   const files = (await readdir(dir)).filter((f) => f.endsWith(".sql")).sort();
   const applied: string[] = [];
   for (const file of files) {
