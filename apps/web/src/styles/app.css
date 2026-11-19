@@ -1844,6 +1844,70 @@ a.gamecard:hover {
   max-inline-size: 40rem;
 }
 
+/* ---- Org admin dashboard */
+.manage-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-block-end: var(--space-5);
+}
+.manage-nav__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  text-decoration: none;
+  font-size: var(--text-sm);
+  transition: border-color 0.1s, background 0.1s;
+}
+.manage-nav__item:hover {
+  border-color: var(--accent);
+  background: var(--surface-hover);
+}
+.manage-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-3);
+  margin-block-end: var(--space-5);
+}
+.manage-stat {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4) !important;
+}
+.manage-stat__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 44px;
+  block-size: 44px;
+  border-radius: var(--radius-full);
+  background: var(--accent-subtle, #e8f0fe);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.manage-stat__body {
+  display: flex;
+  flex-direction: column;
+}
+.manage-stat__value {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  line-height: 1;
+}
+.manage-stat__label {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+.manage-stat__sub {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
 /* ------------------------------------------------------------ Parent Portal */
 .parent-shell {
   display: flex;

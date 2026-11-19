@@ -90,6 +90,64 @@ export function orgAdminRoutes(pool: pg.Pool, auth: Auth, mailer: Mailer, public
     return c.json(result);
   });
 
+  // ── Dashboard stats ────────────────────────────────────────────────
+
+  r.get("/stats", async (c) => {
+    const orgId = c.get("orgId");
+    const stats = await run(c, async (db) => {
+      const [clinics, staff, patients, sessions, appointments] = await Promise.all([
+        db.query<{ total: number; active: number }>(
+          `SELECT count(*)::int AS total,
+                  count(*) FILTER (WHERE status = 'active')::int AS active
+             FROM app.clinic WHERE organization_id = $1 AND deleted_at IS NULL`,
+          [orgId],
+        ),
+        db.query<{ total: number; active: number; invited: number }>(
+          `SELECT count(DISTINCT m.user_id)::int AS total,
+                  count(DISTINCT m.user_id) FILTER (WHERE u.status = 'active')::int AS active,
+                  count(DISTINCT m.user_id) FILTER (WHERE u.status = 'invited')::int AS invited
+             FROM app.membership m
+             JOIN app.app_user u ON u.id = m.user_id AND u.deleted_at IS NULL
+            WHERE m.organization_id = $1 AND m.status = 'active'
+              AND m.role IN ('therapist', 'assistant', 'clinic_manager')`,
+          [orgId],
+        ),
+        db.query<{ total: number; active: number; pending: number }>(
+          `SELECT count(*)::int AS total,
+                  count(*) FILTER (WHERE p.status = 'active')::int AS active,
+                  count(*) FILTER (WHERE p.status = 'pending_consent')::int AS pending
+             FROM app.patient p
+             JOIN app.clinic c ON c.id = p.clinic_id AND c.organization_id = $1
+            WHERE p.deleted_at IS NULL`,
+          [orgId],
+        ),
+        db.query<{ upcoming: number; completed_this_week: number }>(
+          `SELECT count(*) FILTER (WHERE ps.status IN ('planned', 'in_progress') AND ps.planned_date >= current_date)::int AS upcoming,
+                  count(*) FILTER (WHERE ps.status = 'done' AND ps.completed_at >= date_trunc('week', current_date))::int AS completed_this_week
+             FROM app.planned_session ps
+             JOIN app.clinic c ON c.id = ps.clinic_id AND c.organization_id = $1`,
+          [orgId],
+        ),
+        db.query<{ upcoming: number }>(
+          `SELECT count(*) FILTER (WHERE ap.status = 'scheduled' AND ap.date >= current_date)::int AS upcoming
+             FROM app.appointment ap
+             JOIN app.clinic c ON c.id = ap.clinic_id AND c.organization_id = $1`,
+          [orgId],
+        ),
+      ]);
+      return {
+        clinics: clinics.rows[0] ?? { total: 0, active: 0 },
+        staff: staff.rows[0] ?? { total: 0, active: 0, invited: 0 },
+        patients: patients.rows[0] ?? { total: 0, active: 0, pending: 0 },
+        sessions: {
+          upcoming: (sessions.rows[0]?.upcoming ?? 0) + (appointments.rows[0]?.upcoming ?? 0),
+          completed_this_week: sessions.rows[0]?.completed_this_week ?? 0,
+        },
+      };
+    });
+    return c.json(stats);
+  });
+
   // ── Clinics ────────────────────────────────────────────────────────
 
   r.get("/clinics", async (c) => {

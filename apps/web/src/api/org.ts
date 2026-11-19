@@ -81,10 +81,20 @@ export interface CreateOrgPatientInput {
   allow_duplicate?: boolean;
 }
 
+export interface OrgStats {
+  clinics: { total: number; active: number };
+  staff: { total: number; active: number; invited: number };
+  patients: { total: number; active: number; pending: number };
+  sessions: { upcoming: number; completed_this_week: number };
+}
+
 const enc = encodeURIComponent;
 
 export const getOrgOverview = (signal?: AbortSignal) =>
   apiGet<OrgOverview>("/v1/org", signal ? { signal } : {});
+
+export const getOrgStats = (signal?: AbortSignal) =>
+  apiGet<OrgStats>("/v1/org/stats", signal ? { signal } : {});
 
 export const listOrgClinics = (signal?: AbortSignal) =>
   apiGet<{ clinics: OrgClinic[] }>("/v1/org/clinics", signal ? { signal } : {}).then((r) => r.clinics);
@@ -126,6 +136,9 @@ const orgKey = ["org"] as const;
 
 export const useOrgOverview = (enabled = true) =>
   useQuery({ queryKey: [...orgKey, "overview"], queryFn: ({ signal }) => getOrgOverview(signal), enabled });
+
+export const useOrgStats = () =>
+  useQuery({ queryKey: [...orgKey, "stats"], queryFn: ({ signal }) => getOrgStats(signal) });
 
 export const useOrgClinics = (enabled = true) =>
   useQuery({ queryKey: [...orgKey, "clinics"], queryFn: ({ signal }) => listOrgClinics(signal), enabled });
