@@ -44,6 +44,11 @@ import { ManageClinicFormPage } from "./routes/manage/clinic-form.tsx";
 import { ManageStaffFormPage } from "./routes/manage/staff-form.tsx";
 import { ManagePatientsPage } from "./routes/manage/patients.tsx";
 import { ManagePatientFormPage } from "./routes/manage/patient-form.tsx";
+import { ParentShell } from "./routes/parent/shell.tsx";
+import { ParentHomePage } from "./routes/parent/home.tsx";
+import { ParentProgressPage } from "./routes/parent/progress.tsx";
+import { ParentMessagesPage } from "./routes/parent/messages.tsx";
+import { ParentRegisterPage, ParentRegisterSuccessPage } from "./routes/parent/register.tsx";
 import { flush } from "./session/outbox.ts";
 
 /**
@@ -197,6 +202,17 @@ export const routes: RouteObject[] = [
   { path: "/setup-mfa", element: <SetupMfaPage /> },
   { path: "/offline", element: <OfflineSignInPage /> },
   { path: "/consent/:token", element: <PublicConsentPage /> },
+  { path: "/parent/register/:token", element: <ParentRegisterPage /> },
+  { path: "/parent/register/success", element: <ParentRegisterSuccessPage /> },
+  {
+    path: "/parent",
+    element: <ParentShell />,
+    children: [
+      { index: true, element: <ParentHomePage /> },
+      { path: "progress", element: <ParentProgressPage /> },
+      { path: "messages", element: <ParentMessagesPage /> },
+    ],
+  },
   {
     element: <RequireStaff bare />,
     children: [

@@ -136,6 +136,8 @@ export interface GuardianView {
   email: string | null;
   phone: string | null;
   preferred_locale: Locale;
+  /** True when the guardian has created a parent portal account. */
+  has_portal_account: boolean;
 }
 
 export interface ConsentState {

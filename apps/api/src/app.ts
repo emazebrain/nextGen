@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type pg from "pg";
 import type { Auth } from "./auth.ts";
-import { requireActiveUser, requireStaffSession, type Env } from "./context.ts";
+import { requireActiveUser, requireParentSession, requireStaffSession, type Env } from "./context.ts";
 import { meRoutes } from "./modules/me/routes.ts";
 import { patientRoutes } from "./modules/patients/routes.ts";
 import { clinicRoutes } from "./modules/clinics/routes.ts";
@@ -13,6 +13,8 @@ import { offlineRoutes } from "./modules/offline/routes.ts";
 import { adminRoutes } from "./modules/admin/routes.ts";
 import { orgAdminRoutes } from "./modules/org/routes.ts";
 import { publicConsentRoutes } from "./modules/consent/public-routes.ts";
+import { parentRoutes } from "./modules/parent/routes.ts";
+import { publicParentPortalRoutes } from "./modules/parent/public-routes.ts";
 import { deviceKey, type DeviceKey } from "./device-crypto.ts";
 import { localFileStore, type FileStore } from "./files.ts";
 import { createMailer, type Mailer } from "./email.ts";
@@ -78,12 +80,23 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
     v1.route("/org", orgAdminRoutes(deps.pool, deps.auth, mailer, deps.publicAppUrl));
     app.route("/v1", v1);
 
+    // Parent portal — authenticated but no MFA requirement (§5.10)
+    const parentV1 = new Hono<Env>();
+    parentV1.use("*", requireParentSession(deps.auth));
+    parentV1.route("/parent", parentRoutes(deps.pool));
+    app.route("/v1", parentV1);
+
     // Public consent endpoints — outside /v1 (no auth required).
     // Mounted at /api/consent so the Vercel proxy (/api/:path*) forwards them,
     // and also at /consent for backward-compat with any already-sent emails.
     const consentRouter = publicConsentRoutes(deps.pool);
     app.route("/api/consent", consentRouter);
     app.route("/consent", consentRouter);
+
+    // Public parent portal registration — outside /v1 (no auth required)
+    const portalRouter = publicParentPortalRoutes(deps.pool, deps.auth);
+    app.route("/api/parent-portal", portalRouter);
+    app.route("/parent-portal", portalRouter);
   }
 
   app.notFound((c) => {

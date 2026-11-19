@@ -190,6 +190,14 @@ export function useCancelConsentRequest(patientId: string) {
   });
 }
 
+export function useSendPortalInvite(patientId: string) {
+  const refresh = useRefresh(patientId);
+  return useMutation({
+    mutationFn: (guardianId: string) => apiSend<{ invite_id: string; token: string }>("POST", `/v1/patients/${patientId}/guardians/${guardianId}/portal-invite`),
+    onSuccess: () => refresh(),
+  });
+}
+
 // ---------------------------------------------------------------- protocols (slice 3)
 export type { AssignmentView, TemplateDetail, TemplateSummary, TodayItem };
 

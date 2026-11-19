@@ -64,6 +64,20 @@ export function requireStaffSession(auth: Auth): MiddlewareHandler<Env> {
 }
 
 /**
+ * Requires a signed-in guardian/parent user (kind = 'guardian').
+ * Parents do not need MFA (§5.10 — mobile-first, simplified onboarding).
+ */
+export function requireParentSession(auth: Auth): MiddlewareHandler<Env> {
+  return async (c, next) => {
+    const session = await auth.api.getSession({ headers: c.req.raw.headers });
+    if (!session) return c.json({ error: "unauthenticated" }, 401);
+    const user = session.user as SessionUser;
+    c.set("user", { id: user.id, email: user.email, name: user.name, twoFactorEnabled: user.twoFactorEnabled });
+    await next();
+  };
+}
+
+/**
  * Account status gate (system admin spec: anti-goals). A disabled account is refused everywhere. An invited one,
  * still on its temporary password, reaches only /me (to see its status and to activate) until it is replaced.
  */

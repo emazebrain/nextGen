@@ -66,6 +66,12 @@ export interface Mailer {
     to: string,
     resetUrl: string,
   ): Promise<boolean>;
+  sendPortalInvite(
+    to: string,
+    clinicName: string,
+    portalUrl: string,
+    locale: string,
+  ): Promise<boolean>;
 }
 
 const RESEND_API_URL = "https://api.resend.com/emails";
@@ -85,6 +91,10 @@ export function createMailer(env: MailerConfig): Mailer {
       },
       async sendPasswordReset() {
         console.warn("[email] RESEND_API_KEY not configured — password reset email not sent");
+        return false;
+      },
+      async sendPortalInvite() {
+        console.warn("[email] RESEND_API_KEY not configured — portal invite email not sent");
         return false;
       },
     };
@@ -180,6 +190,36 @@ export function createMailer(env: MailerConfig): Mailer {
         return true;
       } catch (err) {
         console.error("[email] Failed to send password reset:", err);
+        return false;
+      }
+    },
+
+    async sendPortalInvite(to, clinicName, portalUrl, _locale) {
+      try {
+        const res = await fetch(RESEND_API_URL, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from,
+            to: [to],
+            subject: "You have a new message",
+            text: portalInviteText(portalUrl),
+            html: portalInviteHtml(portalUrl),
+          }),
+        });
+        if (!res.ok) {
+          const body = await res.text();
+          console.error(`[email] Resend API error (${res.status}):`, body);
+          return false;
+        }
+        const data = await res.json();
+        console.log("[email] Portal invite sent via Resend, id:", (data as { id?: string }).id);
+        return true;
+      } catch (err) {
+        console.error("[email] Failed to send portal invite:", err);
         return false;
       }
     },
@@ -303,6 +343,44 @@ function passwordResetHtml(resetUrl: string): string {
   <p style="font-size:15px;line-height:1.5;color:#333">Click the button below to choose a new password:</p>
   <p style="text-align:center;margin:24px 0"><a href="${escapeHtml(resetUrl)}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-size:15px">Reset Password</a></p>
   <p style="font-size:13px;color:#666">This link expires in one hour. If you didn't request a password reset, you can safely ignore this email.</p>
+</td></tr>
+</table>
+</body>
+</html>`;
+}
+
+// ---------------------------------------------------------------------------
+// Portal invite email templates — NO patient data (§5.10, CLAUDE.md rule 7)
+// Subject is generic ("You have a new message") — no child names or diagnoses.
+// ---------------------------------------------------------------------------
+
+function portalInviteText(portalUrl: string): string {
+  return [
+    "Hello,",
+    "",
+    "You've been invited to join eMazeBrain's parent portal.",
+    "",
+    "Create your account to track your child's progress and communicate with their therapist:",
+    portalUrl,
+    "",
+    "If you did not expect this email, you can safely ignore it.",
+    "",
+    "— The eMazeBrain Team",
+  ].join("\n");
+}
+
+function portalInviteHtml(portalUrl: string): string {
+  return `<!DOCTYPE html>
+<html dir="ltr" lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f5f5f5">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;margin:32px auto;background:#ffffff;border-radius:8px;padding:32px">
+<tr><td>
+  <h1 style="font-size:20px;margin:0 0 16px">Join the Parent Portal</h1>
+  <p style="font-size:15px;line-height:1.5;color:#333">Hello,</p>
+  <p style="font-size:15px;line-height:1.5;color:#333">You've been invited to join eMazeBrain's parent portal, where you can track your child's progress and communicate with their therapist.</p>
+  <p style="text-align:center;margin:24px 0"><a href="${escapeHtml(portalUrl)}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-size:15px">Create Your Account</a></p>
+  <p style="font-size:13px;color:#666">If you did not expect this email, you can safely ignore it.</p>
 </td></tr>
 </table>
 </body>

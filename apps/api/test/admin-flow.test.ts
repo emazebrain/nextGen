@@ -30,6 +30,7 @@ beforeAll(async () => {
       },
       async sendConsentRequest() { return true; },
       async sendPasswordReset() { return true; },
+      async sendPortalInvite() { return true; },
     },
   });
   admin = (await platformAdmin(env)).api;

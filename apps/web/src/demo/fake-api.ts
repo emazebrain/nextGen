@@ -125,7 +125,7 @@ function seed(): Db {
     const id = uid(Date.now() - 400 * DAY + n * 1000);
     const g = syntheticGuardian(p, 1000 + n);
     const gid = uid(Date.now() - 400 * DAY + n * 1000 + 1);
-    db.guardians.push({ id: gid, full_name: g.full_name, email: null, phone: g.phone, preferred_locale: p.preferred_locale });
+    db.guardians.push({ id: gid, full_name: g.full_name, email: null, phone: g.phone, preferred_locale: p.preferred_locale, has_portal_account: false });
     db.patients.push({
       id,
       clinic_id: clinic,
@@ -391,7 +391,7 @@ function strip(s: StepInput & { id?: string; ordinal?: number }): StepInput {
 /** Ella Navon: a finished six-week protocol with 12 sessions, as in seed:dev. */
 function history(db: Db) {
   const gid = uid(Date.now() - 50 * DAY);
-  db.guardians.push({ id: gid, full_name: "Dan Navon", email: null, phone: "+972 50 000 0999", preferred_locale: "en" });
+  db.guardians.push({ id: gid, full_name: "Dan Navon", email: null, phone: "+972 50 000 0999", preferred_locale: "en", has_portal_account: false });
   const p: Patient = {
     id: uid(Date.now() - 50 * DAY),
     clinic_id: CLINIC_A,
@@ -747,7 +747,7 @@ async function handle(path: string, method: string, q: URLSearchParams, body: Re
     if (r2 === "guardians") {
       if (method === "POST" && !r3) {
         const gid = uid();
-        db.guardians.push({ id: gid, full_name: String(body.full_name), email: (body.email as string) || null, phone: (body.phone as string) || null, preferred_locale: (body.preferred_locale as Guardian["preferred_locale"]) ?? p.preferred_locale });
+        db.guardians.push({ id: gid, full_name: String(body.full_name), email: (body.email as string) || null, phone: (body.phone as string) || null, preferred_locale: (body.preferred_locale as Guardian["preferred_locale"]) ?? p.preferred_locale, has_portal_account: false });
         p.guardianIds.push(gid);
         p.legal[gid] = !!body.is_legal_guardian;
         p.relationship[gid] = (body.relationship as GuardianView["relationship"]) ?? "parent";

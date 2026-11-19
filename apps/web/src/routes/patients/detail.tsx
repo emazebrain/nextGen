@@ -5,7 +5,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link, Outlet, useLocation, useNavigate, useOutletContext, useParams } from "react-router";
 import { useIntl } from "react-intl";
-import { ArchiveRestore, ArrowLeft, Archive, Mail, MoreHorizontal, Pencil, Plus, RefreshCw, Route as RouteIcon, ShieldCheck, SearchX, UserRound, Unlink, X } from "lucide-react";
+import { ArchiveRestore, ArrowLeft, Archive, Mail, MoreHorizontal, Pencil, Plus, RefreshCw, Route as RouteIcon, Send, ShieldCheck, SearchX, UserRound, Unlink, X } from "lucide-react";
 import { guardianFields, CONSENT_PURPOSES, LOCALES, RELATIONSHIPS, type ConsentRequestView, type GuardianInput, type Locale, type Relationship } from "@emb/contracts";
 import {
   Alert,
@@ -23,7 +23,7 @@ import {
   TextField,
 } from "@emb/ui";
 import { ApiError } from "../../api/http.ts";
-import { useArchivePatient, useCancelConsentRequest, usePatient, useRemoveGuardian, useRequestConsent, useResendConsentRequest, useSaveGuardian, type PatientDetail } from "../../api/queries.ts";
+import { useArchivePatient, useCancelConsentRequest, usePatient, useRemoveGuardian, useRequestConsent, useResendConsentRequest, useSaveGuardian, useSendPortalInvite, type PatientDetail } from "../../api/queries.ts";
 import { useT, usePrefs, type MessageId } from "../../i18n/index.tsx";
 import { useClinic } from "../../lib/clinic.tsx";
 import { calendarDate } from "../../lib/format.ts";
@@ -265,6 +265,7 @@ export function PatientFamily() {
   const [showConsentForm, setShowConsentForm] = useState(false);
   const [cancellingReq, setCancellingReq] = useState<ConsentRequestView | null>(null);
   const remove = useRemoveGuardian(p.id);
+  const portalInvite = useSendPortalInvite(p.id);
   const resend = useResendConsentRequest(p.id);
   const cancelReq = useCancelConsentRequest(p.id);
   const consents = new Map(p.consents.map((c) => [c.purpose, c]));
@@ -322,6 +323,18 @@ export function PatientFamily() {
                   </div>
                   {!p.archived && editing === null && (
                     <div className="guardian__actions">
+                      {g.has_portal_account ? (
+                        <Chip tone="success">{t("guardian.portalRegistered")}</Chip>
+                      ) : g.email ? (
+                        <Button
+                          variant="ghost"
+                          icon={<Send size={18} aria-hidden="true" />}
+                          loading={portalInvite.isPending}
+                          onClick={() => void portalInvite.mutateAsync(g.id)}
+                        >
+                          {t("guardian.portalInvite")}
+                        </Button>
+                      ) : null}
                       <Button variant="ghost" icon={<Pencil size={18} aria-hidden="true" />} onClick={() => setEditing(g.id)} aria-label={t("family.editGuardian", { name: g.full_name })}>
                         {t("common.edit")}
                       </Button>

@@ -45,7 +45,8 @@ export async function loadPatient(db: pg.PoolClient, id: string): Promise<Patien
       [id],
     ),
     db.query(
-      `SELECT g.id, g.full_name, gp.relationship, gp.is_legal_guardian, g.email, g.phone, g.preferred_locale
+      `SELECT g.id, g.full_name, gp.relationship, gp.is_legal_guardian, g.email, g.phone, g.preferred_locale,
+              g.user_id IS NOT NULL AS has_portal_account
          FROM app.guardian_patient gp JOIN app.guardian g ON g.id = gp.guardian_id
         WHERE gp.patient_id = $1 AND g.deleted_at IS NULL
         ORDER BY gp.created_at`,
@@ -251,6 +252,66 @@ export function patientRoutes(pool: pg.Pool, mailer?: Mailer, publicAppUrl?: str
     if (!UUID.test(id) || !UUID.test(gid)) return notFound(c);
     const ok = await run(c, async (db) => (await db.query(`DELETE FROM app.guardian_patient WHERE guardian_id = $1 AND patient_id = $2`, [gid, id])).rowCount === 1);
     return ok ? c.json({ ok: true }) : notFound(c);
+  });
+
+  // ---- Portal invites (send a guardian a link to create a parent portal account)
+
+  r.post("/:id/guardians/:gid/portal-invite", async (c) => {
+    const { id, gid } = c.req.param();
+    if (!UUID.test(id) || !UUID.test(gid)) return notFound(c);
+    const result = await run(c, async (db) => {
+      // Verify the guardian is linked to this patient and has an email
+      const { rows } = await db.query(
+        `SELECT g.id, g.email, g.full_name, g.user_id, g.clinic_id, g.preferred_locale,
+                cl.name AS clinic_name
+           FROM app.guardian g
+           JOIN app.guardian_patient gp ON gp.guardian_id = g.id AND gp.patient_id = $1
+           JOIN app.clinic cl ON cl.id = g.clinic_id
+          WHERE g.id = $2 AND g.deleted_at IS NULL`,
+        [id, gid],
+      );
+      if (!rows[0]) return { error: "not_found" as const };
+      const guardian = rows[0];
+      if (guardian.user_id) return { error: "already_registered" as const };
+      if (!guardian.email) return { error: "no_email" as const };
+
+      // Cancel any existing pending invites for this guardian
+      await db.query(
+        `UPDATE app.portal_invite SET status = 'cancelled' WHERE guardian_id = $1 AND status = 'pending'`,
+        [gid],
+      );
+
+      // Create the invite
+      const inviteId = uuidv7();
+      const { rows: invites } = await db.query(
+        `INSERT INTO app.portal_invite (id, guardian_id, clinic_id, created_by)
+         VALUES ($1, $2, $3, app.current_user_id())
+         RETURNING token`,
+        [inviteId, gid, guardian.clinic_id],
+      );
+
+      return {
+        invite_id: inviteId,
+        token: invites[0].token,
+        guardian_email: guardian.email,
+        guardian_name: guardian.full_name,
+        clinic_name: guardian.clinic_name,
+      };
+    });
+
+    if ("error" in result) {
+      if (result.error === "not_found") return notFound(c);
+      if (result.error === "already_registered") return c.json({ error: "already_registered" }, 409);
+      if (result.error === "no_email") return c.json({ error: "no_email", message: "Guardian needs an email address for a portal invite" }, 422);
+    }
+
+    // Send the portal invite email
+    if (mailer && "token" in result) {
+      const portalUrl = `${publicAppUrl ?? "https://next-gen-cyan.vercel.app"}/parent/register/${result.token}`;
+      void mailer.sendPortalInvite(result.guardian_email, result.clinic_name, portalUrl, "he");
+    }
+
+    return c.json(result, 201);
   });
 
   // ---- Consent (append-only; the latest row per purpose is current)
