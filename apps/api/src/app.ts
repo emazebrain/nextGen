@@ -63,7 +63,7 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
 
   app.get("/health", (c) => c.json({ status: "ok", cell: info.cell, version: info.version }));
 
-  // Diagnostic: which migrations have been applied
+  // Diagnostic: which migrations have been applied, and try to run pending ones
   if (deps) {
     app.get("/health/migrations", async (c) => {
       const client = await deps.pool.connect();
@@ -74,6 +74,21 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
         return c.json({ migrations: rows });
       } finally {
         client.release();
+      }
+    });
+
+    app.post("/health/migrate", async (c) => {
+      const pg = await import("pg");
+      const { migrate } = await import("@emb/db");
+      const client = new pg.default.Client({ connectionString: process.env.DATABASE_URL });
+      await client.connect();
+      try {
+        const applied = await migrate(client);
+        return c.json({ ok: true, applied });
+      } catch (err) {
+        return c.json({ ok: false, error: String(err), message: (err as Error).message }, 500);
+      } finally {
+        await client.end();
       }
     });
   }
