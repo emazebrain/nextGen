@@ -15,7 +15,10 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = app, pg_t
       AND m.status = 'active'
   )
 $$;
-ALTER FUNCTION app.is_org_admin_of(uuid) OWNER TO emb_rls_helper;
+-- On Supabase, postgres cannot ALTER OWNER TO a BYPASSRLS role.
+-- The function works as SECURITY DEFINER owned by postgres, which has
+-- full access to the membership table it queries.
+-- ALTER FUNCTION app.is_org_admin_of(uuid) OWNER TO emb_rls_helper;
 
 -- ---------------------------------------------------------------- organization
 DROP POLICY IF EXISTS org_admin_read ON app.organization;
