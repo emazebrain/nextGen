@@ -2125,3 +2125,123 @@ a.gamecard:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* ------------------------------------------------------------ Calendar */
+.calendar-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-block-end: var(--space-4);
+}
+.calendar-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.calendar-date {
+  font-size: var(--text-base);
+  font-weight: 600;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+}
+.calendar-date:hover {
+  background: var(--surface-hover);
+}
+.calendar-filters {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.calendar-day {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.calendar-slot {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: var(--space-3);
+  align-items: start;
+  padding-block: var(--space-2);
+  border-block-start: 1px solid var(--border);
+}
+.calendar-slot__time {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding-block-start: var(--space-2);
+  text-align: end;
+}
+.calendar-slot__sessions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.calendar-session {
+  padding: var(--space-3) !important;
+}
+.calendar-session__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-block-end: var(--space-1);
+}
+.calendar-session__patient {
+  font-weight: 600;
+}
+.calendar-session__info {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-2);
+}
+.calendar-session__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+.calendar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: var(--space-4);
+}
+.calendar-dialog {
+  inline-size: min(480px, 100%);
+}
+.calendar-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-block-end: var(--space-2);
+}
+.calendar-dialog__header h3 {
+  margin: 0;
+}
+.calendar-dialog__shift {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.calendar-dialog__shift input {
+  margin: 0;
+}
+@media (max-width: 640px) {
+  .calendar-slot {
+    grid-template-columns: 1fr;
+  }
+  .calendar-slot__time {
+    text-align: start;
+  }
+}

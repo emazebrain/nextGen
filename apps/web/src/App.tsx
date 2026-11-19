@@ -50,6 +50,7 @@ import { ParentProgressPage } from "./routes/parent/progress.tsx";
 import { ParentMessagesPage } from "./routes/parent/messages.tsx";
 import { ParentRegisterPage, ParentRegisterSuccessPage } from "./routes/parent/register.tsx";
 import { MessagesPage } from "./routes/messages.tsx";
+import { CalendarPage } from "./routes/calendar.tsx";
 import { flush } from "./session/outbox.ts";
 
 /**
@@ -241,7 +242,7 @@ export const routes: RouteObject[] = [
         ],
       },
       { path: "/team", element: <TeamPage /> },
-      { path: "/calendar", element: <ComingSoonPage area="calendar" /> },
+      { path: "/calendar", element: <CalendarPage /> },
       { path: "/protocols", element: <ProtocolsPage /> },
       { path: "/protocols/new", element: <TemplateBuilderPage /> },
       { path: "/protocols/:id/edit", element: <TemplateBuilderPage /> },
