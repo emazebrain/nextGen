@@ -1122,5 +1122,9 @@
   "search.group.actions": "Quick actions",
   "search.group.pages": "Pages",
   "calendar.noClinic": "Select a clinic to view the calendar. System administrators can view calendars through the organization management area.",
-  "guardian.address": "Address"
+  "guardian.address": "Address",
+  "manage.staff.editFor": "Edit {name}",
+  "manage.staff.editTitle": "Edit {name}",
+  "manage.staff.editSuccess": "{name} updated successfully",
+  "manage.staff.nameLabel": "Full name"
 }

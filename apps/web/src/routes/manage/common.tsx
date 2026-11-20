@@ -1,8 +1,8 @@
 /** Shared pieces for the org-admin manage screens: the gate, status chips, and the staff list. */
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
-import { ArrowLeft, Building2, Send, UserRound } from "lucide-react";
-import { Alert, Avatar, Button, Card, Chip, ConfirmDialog, DataList, EmptyState, MazeLoader, type ChipTone, type Column, type Tone } from "@emb/ui";
+import { ArrowLeft, Building2, Pencil, Send, UserRound } from "lucide-react";
+import { Alert, Avatar, Button, Card, Chip, ConfirmDialog, DataList, EmptyState, MazeLoader, TextField, type ChipTone, type Column, type Tone } from "@emb/ui";
 import { patchOrgStaff, resendOrgInvite, useOrgMutation, type OrgStaff, type ClinicStatus, type UserStatus } from "../../api/org.ts";
 import { ApiError } from "../../api/http.ts";
 import { useMe } from "../../api/queries.ts";
@@ -103,7 +103,9 @@ export function StaffSection({
   const me = useMe();
   const resend = useOrgMutation(resendOrgInvite);
   const setStatus = useOrgMutation(({ id, status }: { id: string; status: "active" | "disabled" }) => patchOrgStaff(id, { status }));
+  const editName = useOrgMutation(({ id, full_name }: { id: string; full_name: string }) => patchOrgStaff(id, { full_name }));
   const [disabling, setDisabling] = useState<OrgStaff | null>(null);
+  const [editing, setEditing] = useState<OrgStaff | null>(null);
 
   const onResend = async (u: OrgStaff) => {
     const ok = await resend.mutateAsync(u.id).then(
@@ -154,6 +156,14 @@ export function StaffSection({
       header: t("manage.staff.actions"),
       cell: (u) => (
         <span className="admin-rowactions">
+          <Button
+            variant="ghost"
+            icon={<Pencil size={16} aria-hidden="true" />}
+            aria-label={t("manage.staff.editFor", { name: u.full_name })}
+            onClick={() => setEditing(u)}
+          >
+            {t("common.edit")}
+          </Button>
           {u.status === "invited" && (
             <Button
               variant="secondary"
@@ -216,6 +226,48 @@ export function StaffSection({
           {t("manage.staff.disableBody")}
         </ConfirmDialog>
       )}
+      {editing && (
+        <EditStaffDialog
+          staff={editing}
+          busy={editName.isPending}
+          onSave={async (newName) => {
+            try {
+              await editName.mutateAsync({ id: editing.id, full_name: newName });
+              onNotice({ tone: "success", text: t("manage.staff.editSuccess", { name: newName }) });
+              setEditing(null);
+            } catch (err) {
+              onNotice({ tone: "danger", text: t(saveError(err)) });
+            }
+          }}
+          onCancel={() => setEditing(null)}
+        />
+      )}
     </section>
+  );
+}
+
+function EditStaffDialog({ staff, busy, onSave, onCancel }: { staff: OrgStaff; busy: boolean; onSave: (name: string) => void; onCancel: () => void }) {
+  const t = useT();
+  const [name, setName] = useState(staff.full_name);
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    const trimmed = name.trim();
+    if (trimmed) onSave(trimmed);
+  };
+  return (
+    <ConfirmDialog
+      open
+      tone="primary"
+      title={t("manage.staff.editTitle", { name: staff.full_name })}
+      confirmLabel={t("common.save")}
+      cancelLabel={t("common.cancel")}
+      busy={busy}
+      onConfirm={() => { const trimmed = name.trim(); if (trimmed) onSave(trimmed); }}
+      onCancel={onCancel}
+    >
+      <form onSubmit={submit} noValidate>
+        <TextField label={t("manage.staff.nameLabel")} name="staff-name" autoComplete="off" value={name} onChange={(e) => setName(e.target.value)} />
+      </form>
+    </ConfirmDialog>
   );
 }

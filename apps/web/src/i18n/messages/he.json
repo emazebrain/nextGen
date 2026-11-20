@@ -1122,5 +1122,9 @@
   "search.group.actions": "פעולות מהירות",
   "search.group.pages": "דפים",
   "calendar.noClinic": "בחר מרפאה כדי לצפות בלוח השנה. מנהלי מערכת יכולים לצפות בלוחות שנה דרך אזור ניהול הארגון.",
-  "guardian.address": "כתובת"
+  "guardian.address": "כתובת",
+  "manage.staff.editFor": "עריכת {name}",
+  "manage.staff.editTitle": "עריכת {name}",
+  "manage.staff.editSuccess": "{name} עודכן בהצלחה",
+  "manage.staff.nameLabel": "שם מלא"
 }
