@@ -154,7 +154,9 @@ export function CalendarPage() {
         </div>
       </div>
 
-      {events.isPending ? (
+      {!clinicId ? (
+        <Alert tone="info">{t("calendar.noClinic")}</Alert>
+      ) : events.isPending ? (
         <MazeLoader label={t("common.loading")} />
       ) : view === "day" ? (
         <DayView events={events.data ?? []} date={date} isManager={clinic.isManager} onNewAppt={(h) => setNewApptSlot({ date, hour: h })} onEdit={setRescheduleTarget} />

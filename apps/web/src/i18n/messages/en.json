@@ -1120,5 +1120,6 @@
   "search.group.protocols": "Protocols",
   "search.group.staff": "Staff",
   "search.group.actions": "Quick actions",
-  "search.group.pages": "Pages"
+  "search.group.pages": "Pages",
+  "calendar.noClinic": "Select a clinic to view the calendar. System administrators can view calendars through the organization management area."
 }

@@ -1120,5 +1120,6 @@
   "search.group.protocols": "פרוטוקולים",
   "search.group.staff": "צוות",
   "search.group.actions": "פעולות מהירות",
-  "search.group.pages": "דפים"
+  "search.group.pages": "דפים",
+  "calendar.noClinic": "בחר מרפאה כדי לצפות בלוח השנה. מנהלי מערכת יכולים לצפות בלוחות שנה דרך אזור ניהול הארגון."
 }
