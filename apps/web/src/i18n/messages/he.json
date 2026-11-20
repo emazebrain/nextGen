@@ -1127,5 +1127,6 @@
   "manage.staff.editTitle": "עריכת {name}",
   "manage.staff.editSuccess": "{name} עודכן בהצלחה",
   "manage.staff.nameLabel": "שם מלא",
-  "shell.switchUser": "החלף משתמש"
+  "shell.switchUser": "החלף משתמש",
+  "today.viewCalendar": "צפה בלוח שנה"
 }

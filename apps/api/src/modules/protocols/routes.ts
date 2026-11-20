@@ -387,19 +387,41 @@ export function protocolRoutes(pool: pg.Pool) {
     const date = c.req.query("date");
     if (clinic !== undefined && !UUID.test(clinic)) return c.json({ error: "invalid_clinic" }, 400);
     if (date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return c.json({ error: "invalid_date" }, 400);
-    const { items, review_count } = await run(c, async (db) => ({
-      items: await todayItems(db, clinic ?? null, date ?? null, langOf(c)),
+    const { items, appointments, review_count } = await run(c, async (db) => {
+      const todayDate = date ?? new Date().toISOString().slice(0, 10);
+      // Protocol sessions
+      const sessionItems = await todayItems(db, clinic ?? null, date ?? null, langOf(c));
+
+      // Calendar appointments for today (if the table exists)
+      let appts: Array<{ id: string; title: string; notes: string; date: string; start_time: string | null; end_time: string | null; color: string; patient_given_name: string; patient_family_name: string; patient_id: string }> = [];
+      const hasApptTable = (await db.query(`SELECT 1 FROM information_schema.tables WHERE table_schema = 'app' AND table_name = 'appointment'`)).rows.length > 0;
+      if (hasApptTable) {
+        const hasColor = (await db.query(`SELECT 1 FROM information_schema.columns WHERE table_schema = 'app' AND table_name = 'appointment' AND column_name = 'color'`)).rows.length > 0;
+        const { rows } = await db.query(
+          `SELECT a.id, a.title, a.notes, to_char(a.date, 'YYYY-MM-DD') AS date, a.start_time::text, a.end_time::text,
+                  ${hasColor ? "a.color" : "'blue' AS color"},
+                  p.given_name AS patient_given_name, p.family_name AS patient_family_name, p.id AS patient_id
+             FROM app.appointment a
+             JOIN app.patient p ON p.id = a.patient_id AND p.deleted_at IS NULL
+            WHERE a.date = $1::date AND a.status = 'scheduled'
+              AND ($2::uuid IS NULL OR a.clinic_id = $2::uuid)
+            ORDER BY a.start_time NULLS LAST, p.family_name`,
+          [todayDate, clinic ?? null],
+        );
+        appts = rows;
+      }
+
       // Flagged results waiting for review that the caller may decide on (spec §7.4).
-      review_count: (
+      const reviewCount = (
         await db.query<{ n: number }>(
-          // The same set the patient's session history lists with Count it / Don't count it: valid game sessions.
-          // Flagged video views are kept too, but have no review screen yet, so they aren't counted here.
           `SELECT count(*) AS n FROM app.game_session_review r JOIN app.game_session g ON g.id = r.id
             WHERE r.review_reason IS NOT NULL AND r.decision IS NULL AND g.is_valid AND app.can_treat_patient(r.patient_id)`,
         )
-      ).rows[0]!.n,
-    }));
-    return c.json({ items, review_count: Number(review_count) });
+      ).rows[0]!.n;
+
+      return { items: sessionItems, appointments: appts, review_count: reviewCount };
+    });
+    return c.json({ items, appointments, review_count: Number(review_count) });
   });
 
   return r;

@@ -274,7 +274,9 @@ function NextUp() {
   const todayIso = new Date().toLocaleDateString("en-CA");
   if (today.isPending) return <MazeLoader label={t("common.loading")} />;
   if (today.isError) return <LoadError error={today.error} retry={() => void today.refetch()} />;
-  if (today.data.length === 0) {
+  const sessions = today.data.items;
+  const appointments = today.data.appointments;
+  if (sessions.length === 0 && appointments.length === 0) {
     return (
       <EmptyState icon={<CalendarDays size={28} aria-hidden="true" />} title={t("today.nextUp.empty")}>
         {t("today.nextUp.emptyBody")}
@@ -283,7 +285,8 @@ function NextUp() {
   }
   return (
     <ul className="nextup">
-      {today.data.map((it) => {
+      {/* Protocol sessions */}
+      {sessions.map((it) => {
         const gameName = (g: string) => (findGame(g) ? localText(findGame(g)!.manifest.name, locale) : g);
         const games = it.items ? it.items.map((i) => (i.kind === "video" ? `▶ ${i.title}` : gameName(i.game_id))) : [...new Set(it.games)].map(gameName);
         return (
@@ -308,6 +311,30 @@ function NextUp() {
                 <span aria-hidden="true">{t("run.startShort")}</span>
               </Link>
             )}
+          </li>
+        );
+      })}
+      {/* Calendar appointments */}
+      {appointments.map((appt) => {
+        const name = `${appt.patient_given_name} ${appt.patient_family_name}`;
+        const time = appt.start_time && appt.end_time
+          ? `${appt.start_time} – ${appt.end_time}`
+          : appt.start_time ?? "";
+        return (
+          <li key={appt.id} className="nextup__item">
+            <Avatar name={name} size={44} />
+            <div className="nextup__text">
+              <Link to={`/patients/${appt.patient_id}`} className="nextup__name">
+                <bdi>{name}</bdi>
+              </Link>
+              <p className="app-muted">
+                {time}{appt.title ? ` · ${appt.title}` : ""}
+              </p>
+              {appt.notes && <p className="nextup__games">{appt.notes}</p>}
+            </div>
+            <Link to="/calendar" className="emb-btn emb-btn--secondary nextup__start" aria-label={t("today.viewCalendar")}>
+              <CalendarDays size={18} aria-hidden="true" />
+            </Link>
           </li>
         );
       })}

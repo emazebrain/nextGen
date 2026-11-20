@@ -288,6 +288,24 @@ export function useReviewCount(clinicId: string | null): number {
   return useQuery({ queryKey: reviewCountKey(clinicId), queryFn: () => 0, enabled: false, initialData: 0 }).data;
 }
 
+export interface TodayAppointment {
+  id: string;
+  title: string;
+  notes: string;
+  date: string;
+  start_time: string | null;
+  end_time: string | null;
+  color: string;
+  patient_given_name: string;
+  patient_family_name: string;
+  patient_id: string;
+}
+
+interface TodayData {
+  items: TodayItem[];
+  appointments: TodayAppointment[];
+}
+
 export function useToday(clinicId: string | null) {
   const qc = useQueryClient();
   const { locale } = usePrefs();
@@ -299,11 +317,11 @@ export function useToday(clinicId: string | null) {
         space,
         `today:${clinicId}`,
         () =>
-          apiGet<{ items: TodayItem[]; review_count?: number }>(`/v1/today?lang=${locale}${clinicId ? `&clinic=${clinicId}` : ""}`, { signal }).then((r) => {
+          apiGet<{ items: TodayItem[]; appointments?: TodayAppointment[]; review_count?: number }>(`/v1/today?lang=${locale}${clinicId ? `&clinic=${clinicId}` : ""}`, { signal }).then((r) => {
             qc.setQueryData(reviewCountKey(clinicId), r.review_count ?? 0);
-            return r.items;
+            return { items: r.items, appointments: r.appointments ?? [] } as TodayData;
           }),
-        (b, done) => todayFromBundle(b, done),
+        (b, done) => ({ items: todayFromBundle(b, done), appointments: [] } as TodayData),
       ),
     retry,
   });
