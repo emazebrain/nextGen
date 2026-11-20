@@ -22,6 +22,7 @@ import {
   Film,
   Building2,
   Search,
+  UserRoundCog,
 } from "lucide-react";
 import { AppShell, Avatar, Disclosure, Logo, SelectField, type ShellNavItem } from "@emb/ui";
 import { authClient } from "../api/auth.ts";
@@ -206,6 +207,11 @@ export function ClinicShell({ me }: { me: Me }) {
                   <MenuLink to="/settings" onDone={close} icon={<SettingsIcon size={20} aria-hidden="true" />}>
                     {t("nav.settings")}
                   </MenuLink>
+                  <hr className="emb-menusep" />
+                  <button type="button" className="emb-menuitem" onClick={() => void signOut("signed_out")}>
+                    <UserRoundCog size={20} aria-hidden="true" />
+                    {t("shell.switchUser")}
+                  </button>
                   <button type="button" className="emb-menuitem" onClick={() => void signOut("signed_out")}>
                     <LogOut size={20} aria-hidden="true" className="emb-flip-rtl" />
                     {t("common.signOut")}

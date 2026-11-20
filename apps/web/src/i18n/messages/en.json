@@ -1126,5 +1126,6 @@
   "manage.staff.editFor": "Edit {name}",
   "manage.staff.editTitle": "Edit {name}",
   "manage.staff.editSuccess": "{name} updated successfully",
-  "manage.staff.nameLabel": "Full name"
+  "manage.staff.nameLabel": "Full name",
+  "shell.switchUser": "Switch user"
 }
