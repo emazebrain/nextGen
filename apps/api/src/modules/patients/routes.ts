@@ -45,7 +45,7 @@ export async function loadPatient(db: pg.PoolClient, id: string): Promise<Patien
       [id],
     ),
     db.query(
-      `SELECT g.id, g.full_name, gp.relationship, gp.is_legal_guardian, g.email, g.phone, g.preferred_locale,
+      `SELECT g.id, g.full_name, gp.relationship, gp.is_legal_guardian, g.email, g.phone, g.address, g.preferred_locale,
               g.user_id IS NOT NULL AS has_portal_account
          FROM app.guardian_patient gp JOIN app.guardian g ON g.id = gp.guardian_id
         WHERE gp.patient_id = $1 AND g.deleted_at IS NULL
@@ -214,9 +214,9 @@ export function patientRoutes(pool: pg.Pool, mailer?: Mailer, publicAppUrl?: str
       if (!rows[0]) return null;
       const gid = uuidv7();
       await db.query(
-        `INSERT INTO app.guardian (id, clinic_id, full_name, email, phone, preferred_locale, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [gid, rows[0].clinic_id, g.full_name, g.email || null, g.phone || null, g.preferred_locale, c.get("user").id],
+        `INSERT INTO app.guardian (id, clinic_id, full_name, email, phone, address, preferred_locale, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [gid, rows[0].clinic_id, g.full_name, g.email || null, g.phone || null, g.address || null, g.preferred_locale, c.get("user").id],
       );
       await db.query(
         `INSERT INTO app.guardian_patient (guardian_id, patient_id, relationship, is_legal_guardian) VALUES ($1,$2,$3,$4)`,
@@ -239,8 +239,8 @@ export function patientRoutes(pool: pg.Pool, mailer?: Mailer, publicAppUrl?: str
         [gid, id, g.relationship, g.is_legal_guardian],
       );
       if (link.rowCount === 0) return false;
-      await db.query(`UPDATE app.guardian SET full_name = $2, email = $3, phone = $4, preferred_locale = $5 WHERE id = $1`, [
-        gid, g.full_name, g.email || null, g.phone || null, g.preferred_locale,
+      await db.query(`UPDATE app.guardian SET full_name = $2, email = $3, phone = $4, address = $5, preferred_locale = $6 WHERE id = $1`, [
+        gid, g.full_name, g.email || null, g.phone || null, g.address || null, g.preferred_locale,
       ]);
       return true;
     });

@@ -74,7 +74,8 @@ export const guardianFields = z.object({
   relationship: z.enum(RELATIONSHIPS),
   is_legal_guardian: z.boolean(),
   email: email.nullable().optional(),
-  phone: phone.nullable().optional(),
+  phone: phone,
+  address: z.string().trim().max(500).nullable().optional(),
   preferred_locale: z.enum(LOCALES),
 });
 export type GuardianInput = z.infer<typeof guardianFields>;
@@ -135,6 +136,7 @@ export interface GuardianView {
   is_legal_guardian: boolean;
   email: string | null;
   phone: string | null;
+  address: string | null;
   preferred_locale: Locale;
   /** True when the guardian has created a parent portal account. */
   has_portal_account: boolean;

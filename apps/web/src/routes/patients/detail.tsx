@@ -320,6 +320,7 @@ export function PatientFamily() {
                         </>
                       )}
                     </p>
+                    {g.address && <p className="app-muted">{g.address}</p>}
                   </div>
                   {!p.archived && editing === null && (
                     <div className="guardian__actions">
@@ -486,6 +487,7 @@ function GuardianForm({ patientId, guardian, onDone }: { patientId: string; guar
     is_legal_guardian: guardian?.is_legal_guardian ?? true,
     phone: guardian?.phone ?? "",
     email: guardian?.email ?? "",
+    address: guardian?.address ?? "",
     preferred_locale: (guardian?.preferred_locale ?? locale) as Locale,
   });
   const [errors, setErrors] = useState<Partial<Record<string, MessageId>>>({});
@@ -496,7 +498,7 @@ function GuardianForm({ patientId, guardian, onDone }: { patientId: string; guar
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    const body: GuardianInput = { ...g, phone: g.phone.trim() || null, email: g.email.trim() || null };
+    const body: GuardianInput = { ...g, phone: g.phone.trim(), email: g.email.trim() || null, address: g.address.trim() || null };
     const parsed = guardianFields.safeParse(body);
     if (!parsed.success) {
       setErrors(issuesToErrors(parsed.error.issues) as Record<string, MessageId>);
@@ -531,9 +533,10 @@ function GuardianForm({ patientId, guardian, onDone }: { patientId: string; guar
         </SelectField>
       </div>
       <div className="pform__row">
-        <TextField label={t("guardian.phone")} name="phone" type="tel" inputMode="tel" autoComplete="off" dir="ltr" value={g.phone} onChange={(e) => set("phone", e.target.value)} error={errors.phone ? t(errors.phone) : undefined} />
+        <TextField label={t("guardian.phone")} name="phone" type="tel" inputMode="tel" autoComplete="off" dir="ltr" required value={g.phone} onChange={(e) => set("phone", e.target.value)} error={errors.phone ? t(errors.phone) : undefined} />
         <TextField label={t("guardian.email")} name="email" type="email" inputMode="email" autoComplete="off" dir="ltr" value={g.email} onChange={(e) => set("email", e.target.value)} error={errors.email ? t(errors.email) : undefined} />
       </div>
+      <TextField label={t("guardian.address")} name="address" autoComplete="off" value={g.address} onChange={(e) => set("address", e.target.value)} />
       <CheckboxField label={t("guardian.legal")} checked={g.is_legal_guardian} onChange={(e) => set("is_legal_guardian", e.target.checked)} />
       <div className="pform__actions">
         <Button variant="secondary" onClick={onDone}>
