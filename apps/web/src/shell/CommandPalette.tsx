@@ -6,6 +6,7 @@
  * Results grouped by category with keyboard navigation.
  */
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router";
 import {
   BarChart3,
@@ -134,7 +135,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     }
   }
 
-  return (
+  return createPortal(
     <div className="cmdpal-overlay" onClick={onClose} role="presentation">
       <div
         className="cmdpal"
@@ -236,7 +237,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
           </span>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
