@@ -1,0 +1,16 @@
+# Railway Nixpacks build configuration.
+# The API runs TypeScript directly (--experimental-strip-types) but
+# workspace packages (@emb/tones, @emb/session-rules, etc.) need their
+# dist/ built first. `pnpm build` runs turbo which cascades to all deps.
+
+[phases.setup]
+nixPkgs = ["nodejs_22"]
+
+[phases.install]
+cmds = ["npm i -g pnpm@10.28.0", "pnpm install --frozen-lockfile"]
+
+[phases.build]
+cmds = ["pnpm build"]
+
+[start]
+cmd = "node --experimental-strip-types apps/api/src/server.ts"
