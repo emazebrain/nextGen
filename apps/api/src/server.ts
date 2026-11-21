@@ -20,7 +20,7 @@ function required(name: string): string {
 }
 
 const port = Number(process.env.PORT ?? 8787);
-const pkgVersion = await import("../package.json", { with: { type: "json" } }).then((m) => (m.default as { version?: string }).version).catch(() => undefined);
+const pkgVersion = await import("node:fs").then((fs) => { try { return JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8")).version as string; } catch { return undefined; } });
 const info = { cell: process.env.CELL ?? "local", version: process.env.APP_VERSION ?? pkgVersion ?? "dev" };
 const databaseUrl = required("DATABASE_URL");
 const pool = new pg.Pool({ connectionString: databaseUrl, max: 10 });
