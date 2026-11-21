@@ -278,6 +278,22 @@ export function protocolRoutes(pool: pg.Pool) {
       if (upd.rowCount === 0) return null;
       await db.query(`DELETE FROM app.template_step WHERE template_id = $1`, [id]);
       await insertTemplateSteps(db, id, input.steps);
+
+      // Propagate tones_enabled to all active assignments based on this template.
+      // Match by ordinal position (steps are copied by ordinal at assignment time).
+      for (const [i, s] of input.steps.entries()) {
+        const tonesOn = "tones_enabled" in s && s.tones_enabled === true;
+        await db.query(
+          `UPDATE app.assignment_step SET tones_enabled = $1
+            WHERE ordinal = $2
+              AND assignment_id IN (
+                SELECT id FROM app.protocol_assignment
+                 WHERE template_id = $3 AND status = 'active'
+              )`,
+          [tonesOn, i + 1, id],
+        );
+      }
+
       return loadTemplate(db, id, langOf(c));
     });
     if (result && "issues" in result) return c.json({ error: "invalid", issues: result.issues }, 400);
