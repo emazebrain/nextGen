@@ -63,6 +63,7 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
   });
 
   app.get("/health", (c) => c.json({ status: "ok", cell: info.cell, version: info.version }));
+  app.get("/version", (c) => c.json({ version: info.version }));
 
   // Diagnostic: which migrations have been applied, and try to run pending ones
   if (deps) {

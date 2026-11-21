@@ -20,7 +20,8 @@ function required(name: string): string {
 }
 
 const port = Number(process.env.PORT ?? 8787);
-const info = { cell: process.env.CELL ?? "local", version: process.env.APP_VERSION ?? "dev" };
+const pkgVersion = await import("../package.json", { with: { type: "json" } }).then((m) => (m.default as { version?: string }).version).catch(() => undefined);
+const info = { cell: process.env.CELL ?? "local", version: process.env.APP_VERSION ?? pkgVersion ?? "dev" };
 const databaseUrl = required("DATABASE_URL");
 const pool = new pg.Pool({ connectionString: databaseUrl, max: 10 });
 const mailer = createMailer(process.env);

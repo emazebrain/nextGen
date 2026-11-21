@@ -2835,3 +2835,13 @@ a.gamecard:hover {
 @media (max-width: 480px) {
   .cmdpal-footer { display: none; }
 }
+
+/* ─── App footer ─── */
+.app-footer {
+  padding: var(--space-4) var(--space-4) var(--space-6);
+  text-align: center;
+  font-size: var(--text-12);
+  color: var(--text-secondary);
+  opacity: 0.6;
+  margin-block-start: auto;
+}

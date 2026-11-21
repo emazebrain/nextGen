@@ -24,7 +24,9 @@ import {
   Search,
   UserRoundCog,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { AppShell, Avatar, Disclosure, Logo, SelectField, type ShellNavItem } from "@emb/ui";
+import { apiGet } from "../api/http.ts";
 import { authClient } from "../api/auth.ts";
 import type { Me } from "../api/queries.ts";
 import { useT, type MessageId } from "../i18n/index.tsx";
@@ -225,6 +227,7 @@ export function ClinicShell({ me }: { me: Me }) {
     >
       <OfflineBanner />
       <Outlet />
+      <AppFooter />
       <CommandPalette open={paletteOpen} onClose={closePalette} />
     </AppShell>
   );
@@ -236,5 +239,19 @@ function MenuLink({ to, onDone, icon, children }: { to: string; onDone: () => vo
       {icon}
       {children}
     </Link>
+  );
+}
+
+function AppFooter() {
+  const version = useQuery({
+    queryKey: ["app-version"],
+    queryFn: () => apiGet<{ version: string }>("/version").then((r) => r.version),
+    staleTime: 60 * 60_000,
+    retry: false,
+  });
+  return (
+    <footer className="app-footer">
+      Powered by eMazeLabs{version.data ? ` | version: ${version.data}` : ""}
+    </footer>
   );
 }
