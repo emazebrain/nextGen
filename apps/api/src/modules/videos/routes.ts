@@ -157,11 +157,20 @@ export function videoRoutes(pool: pg.Pool, files: FileStore) {
     const version = vParam === undefined ? null : /^[1-9]\d{0,8}$/.test(vParam) ? Number(vParam) : -1;
     if (version === -1) return notFound(c);
     const file = await run(c, async (db) => {
+      if (version === null) {
+        const { rows } = await db.query<{ storage_key: string; mime: string; sha256: Buffer; bytes: string }>(
+          `SELECT f.storage_key, f.mime, f.sha256, f.bytes FROM app.video v JOIN app.file_object f ON f.id = v.file_id WHERE v.id = $1`,
+          [id],
+        );
+        return rows[0] ?? null;
+      }
+      // Try exact version first; fall back to the video's current file (metadata updates bump the version
+      // without re-uploading, so the file_object may still have the earlier video_version).
       const { rows } = await db.query<{ storage_key: string; mime: string; sha256: Buffer; bytes: string }>(
-        version === null
-          ? `SELECT f.storage_key, f.mime, f.sha256, f.bytes FROM app.video v JOIN app.file_object f ON f.id = v.file_id WHERE v.id = $1`
-          : `SELECT f.storage_key, f.mime, f.sha256, f.bytes FROM app.video v JOIN app.file_object f ON f.video_id = v.id AND f.video_version = $2 WHERE v.id = $1`,
-        version === null ? [id] : [id, version],
+        `SELECT f.storage_key, f.mime, f.sha256, f.bytes FROM app.video v JOIN app.file_object f
+            ON (f.video_id = v.id AND f.video_version = $2) OR f.id = v.file_id
+          WHERE v.id = $1 ORDER BY (f.video_version = $2)::int DESC LIMIT 1`,
+        [id, version],
       );
       return rows[0] ?? null;
     });
