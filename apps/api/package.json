@@ -14,6 +14,7 @@
     "@emb/db": "workspace:*",
     "@emb/game-sdk": "workspace:*",
     "@emb/session-rules": "workspace:*",
+    "@emb/tones": "workspace:*",
     "@hono/node-server": "^1.14.0",
     "better-auth": "1.7.7",
     "hono": "^4.7.0",

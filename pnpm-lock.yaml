@@ -26,6 +26,9 @@ importers:
       '@emb/session-rules':
         specifier: workspace:*
         version: link:../../packages/session-rules
+      '@emb/tones':
+        specifier: workspace:*
+        version: link:../../packages/tones
       '@hono/node-server':
         specifier: ^1.14.0
         version: 1.19.17(hono@4.13.13)
@@ -491,6 +494,15 @@ importers:
         version: 3.2.7(@types/node@22.20.5)(jsdom@26.1.0)(terser@5.51.2)(yaml@2.9.1)
 
   packages/session-rules:
+    devDependencies:
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.0
+        version: 3.2.7(@types/node@22.20.5)(jsdom@26.1.0)(terser@5.51.2)(yaml@2.9.1)
+
+  packages/tones:
     devDependencies:
       typescript:
         specifier: ^5.8.0

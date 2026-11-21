@@ -48,6 +48,8 @@ export const gameStepInput = z
      * Omitted (older apps) = keep the step's current region when the server can tell which step it is.
      */
     region_id: z.string().uuid().nullable().optional(),
+    /** Enable pulsed background tones during this step (tone frequency spec). */
+    tones_enabled: z.boolean().default(false),
   })
   .superRefine((s, ctx) => {
     // Only the fields the mode uses are set (§8.1), so a step can never be "timed" without a time limit.
@@ -60,7 +62,7 @@ export const gameStepInput = z
     if (!needLives && (s.lives !== null || s.lives_auto)) ctx.addIssue({ code: "custom", path: ["lives"], message: "no_lives_in_timed" });
   });
 /** A video between games (design doc §7: exactly one of game_id / video_id). It carries no game settings. */
-export const videoStepInput = z.object({ step_type: z.literal("video"), video_id: z.string().uuid() }).strict();
+export const videoStepInput = z.object({ step_type: z.literal("video"), video_id: z.string().uuid(), tones_enabled: z.boolean().default(false) }).strict();
 
 /** A protocol step: a game or a video. Steps without step_type (older apps) are games. */
 export const stepInput = z.preprocess(

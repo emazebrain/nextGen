@@ -59,6 +59,8 @@ export const updatePatient = z
     ...patientFields,
     /** Therapists may mark a patient inactive or discharged; "active" re-checks consent. */
     status: z.enum(["active", "inactive", "discharged"]),
+    /** Override the auto-computed tone age group for this patient (null = use DOB). */
+    tone_age_group: z.number().int().min(1).max(20).nullable(),
   })
   .partial();
 export type UpdatePatient = z.infer<typeof updatePatient>;

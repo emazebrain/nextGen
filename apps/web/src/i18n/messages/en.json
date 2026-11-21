@@ -1128,5 +1128,9 @@
   "manage.staff.editSuccess": "{name} updated successfully",
   "manage.staff.nameLabel": "Full name",
   "shell.switchUser": "Switch user",
-  "today.viewCalendar": "View calendar"
+  "today.viewCalendar": "View calendar",
+  "stepEditor.tones": "Background tones",
+  "stepEditor.tonesHelp": "Play pulsed audio tones during this game-based activity. Requires headphones.",
+  "step.tones": "Tones",
+  "run.headphonesRequired": "This session uses background tones. Please connect headphones before starting."
 }

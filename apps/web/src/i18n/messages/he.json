@@ -1128,5 +1128,9 @@
   "manage.staff.editSuccess": "{name} עודכן בהצלחה",
   "manage.staff.nameLabel": "שם מלא",
   "shell.switchUser": "החלף משתמש",
-  "today.viewCalendar": "צפה בלוח שנה"
+  "today.viewCalendar": "צפה בלוח שנה",
+  "stepEditor.tones": "צלילי רקע",
+  "stepEditor.tonesHelp": "השמעת צלילים פולסטיביים ברקע במהלך הפעילות. דורש אוזניות.",
+  "step.tones": "צלילים",
+  "run.headphonesRequired": "הפעלה זו משתמשת בצלילי רקע. אנא חברו אוזניות לפני ההתחלה."
 }

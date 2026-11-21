@@ -31,6 +31,7 @@ import { enqueueAndSend, enqueueViewAndSend, send, sendView, type SendResult, ty
 import { VideoStep, viewSummary } from "./VideoStep.tsx";
 import { launchFromPackage, type SessionPoint } from "./package.ts";
 import { preflight, type Preflight } from "./preflight.ts";
+import { TonePlayer } from "./TonePlayer.ts";
 import { useOptionalDevice } from "../device/session.tsx";
 import { hasVideo } from "../device/content.ts";
 import { markSessionDone } from "../device/bundle.ts";
@@ -297,6 +298,7 @@ function Runner({ pkg, space = null }: { pkg: LaunchPackage; space?: OpenSpace |
 function Handoff({ pkg, games, onStart }: { pkg: LaunchPackage; games: string[]; onStart: () => void }) {
   const t = useT();
   const [pinReady, setPinReady] = useState(hasPin);
+  const hasTones = pkg.steps.some((s) => s.tones);
   return (
     <Shell>
       <Card>
@@ -306,6 +308,7 @@ function Handoff({ pkg, games, onStart }: { pkg: LaunchPackage; games: string[];
             {t("run.handoff.title", { name: iso(pkg.patient.given_name) })}
           </h1>
           {pkg.patient.alert && <Alert tone="warning">{pkg.patient.alert}</Alert>}
+          {hasTones && <Alert tone="info">{t("run.headphonesRequired")}</Alert>}
           <ol className="run-games">
             {games.map((g, i) => (
               <li key={i}>{g}</li>
@@ -345,6 +348,16 @@ function PlayStep({ step, name, onResult, onDone }: { step: LaunchGameStep; name
   const sendRef = useRef<((m: HostToFrame) => void) | null>(null);
   const ending = useRef<"skip" | "end" | null>(null);
   const ended = useRef(false);
+  const tonePlayerRef = useRef<TonePlayer | null>(null);
+
+  // Start/stop tones with this step's lifecycle
+  useEffect(() => {
+    if (!step.tones) return;
+    const player = new TonePlayer(step.tones);
+    tonePlayerRef.current = player;
+    player.start(0.3);
+    return () => { player.stop(); tonePlayerRef.current = null; };
+  }, [step.tones]);
 
   const openControls = () => {
     sendRef.current?.({ type: "pause" });
