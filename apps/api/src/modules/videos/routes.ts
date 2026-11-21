@@ -98,6 +98,19 @@ export function videoRoutes(pool: pg.Pool, files: FileStore) {
     return c.json({ regions });
   });
 
+  /** Region IDs that have at least one published video — used to filter dropdowns so users don't pick empty combos. */
+  r.get("/video-region-ids", async (c) => {
+    const ids = await run(c, async (db) => {
+      const { rows } = await db.query<{ region_id: string }>(
+        `SELECT DISTINCT vr.region_id
+           FROM app.video_region vr
+           JOIN app.video v ON v.id = vr.video_id AND v.status = 'published'`,
+      );
+      return rows.map((r) => r.region_id);
+    });
+    return c.json({ ids });
+  });
+
   r.get("/videos", async (c) => {
     const lang = langOf(c);
     const region = c.req.query("region");

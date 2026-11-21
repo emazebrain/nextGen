@@ -131,8 +131,27 @@ export function RegionTagPicker({ tree, value, onChange }: { tree: RegionTree; v
   );
 }
 
-/** Narrow a list to one hemisphere, lobe or area. Returns the id of the most specific choice (or null). */
-export function RegionFilter({ tree, value, onChange }: { tree: RegionTree; value: RegionChoice; onChange: (c: RegionChoice) => void }) {
+/** Check whether a region or any of its descendants has a video. */
+function hasVideos(tree: RegionTree, regionId: string, videoRegionIds: Set<string> | undefined): boolean {
+  if (!videoRegionIds) return true; // No filter data → show everything
+  if (videoRegionIds.has(regionId)) return true;
+  // Check children (lobes under hemisphere, areas under lobe)
+  for (const child of tree.lobesOf(regionId)) {
+    if (videoRegionIds.has(child.id)) return true;
+    for (const area of tree.areasOf(child.id)) {
+      if (videoRegionIds.has(area.id)) return true;
+    }
+  }
+  // Check areas under a lobe
+  for (const area of tree.areasOf(regionId)) {
+    if (videoRegionIds.has(area.id)) return true;
+  }
+  return false;
+}
+
+/** Narrow a list to one hemisphere, lobe or area. Returns the id of the most specific choice (or null).
+ * When videoRegionIds is provided, only regions with at least one video are shown. */
+export function RegionFilter({ tree, value, onChange, videoRegionIds }: { tree: RegionTree; value: RegionChoice; onChange: (c: RegionChoice) => void; videoRegionIds?: Set<string> | undefined }) {
   const t = useT();
   const any = t("regions.any");
   const both = value?.kind === "both";
@@ -143,12 +162,16 @@ export function RegionFilter({ tree, value, onChange }: { tree: RegionTree; valu
   const sel = both ? bothSelection(tree, value.code) : { lobe: lobeNode?.id ?? "", area: leaf ? node.id : "" };
   // Lobes and areas to offer: the chosen hemisphere's by id, or the first hemisphere's by code when it's both.
   const lobeSource = both ? tree.hemispheres[0] : hemi;
-  const lobes = lobeSource ? tree.lobesOf(lobeSource.id) : [];
+  const allLobes = lobeSource ? tree.lobesOf(lobeSource.id) : [];
+  const lobes = videoRegionIds ? allLobes.filter((l) => hasVideos(tree, l.id, videoRegionIds)) : allLobes;
   const lobeOf = both ? lobes.find((l) => l.code === sel.lobe) : lobeNode;
-  const areas = lobeOf ? tree.areasOf(lobeOf.id) : [];
+  const allAreas = lobeOf ? tree.areasOf(lobeOf.id) : [];
+  const areas = videoRegionIds ? allAreas.filter((a) => videoRegionIds.has(a.id)) : allAreas;
   const key = (r: BrainRegion) => (both ? r.code : r.id);
   const pickLobe = (v: string) => (both ? onChange({ kind: "both", code: v || null }) : onChange(v ? { kind: "node", id: v } : hemi ? { kind: "node", id: hemi.id } : null));
   const pickArea = (v: string) => (both ? onChange({ kind: "both", code: v || sel.lobe || null }) : onChange(v ? { kind: "node", id: v } : lobeNode ? { kind: "node", id: lobeNode.id } : null));
+  // Filter hemispheres too — only show those with videos under them
+  const hemispheres = videoRegionIds ? tree.hemispheres.filter((h) => hasVideos(tree, h.id, videoRegionIds)) : tree.hemispheres;
   return (
     <div className="region-filter">
       <SelectField
@@ -157,7 +180,7 @@ export function RegionFilter({ tree, value, onChange }: { tree: RegionTree; valu
         onChange={(e) => onChange(e.target.value === "both" ? { kind: "both", code: null } : e.target.value ? { kind: "node", id: e.target.value } : null)}
       >
         <option value="">{any}</option>
-        {tree.hemispheres.map((h) => (
+        {hemispheres.map((h) => (
           <option key={h.id} value={h.id}>
             {h.label}
           </option>

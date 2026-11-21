@@ -3,7 +3,7 @@ import { useState } from "react";
 import { PlayCircle } from "lucide-react";
 import { Button, MazeLoader, TextField } from "@emb/ui";
 import type { VideoSummary } from "@emb/contracts";
-import { useBrainRegions, useVideos } from "../../api/queries.ts";
+import { useBrainRegions, useVideoRegionIds, useVideos } from "../../api/queries.ts";
 import { usePrefs, useT } from "../../i18n/index.tsx";
 import { RegionFilter, regionParams, useRegionTree, type RegionChoice } from "../admin/RegionPicker.tsx";
 import { formatDuration, VideoRegionChips, VideoSourceChip } from "../admin/videos.tsx";
@@ -16,13 +16,14 @@ export function VideoPicker({ onPick, onCancel }: { onPick: (v: VideoSummary) =>
   const [region, setRegion] = useState<RegionChoice>(null);
   const regions = useBrainRegions(locale);
   const tree = useRegionTree(regions.data);
+  const videoRegionIds = useVideoRegionIds();
   const videos = useVideos({ lang: locale, q, ...regionParams(region) });
   return (
     <div className="gamepick videopick" role="group" aria-label={t("videoPicker.title")}>
       <p className="emb-field__label">{t("videoPicker.title")}</p>
       <div className="videopick__filters">
         <TextField label={t("videoPicker.search")} type="search" value={q} onChange={(e) => setQ(e.target.value)} />
-        {regions.data && <RegionFilter tree={tree} value={region} onChange={setRegion} />}
+        {regions.data && <RegionFilter tree={tree} value={region} onChange={setRegion} videoRegionIds={videoRegionIds.data} />}
       </div>
       {videos.isPending ? (
         <MazeLoader label={t("common.loading")} />

@@ -490,6 +490,16 @@ export function useBrainRegions(lang: string) {
   });
 }
 
+/** Region IDs that have at least one published video — used to filter empty options from dropdowns. */
+export function useVideoRegionIds() {
+  return useQuery({
+    queryKey: ["video-region-ids"],
+    queryFn: ({ signal }) => apiGet<{ ids: string[] }>("/v1/video-region-ids", { signal }).then((r) => new Set(r.ids)),
+    retry,
+    staleTime: 10 * 60_000,
+  });
+}
+
 export interface VideoFilters {
   lang: string;
   q?: string;
