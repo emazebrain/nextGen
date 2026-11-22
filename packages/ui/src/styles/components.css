@@ -454,7 +454,8 @@
 
 /* ------------------------------------------------------------ Data list */
 .emb-datalist--table {
-  overflow-x: auto;
+  overflow: auto;
+  max-block-size: 480px;
   border: 1px solid var(--border-decorative);
   border-radius: var(--radius-card);
   background: var(--bg-surface);
@@ -465,6 +466,11 @@
   border-collapse: separate;
   border-spacing: 0;
 }
+.emb-table thead {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 1;
+}
 .emb-table thead th {
   padding: var(--space-3) var(--space-4);
   font-size: var(--text-14);
@@ -473,6 +479,7 @@
   text-align: start;
   border-block-end: 1px solid var(--border-decorative);
   white-space: nowrap;
+  background: var(--bg-surface);
 }
 .emb-table tbody th,
 .emb-table tbody td {
@@ -528,6 +535,8 @@
   padding: 0;
   display: grid;
   gap: var(--space-2);
+  max-block-size: 480px;
+  overflow-y: auto;
 }
 .emb-rowcard {
   position: relative;
