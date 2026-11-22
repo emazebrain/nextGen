@@ -2090,6 +2090,86 @@ a.gamecard:hover {
   flex-wrap: wrap;
 }
 
+.parent-kid {
+  display: grid;
+  gap: var(--space-3);
+}
+.parent-kid__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.parent-kid__name {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+.parent-kid__sessions {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.parent-stats-inline {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-block-end: var(--space-2);
+}
+
+.parent-protocols {
+  display: grid;
+  gap: var(--space-2);
+  margin-block-end: var(--space-2);
+}
+.parent-protocol-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.parent-calendar {
+  display: grid;
+  gap: var(--space-2);
+}
+.parent-calendar__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-decorative);
+  border-radius: var(--radius-control);
+}
+.parent-calendar__item--done {
+  opacity: 0.7;
+}
+.parent-calendar__date {
+  min-inline-size: 80px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.parent-calendar__date--overdue {
+  color: var(--status-serious);
+}
+.parent-calendar__details {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-inline-size: 0;
+}
+.parent-calendar__status {
+  flex-shrink: 0;
+}
+.parent-calendar__overdue {
+  color: var(--status-serious);
+  font-weight: 500;
+  font-size: var(--text-sm);
+}
+.parent-calendar__today {
+  color: var(--brand-primary);
+  font-weight: 500;
+  font-size: var(--text-sm);
+}
+
 /* ------------------------------------------------------------ Messaging */
 .messages-layout {
   display: grid;

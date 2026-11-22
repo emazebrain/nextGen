@@ -47,8 +47,8 @@ import { ManagePatientFormPage } from "./routes/manage/patient-form.tsx";
 import { ManageCalendarPage } from "./routes/manage/calendar.tsx";
 import { ParentShell } from "./routes/parent/shell.tsx";
 import { ParentHomePage } from "./routes/parent/home.tsx";
-import { ParentProgressPage } from "./routes/parent/progress.tsx";
-import { ParentMessagesPage } from "./routes/parent/messages.tsx";
+import { ParentCalendarPage } from "./routes/parent/calendar.tsx";
+import { ParentResultsPage } from "./routes/parent/results.tsx";
 import { ParentRegisterPage, ParentRegisterSuccessPage } from "./routes/parent/register.tsx";
 import { MessagesPage } from "./routes/messages.tsx";
 import { CalendarPage } from "./routes/calendar.tsx";
@@ -214,8 +214,8 @@ export const routes: RouteObject[] = [
     element: <ParentShell />,
     children: [
       { index: true, element: <ParentHomePage /> },
-      { path: "progress", element: <ParentProgressPage /> },
-      { path: "messages", element: <ParentMessagesPage /> },
+      { path: "calendar", element: <ParentCalendarPage /> },
+      { path: "results", element: <ParentResultsPage /> },
     ],
   },
   {

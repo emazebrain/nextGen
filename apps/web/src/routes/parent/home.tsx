@@ -1,25 +1,23 @@
-/** Parent home — today's session card, child overview (§5.10). */
+/** Parent kids page — list of children with upcoming sessions (§5.10). */
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useIntl } from "react-intl";
 import { Button, Card, Chip, EmptyState, MazeLoader, PageHeader } from "@emb/ui";
-import { CalendarDays, Play } from "lucide-react";
-import { useT } from "../../i18n/index.tsx";
+import { Play, Users } from "lucide-react";
+import { useT, type MessageId } from "../../i18n/index.tsx";
 import { useTitle } from "../../lib/title.ts";
 import { useParentContext } from "./shell.tsx";
 import { useChildSessions, useLaunchHomeSession, type HomePlannedSession } from "../../api/parent.ts";
-import type { MessageId } from "../../i18n/index.tsx";
 
 export function ParentHomePage() {
   const t = useT();
-  const intl = useIntl();
-  const { activeChild } = useParentContext();
-  useTitle(t("parent.home"));
+  const { children } = useParentContext();
+  useTitle(t("parent.kids"));
 
-  if (!activeChild) {
+  if (children.length === 0) {
     return (
       <div className="app-page">
-        <EmptyState icon={<CalendarDays size={32} aria-hidden="true" />} title={t("parent.noChildren")}>
+        <EmptyState icon={<Users size={32} aria-hidden="true" />} title={t("parent.noChildren")}>
           {t("parent.noChildrenHint")}
         </EmptyState>
       </div>
@@ -28,34 +26,15 @@ export function ParentHomePage() {
 
   return (
     <div className="app-page">
-      <PageHeader
-        title={t("parent.welcome", { name: activeChild.given_name })}
-        description={t("parent.homeIntro")}
-      />
-      <Card>
-        <div className="parent-child-card">
-          <h3 className="parent-child-card__name">
-            <bdi>{activeChild.given_name} {activeChild.family_name}</bdi>
-          </h3>
-          <dl className="parent-child-card__details">
-            <div className="parent-child-card__detail">
-              <dt>{t("parent.clinic")}</dt>
-              <dd><bdi>{activeChild.clinic_name}</bdi></dd>
-            </div>
-            <div className="parent-child-card__detail">
-              <dt>{t("parent.status")}</dt>
-              <dd>{t("patients.status", { status: activeChild.status })}</dd>
-            </div>
-          </dl>
-        </div>
-      </Card>
-
-      <SessionCards childId={activeChild.id} />
+      <PageHeader title={t("parent.kidsTitle")} description={t("parent.kidsIntro")} />
+      {children.map((child) => (
+        <ChildCard key={child.id} childId={child.id} name={`${child.given_name} ${child.family_name}`} clinicName={child.clinic_name} />
+      ))}
     </div>
   );
 }
 
-function SessionCards({ childId }: { childId: string }) {
+function ChildCard({ childId, name, clinicName }: { childId: string; name: string; clinicName: string }) {
   const t = useT();
   const intl = useIntl();
   const navigate = useNavigate();
@@ -63,53 +42,42 @@ function SessionCards({ childId }: { childId: string }) {
   const launch = useLaunchHomeSession(childId);
   const [launching, setLaunching] = useState<string | null>(null);
 
-  if (sessions.isPending) return <MazeLoader label={t("common.loading")} />;
-  if (sessions.isError) return null;
-
-  const { upcoming, recent } = sessions.data;
   const today = new Date().toISOString().slice(0, 10);
-  const date = (s: string) => intl.formatDate(new Date(s + "T00:00:00"), { day: "numeric", month: "short", year: "numeric" });
+  const date = (s: string) => intl.formatDate(new Date(s + "T00:00:00"), { day: "numeric", month: "short" });
 
   const handleLaunch = async (sessionId: string) => {
     setLaunching(sessionId);
     try {
       const result = await launch.mutateAsync(sessionId);
-      // Navigate to session runner with the launch package
       navigate(`/session/${sessionId}`, { state: { launch: result.launch, fromParent: true } });
     } catch {
       setLaunching(null);
     }
   };
 
-  if (upcoming.length === 0) {
-    return (
-      <Card>
-        <EmptyState icon={<CalendarDays size={32} aria-hidden="true" />} title={t("parent.noSession")}>
-          {t("parent.noSessionHint")}
-        </EmptyState>
-      </Card>
-    );
-  }
-
-  // Split into today/overdue and future
-  const todayOrOverdue = upcoming.filter((s) => s.planned_date <= today);
-  const future = upcoming.filter((s) => s.planned_date > today);
+  const upcoming = sessions.data?.upcoming ?? [];
+  const readySessions = upcoming.filter((s) => s.planned_date <= today);
+  const nextSession = upcoming.find((s) => s.planned_date > today);
 
   return (
-    <>
-      {todayOrOverdue.length > 0 && (
-        <Card as="section" labelledBy="parent-sessions-ready">
-          <h2 id="parent-sessions-ready" className="app-cardtitle">{t("parent.sessionsReady")}</h2>
-          <ul className="plainlist parent-sessions">
-            {todayOrOverdue.map((s) => (
-              <li key={s.id} className="parent-session">
+    <Card as="section">
+      <div className="parent-kid">
+        <div className="parent-kid__header">
+          <h2 className="parent-kid__name"><bdi>{name}</bdi></h2>
+          <span className="app-muted">{clinicName}</span>
+        </div>
+
+        {sessions.isPending && <MazeLoader label={t("common.loading")} />}
+
+        {readySessions.length > 0 && (
+          <div className="parent-kid__sessions">
+            {readySessions.map((s) => (
+              <div key={s.id} className="parent-session">
                 <div className="parent-session__info">
                   <span className="parent-session__name"><bdi>{s.assignment_name}</bdi></span>
                   <span className="parent-session__meta app-muted">
                     {t("parent.sessionMeta", { seq: s.seq, total: s.total ?? 0, week: s.week })}
-                    {s.planned_date < today && (
-                      <Chip tone="warning">{t("parent.overdue")}</Chip>
-                    )}
+                    {s.planned_date < today && <Chip tone="warning">{t("parent.overdue")}</Chip>}
                   </span>
                 </div>
                 <Button
@@ -119,52 +87,21 @@ function SessionCards({ childId }: { childId: string }) {
                 >
                   {t("parent.startSession")}
                 </Button>
-              </li>
+              </div>
             ))}
-          </ul>
-        </Card>
-      )}
+          </div>
+        )}
 
-      {future.length > 0 && (
-        <Card as="section" labelledBy="parent-sessions-upcoming">
-          <h2 id="parent-sessions-upcoming" className="app-cardtitle">{t("parent.upcomingSessions")}</h2>
-          <ul className="plainlist parent-sessions">
-            {future.map((s) => (
-              <li key={s.id} className="parent-session">
-                <div className="parent-session__info">
-                  <span className="parent-session__name"><bdi>{s.assignment_name}</bdi></span>
-                  <span className="parent-session__meta app-muted">
-                    {t("parent.sessionDate", { date: date(s.planned_date) })}
-                    {" · "}
-                    {t("parent.sessionMeta", { seq: s.seq, total: s.total ?? 0, week: s.week })}
-                  </span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
+        {readySessions.length === 0 && nextSession && (
+          <p className="app-muted">
+            {t("parent.nextSessionOn", { date: date(nextSession.planned_date) })}
+          </p>
+        )}
 
-      {recent.length > 0 && (
-        <Card as="section" labelledBy="parent-sessions-recent">
-          <h2 id="parent-sessions-recent" className="app-cardtitle">{t("parent.recentSessions")}</h2>
-          <ul className="plainlist parent-sessions">
-            {recent.map((s) => (
-              <li key={s.id} className="parent-session">
-                <div className="parent-session__info">
-                  <span className="parent-session__name"><bdi>{s.assignment_name}</bdi></span>
-                  <span className="parent-session__meta app-muted">
-                    {date(s.planned_date)}
-                    {" · "}
-                    {t("parent.sessionMeta", { seq: s.seq, total: s.total ?? 0, week: s.week })}
-                  </span>
-                </div>
-                <Chip tone="success">{t("parent.sessionDone")}</Chip>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
-    </>
+        {readySessions.length === 0 && !nextSession && !sessions.isPending && (
+          <p className="app-muted">{t("parent.noSessionHint")}</p>
+        )}
+      </div>
+    </Card>
   );
 }
