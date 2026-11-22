@@ -9,7 +9,7 @@
  * child is done, the PIN opens the therapist's summary.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useLocation, useParams } from "react-router";
 import { useIntl } from "react-intl";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, CircleCheck, CloudOff, Hand, Lock, Minus, Play, RotateCw, SkipForward, Square } from "lucide-react";
@@ -63,6 +63,7 @@ interface OfflineStart {
 export function SessionPage() {
   const t = useT();
   const { plannedSessionId = "" } = useParams();
+  const location = useLocation();
   const launch = useLaunch();
   const device = useOptionalDevice();
   const started = useRef(false);
@@ -70,9 +71,15 @@ export function SessionPage() {
   const [withoutMissing, setWithoutMissing] = useState(false);
   useTitle(t("run.title"));
 
+  // Parent portal flow: launch data arrives in route state (already launched via parent API)
+  const parentLaunch = (location.state as { launch?: LaunchPackage; fromParent?: boolean } | null)?.launch ?? null;
+  const isFromParent = !!(location.state as { fromParent?: boolean } | null)?.fromParent;
+
   useEffect(() => {
     if (started.current) return;
     started.current = true;
+    // If we already have the launch package from the parent portal, skip the therapist launch call
+    if (parentLaunch) return;
     launch.mutate(plannedSessionId, {
       // No connection: start from the package this device keeps for the session (offline devices spec §7.4).
       onError: (e) => {
@@ -127,6 +134,8 @@ export function SessionPage() {
       </Shell>
     );
   }
+  // Parent portal flow: use the pre-launched package
+  if (parentLaunch) return <Runner pkg={parentLaunch} fromParent />;
   if (!launch.data) return <MazeLoader label={t("common.loading")} />;
   return <Runner pkg={launch.data} />;
 }
@@ -173,10 +182,11 @@ function PreflightMissing({ missing, expired, onStartWithout }: { missing: Array
   );
 }
 
-function Runner({ pkg, space = null }: { pkg: LaunchPackage; space?: OpenSpace | null }) {
+function Runner({ pkg, space = null, fromParent = false }: { pkg: LaunchPackage; space?: OpenSpace | null; fromParent?: boolean }) {
   const t = useT();
   const qc = useQueryClient();
   const { locale } = usePrefs();
+  const backUrl = fromParent ? "/parent" : `/patients/${pkg.patient.id}`;
   const queue = pkg.steps.filter((s) => !s.done);
   const [phase, setPhase] = useState<Phase>(queue.length ? { k: "handoff" } : { k: "summary" });
   const [played, setPlayed] = useState<Played[]>([]);
@@ -271,7 +281,7 @@ function Runner({ pkg, space = null }: { pkg: LaunchPackage; space?: OpenSpace |
   const next = (i: number) => setPhase(i < queue.length ? { k: "between", i } : { k: "finished" });
 
   if (phase.k === "handoff") {
-    return <Handoff pkg={pkg} games={queue.map((s) => (s.kind === "video" ? `▶ ${stepName(s)}` : stepName(s)))} onStart={() => setPhase({ k: "play", i: 0 })} />;
+    return <Handoff pkg={pkg} games={queue.map((s) => (s.kind === "video" ? `▶ ${stepName(s)}` : stepName(s)))} onStart={() => setPhase({ k: "play", i: 0 })} backUrl={backUrl} />;
   }
   if (phase.k === "play") {
     const step = queue[phase.i]!;
@@ -309,14 +319,14 @@ function Runner({ pkg, space = null }: { pkg: LaunchPackage; space?: OpenSpace |
           <Alert tone="danger">{t("run.notStored")}</Alert>
         </div>
       )}
-      <Summary pkg={pkg} played={played} stepName={stepName} retry={retry} />
+      <Summary pkg={pkg} played={played} stepName={stepName} retry={retry} backUrl={backUrl} fromParent={fromParent} />
     </>
   );
 }
 
 // ------------------------------------------------------------------ hand-off
 
-function Handoff({ pkg, games, onStart }: { pkg: LaunchPackage; games: string[]; onStart: () => void }) {
+function Handoff({ pkg, games, onStart, backUrl }: { pkg: LaunchPackage; games: string[]; onStart: () => void; backUrl: string }) {
   const t = useT();
   const [pinReady, setPinReady] = useState(hasPin);
   const hasTones = !!pkg.tones;
@@ -342,7 +352,7 @@ function Handoff({ pkg, games, onStart }: { pkg: LaunchPackage; games: string[];
                 <Button size="lg" icon={<Play size={20} aria-hidden="true" />} onClick={onStart}>
                   {t("run.start")}
                 </Button>
-                <Link to={`/patients/${pkg.patient.id}`} className="emb-btn emb-btn--ghost">
+                <Link to={backUrl} className="emb-btn emb-btn--ghost">
                   {t("common.cancel")}
                 </Link>
               </div>
@@ -619,7 +629,7 @@ function Finished({ child, onUnlock }: { child: string; onUnlock: () => void }) 
 
 // ------------------------------------------------------------------ therapist summary
 
-function Summary({ pkg, played, stepName, retry }: { pkg: LaunchPackage; played: Played[]; stepName: (s: LaunchStep) => string; retry: () => void }) {
+function Summary({ pkg, played, stepName, retry, backUrl, fromParent = false }: { pkg: LaunchPackage; played: Played[]; stepName: (s: LaunchStep) => string; retry: () => void; backUrl: string; fromParent?: boolean }) {
   const t = useT();
   const intl = useIntl();
   const waiting = played.some((p) => p.send.state === "waiting");
@@ -669,8 +679,8 @@ function Summary({ pkg, played, stepName, retry }: { pkg: LaunchPackage; played:
               {t("run.summary.retry")}
             </Button>
           )}
-          <Link to={`/patients/${pkg.patient.id}`} className="emb-btn emb-btn--primary">
-            {t("run.summary.done", { name: iso(pkg.patient.given_name) })}
+          <Link to={backUrl} className="emb-btn emb-btn--primary">
+            {t(fromParent ? "run.summary.backHome" as MessageId : "run.summary.done", { name: iso(pkg.patient.given_name) })}
           </Link>
         </div>
       </div>

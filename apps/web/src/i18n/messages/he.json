@@ -510,6 +510,7 @@
   "run.summary.waiting": "חלק מהתוצאות שמורות במכשיר ועדיין לא הגיעו לשרת. הן יישלחו אוטומטית כשהחיבור יחזור.",
   "run.summary.retry": "לנסות לשלוח שוב",
   "run.summary.done": "חזרה ל{name}",
+  "run.summary.backHome": "חזרה לדף הבית",
   "run.send.sending": "שומרים…",
   "run.send.saved": "נשמר",
   "run.send.waiting": "ממתין לשליחה",

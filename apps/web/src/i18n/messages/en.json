@@ -510,6 +510,7 @@
   "run.summary.waiting": "Some results are saved on this device but haven't reached the server yet. They'll be sent automatically when the connection is back.",
   "run.summary.retry": "Try sending again",
   "run.summary.done": "Back to {name}",
+  "run.summary.backHome": "Back to home",
   "run.send.sending": "Saving…",
   "run.send.saved": "Saved",
   "run.send.waiting": "Waiting to send",
