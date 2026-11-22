@@ -1132,5 +1132,9 @@
   "stepEditor.tones": "Background tones",
   "stepEditor.tonesHelp": "Play pulsed audio tones during this game-based activity. Requires headphones.",
   "step.tones": "Tones",
-  "run.headphonesRequired": "This session uses background tones. Please connect headphones before starting."
+  "run.headphonesRequired": "This session uses background tones. Please connect headphones before starting.",
+  "patientForm.tones": "Background tones",
+  "patientForm.tonesHint": "Play pulsed audio tones during all sessions. Requires headphones.",
+  "patientForm.toneAgeGroup": "Tone age group",
+  "patientForm.toneAgeGroupAuto": "Automatic (from date of birth)"
 }

@@ -1132,5 +1132,9 @@
   "stepEditor.tones": "צלילי רקע",
   "stepEditor.tonesHelp": "השמעת צלילים פולסטיביים ברקע במהלך הפעילות. דורש אוזניות.",
   "step.tones": "צלילים",
-  "run.headphonesRequired": "הפעלה זו משתמשת בצלילי רקע. אנא חברו אוזניות לפני ההתחלה."
+  "run.headphonesRequired": "הפעלה זו משתמשת בצלילי רקע. אנא חברו אוזניות לפני ההתחלה.",
+  "patientForm.tones": "צלילי רקע",
+  "patientForm.tonesHint": "השמעת צלילים פולסטיביים ברקע במהלך כל ההפעלות. דורש אוזניות.",
+  "patientForm.toneAgeGroup": "קבוצת גיל לצלילים",
+  "patientForm.toneAgeGroupAuto": "אוטומטי (לפי תאריך לידה)"
 }

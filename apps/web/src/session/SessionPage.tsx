@@ -182,6 +182,27 @@ function Runner({ pkg, space = null }: { pkg: LaunchPackage; space?: OpenSpace |
   const [played, setPlayed] = useState<Played[]>([]);
   // A result couldn't be written to the device: it lives only on this screen until it's sent.
   const [notStored, setNotStored] = useState(false);
+
+  // Session-level tones: start when the session begins, stop when it ends.
+  const tonePlayerRef = useRef<TonePlayer | null>(null);
+  useEffect(() => {
+    if (!pkg.tones) return;
+    // Tones play from the moment the session starts (handoff screen shows headphones reminder)
+    // until the session ends (finished/summary). They play through all steps and breaks.
+    if (phase.k === "play" || phase.k === "between") {
+      if (!tonePlayerRef.current) {
+        const player = new TonePlayer(pkg.tones);
+        tonePlayerRef.current = player;
+        player.start(0.3);
+      }
+    } else if (phase.k === "finished" || phase.k === "summary") {
+      tonePlayerRef.current?.stop();
+      tonePlayerRef.current = null;
+    }
+    return () => { /* cleanup on unmount */ };
+  }, [phase.k, pkg.tones]);
+  // Cleanup on unmount
+  useEffect(() => () => { tonePlayerRef.current?.stop(); tonePlayerRef.current = null; }, []);
   const gameName = (id: string) => (findGame(id) ? localText(findGame(id)!.manifest.name, locale) : id);
   const stepName = (s: LaunchStep) => (s.kind === "video" ? s.video.title : gameName(s.game_id));
 
@@ -298,7 +319,7 @@ function Runner({ pkg, space = null }: { pkg: LaunchPackage; space?: OpenSpace |
 function Handoff({ pkg, games, onStart }: { pkg: LaunchPackage; games: string[]; onStart: () => void }) {
   const t = useT();
   const [pinReady, setPinReady] = useState(hasPin);
-  const hasTones = pkg.steps.some((s) => s.tones);
+  const hasTones = !!pkg.tones;
   return (
     <Shell>
       <Card>
@@ -348,16 +369,6 @@ function PlayStep({ step, name, onResult, onDone }: { step: LaunchGameStep; name
   const sendRef = useRef<((m: HostToFrame) => void) | null>(null);
   const ending = useRef<"skip" | "end" | null>(null);
   const ended = useRef(false);
-  const tonePlayerRef = useRef<TonePlayer | null>(null);
-
-  // Start/stop tones with this step's lifecycle
-  useEffect(() => {
-    if (!step.tones) return;
-    const player = new TonePlayer(step.tones);
-    tonePlayerRef.current = player;
-    player.start(0.3);
-    return () => { player.stop(); tonePlayerRef.current = null; };
-  }, [step.tones]);
 
   const openControls = () => {
     sendRef.current?.({ type: "pause" });

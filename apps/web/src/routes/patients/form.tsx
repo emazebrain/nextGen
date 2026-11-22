@@ -7,6 +7,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { ArrowLeft } from "lucide-react";
 import { createPatient, LOCALES, SEXES, HANDEDNESS, type CreatePatient, type Locale } from "@emb/contracts";
+import { TONE_AGE_GROUPS } from "@emb/tones";
 import { Alert, Button, Card, CheckboxField, MazeLoader, PageHeader, SelectField, TextAreaField, TextField } from "@emb/ui";
 import { ApiError } from "../../api/http.ts";
 import { useCreatePatient, useMe, usePatient, useStaff, useUpdatePatient, type PatientDetail } from "../../api/queries.ts";
@@ -26,6 +27,8 @@ type Draft = {
   alert: string;
   colour_vision_deficiency: boolean;
   therapist_id: string;
+  tones_enabled: boolean;
+  tone_age_group: string;
 };
 type Errors = Partial<Record<keyof Draft | "form", MessageId>>;
 
@@ -76,6 +79,8 @@ function PatientFormPage({ existing }: { existing?: PatientDetail }) {
     alert: existing?.alert ?? "",
     colour_vision_deficiency: existing?.colour_vision_deficiency ?? false,
     therapist_id: "",
+    tones_enabled: (existing as unknown as { tones_enabled?: boolean })?.tones_enabled ?? false,
+    tone_age_group: String((existing as unknown as { tone_age_group?: number | null })?.tone_age_group ?? ""),
   }));
   const title = existing ? t("patientForm.editTitle") : t("patientForm.newTitle");
   useTitle(title);
@@ -118,7 +123,12 @@ function PatientFormPage({ existing }: { existing?: PatientDetail }) {
     try {
       if (existing) {
         const { clinic_id: _c, therapist_id: _t, allow_duplicate: _a, ...patch } = parsed.data;
-        await update.mutateAsync(patch);
+        const tonesPatch = {
+          ...patch,
+          tones_enabled: draft.tones_enabled,
+          tone_age_group: draft.tone_age_group ? Number(draft.tone_age_group) : null,
+        };
+        await update.mutateAsync(tonesPatch);
         navigate(`/patients/${existing.id}`, { state: { flash: "saved" } });
       } else {
         const { id } = await create.mutateAsync(parsed.data);
@@ -212,6 +222,15 @@ function PatientFormPage({ existing }: { existing?: PatientDetail }) {
               </div>
               <TextAreaField label={t("patientForm.alert")} hint={t("patientForm.alertHint")} name="alert" maxLength={500} rows={2} value={draft.alert} onChange={(e) => set("alert", e.target.value)} />
               <CheckboxField label={t("patientForm.cvd")} hint={t("patientForm.cvdHint")} checked={draft.colour_vision_deficiency} onChange={(e) => set("colour_vision_deficiency", e.target.checked)} />
+              <CheckboxField label={t("patientForm.tones")} hint={t("patientForm.tonesHint")} checked={draft.tones_enabled} onChange={(e) => set("tones_enabled", e.target.checked)} />
+              {draft.tones_enabled && (
+                <SelectField label={t("patientForm.toneAgeGroup")} name="tone_age_group" value={draft.tone_age_group} onChange={(e) => set("tone_age_group", e.target.value)}>
+                  <option value="">{t("patientForm.toneAgeGroupAuto")}</option>
+                  {TONE_AGE_GROUPS.map((g) => (
+                    <option key={g.id} value={String(g.id)}>{g.label}</option>
+                  ))}
+                </SelectField>
+              )}
             </div>
           </details>
           <div className="pform__actions">

@@ -61,6 +61,8 @@ export const updatePatient = z
     status: z.enum(["active", "inactive", "discharged"]),
     /** Override the auto-computed tone age group for this patient (null = use DOB). */
     tone_age_group: z.number().int().min(1).max(20).nullable(),
+    /** Enable pulsed background tones during all sessions for this patient. */
+    tones_enabled: z.boolean(),
   })
   .partial();
 export type UpdatePatient = z.infer<typeof updatePatient>;

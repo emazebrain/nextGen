@@ -125,7 +125,7 @@ export function buildParams(step: StepRow, patient: { preferred_locale: string; 
 
 
 export type LaunchRows = {
-  row: { id: string; seq: number; week: number; status: string; assignment_id: string; assignment_name: string; total: number; patient_id: string; given_name: string; family_name: string; preferred_locale: string; alert: string | null; colour_vision_deficiency: boolean; planned_date: string; date_of_birth: string | null; tone_age_group: number | null };
+  row: { id: string; seq: number; week: number; status: string; assignment_id: string; assignment_name: string; total: number; patient_id: string; given_name: string; family_name: string; preferred_locale: string; alert: string | null; colour_vision_deficiency: boolean; planned_date: string; date_of_birth: string | null; tone_age_group: number | null; tones_enabled: boolean };
   steps: Array<StepRow & { done: boolean }>;
   videos: Map<string, { id: string; version: number; source: "upload" | "youtube"; youtube_id: string | null; duration_s: number | null; titles: Record<string, string>; sha256: Buffer | null; has_file: boolean; bytes: number | null }>;
 };
@@ -136,7 +136,7 @@ export async function loadLaunchRows(db: pg.PoolClient, id: string): Promise<Lau
     `SELECT ps.id, ps.seq, ps.week, ps.status, to_char(ps.planned_date, 'YYYY-MM-DD') AS planned_date, a.id AS assignment_id, a.name AS assignment_name, a.status AS assignment_status,
             (SELECT count(*)::int FROM app.planned_session x WHERE x.assignment_id = a.id AND x.status <> 'cancelled') AS total,
             p.id AS patient_id, p.given_name, p.family_name, p.preferred_locale, p.alert, p.colour_vision_deficiency,
-            to_char(p.date_of_birth, 'YYYY-MM-DD') AS date_of_birth, p.tone_age_group,
+            to_char(p.date_of_birth, 'YYYY-MM-DD') AS date_of_birth, p.tone_age_group, p.tones_enabled,
             app.patient_can_play(p.id) AS can_play, app.can_treat_patient(p.id) AS can_treat
        FROM app.planned_session ps
        JOIN app.protocol_assignment a ON a.id = ps.assignment_id
@@ -196,6 +196,12 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
       const { row, steps, videos } = loaded;
       const regions = steps.some((s) => s.region_id) ? await loadRegionCatalog(db) : undefined;
       await db.query(`UPDATE app.planned_session SET status = 'in_progress' WHERE id = $1 AND status = 'planned'`, [id]);
+      // Session-level tones: computed from patient settings + first game step's hemisphere
+      const firstGameStep = steps.find((s) => s.step_type !== "video");
+      const sessionTones = row.tones_enabled && row.date_of_birth && firstGameStep
+        ? toneParamsForPatient(row.date_of_birth, firstGameStep.hemisphere as "left" | "right", row.tone_age_group) ?? undefined
+        : undefined;
+
       const pkg: LaunchPackage = {
         planned_session_id: id,
         seq: row.seq,
@@ -225,12 +231,9 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
           }
           const params = buildParams(s, row, randomInt(1, 2 ** 31), regions);
           const ticket = tickets.sign({ jti: crypto.randomUUID(), psid: id, asid: s.id, pid: row.patient_id, gid: s.game_id, ph: paramsHash(params), sub: me, ...(dev ? { dev } : {}) }, CLINIC_TICKET_TTL_S);
-          // Compute tone params when tones are enabled on this step
-          const tones = s.tones_enabled && row.date_of_birth
-            ? toneParamsForPatient(row.date_of_birth, s.hemisphere as "left" | "right", row.tone_age_group) ?? undefined
-            : undefined;
-          return { kind: "game", assignment_step_id: s.id, ordinal: s.ordinal, game_id: s.game_id, params, ticket, done: s.done, ...(tones ? { tones } : {}) };
+          return { kind: "game", assignment_step_id: s.id, ordinal: s.ordinal, game_id: s.game_id, params, ticket, done: s.done };
         }),
+        ...(sessionTones ? { tones: sessionTones } : {}),
       };
       return pkg;
     });

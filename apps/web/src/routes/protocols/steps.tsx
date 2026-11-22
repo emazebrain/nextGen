@@ -74,7 +74,6 @@ export function useStepSummary() {
           ? [t("step.paletteVaries")]
           : [t("step.palette", { h }), s.duration_s !== null && timerShown(s.timer_position) ? t("step.timer", { h }) : null])(cat ? runsAsHemisphere(cat, s) : s.hemisphere),
       s.monochrome ? t("step.monochrome") : null,
-      s.tones_enabled ? t("step.tones") : null,
     ]
       .filter(Boolean)
       .join(" · ");
@@ -319,12 +318,6 @@ export function StepEditor({ step: s, manifest: m, onChange }: { step: GameStepI
           onChange={(e) => set("monochrome", e.target.checked)}
         />
       )}
-      <CheckboxField
-        label={t("stepEditor.tones")}
-        hint={t("stepEditor.tonesHelp")}
-        checked={s.tones_enabled === true}
-        onChange={(e) => set("tones_enabled", e.target.checked)}
-      />
       {s.duration_s !== null && (
         <div className="stepedit__group">
           <Segmented<"shown" | "hidden">

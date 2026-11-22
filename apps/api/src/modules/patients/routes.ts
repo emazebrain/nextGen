@@ -30,6 +30,7 @@ export async function loadPatient(db: pg.PoolClient, id: string): Promise<Patien
   const { rows } = await db.query(
     `SELECT id, clinic_id, given_name, family_name, to_char(date_of_birth, 'YYYY-MM-DD') AS date_of_birth,
             preferred_locale, status, sex, handedness, alert, colour_vision_deficiency,
+            tones_enabled, tone_age_group,
             deleted_at IS NOT NULL AS archived, app.patient_can_play(id) AS can_play
        FROM app.patient WHERE id = $1`,
     [id],

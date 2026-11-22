@@ -59,7 +59,7 @@ export const resultUpload = z.object({
 });
 export type ResultUpload = z.infer<typeof resultUpload>;
 
-/** Pulsed audio tone parameters for a step — computed server-side, frequencies are IP. */
+/** Pulsed audio tone parameters — computed server-side, frequencies are IP. */
 export interface StepToneParams {
   leftCarrierHz: number;
   rightCarrierHz: number;
@@ -78,8 +78,6 @@ export interface LaunchGameStep {
   ticket: string;
   /** Already has a result in this session (picking up after an interruption). */
   done: boolean;
-  /** Tone params for this step (only when tones are enabled). */
-  tones?: StepToneParams | undefined;
 }
 
 /** A video between games: played by the app itself, no ticket (ADR 0018). */
@@ -102,8 +100,6 @@ export interface LaunchVideoStep {
   done: boolean;
   /** Offline packages only: the step's v2 ticket, sent with the view (spec 2026-11-07 offline devices). */
   ticket?: string;
-  /** Tone params for this step (only when tones are enabled). */
-  tones?: StepToneParams | undefined;
 }
 
 export type LaunchStep = LaunchGameStep | LaunchVideoStep;
@@ -141,6 +137,8 @@ export interface LaunchPackage {
   patient: { id: string; given_name: string; family_name: string; preferred_locale: string; alert: string | null };
   assignment: { id: string; name: string };
   steps: LaunchStep[];
+  /** Session-level tone params (when patient has tones enabled). Plays throughout the entire session. */
+  tones?: StepToneParams | undefined;
 }
 
 export interface ResultReceipt {

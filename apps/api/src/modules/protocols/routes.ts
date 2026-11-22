@@ -279,9 +279,8 @@ export function protocolRoutes(pool: pg.Pool) {
       await db.query(`DELETE FROM app.template_step WHERE template_id = $1`, [id]);
       await insertTemplateSteps(db, id, input.steps);
 
-      // Propagate template changes to active assignments.
-      // - Assignments with NO completed/in-progress sessions: fully rebuild steps.
-      // - Assignments already in progress: only update tones_enabled on existing steps.
+      // Propagate template changes to active assignments that haven't started yet.
+      // Assignments already in progress keep their steps to avoid clinical disruption.
       const { rows: activeAssignments } = await db.query<{ id: string; patient_id: string; has_progress: boolean }>(
         `SELECT a.id, a.patient_id,
                 EXISTS (SELECT 1 FROM app.planned_session ps WHERE ps.assignment_id = a.id AND ps.status IN ('completed', 'in_progress')) AS has_progress
@@ -298,15 +297,6 @@ export function protocolRoutes(pool: pg.Pool) {
               `INSERT INTO app.assignment_step (assignment_id, patient_id, ordinal, ${STEP_COLUMNS}, current_difficulty)
                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$8)`,
               [a.id, a.patient_id, i + 1, ...stepValues(s)],
-            );
-          }
-        } else {
-          // In progress: only update tones_enabled on matching ordinals.
-          for (const [i, s] of input.steps.entries()) {
-            const tonesOn = "tones_enabled" in s && s.tones_enabled === true;
-            await db.query(
-              `UPDATE app.assignment_step SET tones_enabled = $1 WHERE assignment_id = $2 AND ordinal = $3`,
-              [tonesOn, a.id, i + 1],
             );
           }
         }

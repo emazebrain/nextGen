@@ -114,6 +114,9 @@ importers:
       '@emb/session-rules':
         specifier: workspace:*
         version: link:../../packages/session-rules
+      '@emb/tones':
+        specifier: workspace:*
+        version: link:../../packages/tones
       '@emb/ui':
         specifier: workspace:*
         version: link:../../packages/ui
