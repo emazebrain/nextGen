@@ -2061,6 +2061,35 @@ a.gamecard:hover {
   margin: 0;
 }
 
+.parent-sessions {
+  display: grid;
+  gap: var(--space-2);
+}
+.parent-session {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border-decorative);
+  border-radius: var(--radius-control);
+  background: var(--bg-surface);
+}
+.parent-session__info {
+  display: grid;
+  gap: 2px;
+  min-inline-size: 0;
+}
+.parent-session__name {
+  font-weight: 500;
+}
+.parent-session__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
 /* ------------------------------------------------------------ Messaging */
 .messages-layout {
   display: grid;

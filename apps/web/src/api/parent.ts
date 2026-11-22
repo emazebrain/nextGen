@@ -1,6 +1,7 @@
 /** Client for /v1/parent (parent portal routes). */
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiSend } from "./http.ts";
+import type { GameSessionView, LaunchPackage } from "@emb/contracts";
 
 export interface ParentChild {
   id: string;
@@ -99,3 +100,56 @@ export const useChildProgress = (childId: string) =>
     queryFn: ({ signal }) => getChildProgress(childId, signal),
     enabled: !!childId,
   });
+
+// ---- Home session types & hooks
+
+export interface HomePlannedSession {
+  id: string;
+  seq: number;
+  week: number;
+  status: string;
+  planned_date: string;
+  location: string;
+  assignment_id: string;
+  assignment_name: string;
+  assignment_status?: string;
+  total?: number;
+  completed?: number;
+  completed_at?: string | null;
+}
+
+export interface ChildSessions {
+  upcoming: HomePlannedSession[];
+  recent: HomePlannedSession[];
+}
+
+export const getChildSessions = (childId: string, signal?: AbortSignal) =>
+  apiGet<ChildSessions>(`/v1/parent/children/${encodeURIComponent(childId)}/sessions`, signal ? { signal } : {});
+
+export const getChildHistory = (childId: string, signal?: AbortSignal) =>
+  apiGet<{ sessions: GameSessionView[] }>(`/v1/parent/children/${encodeURIComponent(childId)}/history`, signal ? { signal } : {});
+
+export const launchHomeSession = (childId: string, sessionId: string) =>
+  apiSend<{ launch: LaunchPackage }>("POST", `/v1/parent/children/${encodeURIComponent(childId)}/sessions/${encodeURIComponent(sessionId)}/launch`, {});
+
+export const useChildSessions = (childId: string) =>
+  useQuery({
+    queryKey: [...parentKey, "sessions", childId],
+    queryFn: ({ signal }) => getChildSessions(childId, signal),
+    enabled: !!childId,
+  });
+
+export const useChildHistory = (childId: string) =>
+  useQuery({
+    queryKey: [...parentKey, "history", childId],
+    queryFn: ({ signal }) => getChildHistory(childId, signal),
+    enabled: !!childId,
+  });
+
+export const useLaunchHomeSession = (childId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (sessionId: string) => launchHomeSession(childId, sessionId),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: [...parentKey, "sessions", childId] }); },
+  });
+};

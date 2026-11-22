@@ -136,7 +136,7 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
     // Parent portal — authenticated but no MFA requirement (§5.10)
     const parentV1 = new Hono<Env>();
     parentV1.use("*", requireParentSession(deps.auth));
-    parentV1.route("/parent", parentRoutes(deps.pool));
+    parentV1.route("/parent", parentRoutes(deps.pool, deps.tickets ?? ticketSigner()));
     parentV1.route("/parent/messages", parentMessagingRoutes(deps.pool));
     app.route("/v1", parentV1);
 

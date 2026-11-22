@@ -3,14 +3,39 @@
  * Routes under /v1/parent/* — authenticated as a guardian user (no MFA).
  * RLS ensures guardians see only their linked children.
  */
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import type pg from "pg";
+import { randomInt, createHash } from "node:crypto";
+import type { GameSessionView, LaunchPackage, LaunchStep } from "../../../../../packages/contracts/src/index.ts";
+import { toneParamsForPatient } from "@emb/tones";
+import { timerPositionFor, timerShown } from "../../../../../packages/session-rules/src/index.ts";
+import { ageBand, resolveRegion, seededIndex } from "../../../../../packages/contracts/src/index.ts";
 import { withUser, type Env } from "../../context.ts";
+import type { TicketSigner } from "../../tickets.ts";
+import { paramsHash } from "../../tickets.ts";
+import { buildParams, type StepRow } from "../sessions/routes.ts";
+import { GAME_MANIFESTS } from "../../games.ts";
+import { pick } from "../videos/routes.ts";
+import { loadRegionCatalog } from "../../regions.ts";
 
-export function parentRoutes(pool: pg.Pool) {
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const HOME_TICKET_TTL_S = 7 * 24 * 3600; // 7 days — generous for home use
+
+/** Verify this user is a guardian linked to this child. Returns true if linked. */
+async function isLinkedGuardian(db: pg.PoolClient, childId: string, userId: string): Promise<boolean> {
+  const { rows } = await db.query(
+    `SELECT 1 FROM app.guardian_patient gp
+       JOIN app.guardian g ON g.id = gp.guardian_id
+      WHERE gp.patient_id = $1 AND g.user_id = $2 AND g.deleted_at IS NULL`,
+    [childId, userId],
+  );
+  return rows.length > 0;
+}
+
+export function parentRoutes(pool: pg.Pool, tickets?: TicketSigner) {
   const app = new Hono<Env>();
 
-  const run = <T>(c: import("hono").Context<Env>, fn: (db: pg.PoolClient) => Promise<T>) =>
+  const run = <T>(c: Context<Env>, fn: (db: pg.PoolClient) => Promise<T>) =>
     withUser(pool, c.get("user").id, c.get("requestId"), fn);
 
   /**
@@ -194,6 +219,195 @@ export function parentRoutes(pool: pg.Pool) {
     });
 
     return c.json({ ok: true, message: body.type === "export" ? "Your data export request has been received. You will be contacted within 30 days." : "Your deletion request has been received. You will be contacted within 30 days." });
+  });
+
+  /**
+   * GET /v1/parent/children/:id/sessions — home sessions for one child.
+   * Returns all planned (including overdue) + in-progress home sessions, plus recent completed ones.
+   */
+  app.get("/children/:id/sessions", async (c) => {
+    const childId = c.req.param("id");
+    if (!UUID.test(childId)) return c.json({ error: "not_found" }, 404);
+
+    const data = await run(c, async (db) => {
+      if (!(await isLinkedGuardian(db, childId, c.get("user").id))) return null;
+
+      // Upcoming + overdue home sessions (planned or in_progress, location='home')
+      const { rows: upcoming } = await db.query(
+        `SELECT ps.id, ps.seq, ps.week, ps.status, to_char(ps.planned_date, 'YYYY-MM-DD') AS planned_date,
+                ps.location, a.id AS assignment_id, a.name AS assignment_name, a.status AS assignment_status,
+                (SELECT count(*)::int FROM app.planned_session x WHERE x.assignment_id = a.id AND x.status <> 'cancelled') AS total,
+                (SELECT count(*)::int FROM app.planned_session x WHERE x.assignment_id = a.id AND x.status = 'done') AS completed
+           FROM app.planned_session ps
+           JOIN app.protocol_assignment a ON a.id = ps.assignment_id
+          WHERE ps.patient_id = $1 AND ps.location = 'home'
+            AND ps.status IN ('planned', 'in_progress')
+            AND a.status = 'active'
+          ORDER BY ps.planned_date, ps.seq`,
+        [childId],
+      );
+
+      // Recent completed home sessions (last 10)
+      const { rows: recent } = await db.query(
+        `SELECT ps.id, ps.seq, ps.week, ps.status, to_char(ps.planned_date, 'YYYY-MM-DD') AS planned_date,
+                ps.location, ps.completed_at, a.id AS assignment_id, a.name AS assignment_name
+           FROM app.planned_session ps
+           JOIN app.protocol_assignment a ON a.id = ps.assignment_id
+          WHERE ps.patient_id = $1 AND ps.location = 'home' AND ps.status = 'done'
+          ORDER BY ps.completed_at DESC LIMIT 10`,
+        [childId],
+      );
+
+      return { upcoming, recent };
+    });
+
+    if (!data) return c.json({ error: "not_found" }, 404);
+    return c.json(data);
+  });
+
+  /**
+   * POST /v1/parent/children/:id/sessions/:sessionId/launch — launch a home session.
+   * Same result shape as the therapist launch, but restricted to home-location sessions
+   * for children linked to this guardian.
+   */
+  app.post("/children/:id/sessions/:sessionId/launch", async (c) => {
+    if (!tickets) return c.json({ error: "not_configured" }, 500);
+    const childId = c.req.param("id");
+    const sessionId = c.req.param("sessionId");
+    if (!UUID.test(childId) || !UUID.test(sessionId)) return c.json({ error: "not_found" }, 404);
+    const me = c.get("user").id;
+
+    const result = await run(c, async (db) => {
+      if (!(await isLinkedGuardian(db, childId, me))) return { error: "forbidden" as const };
+
+      // Load planned session — must belong to this child and be a home session
+      const { rows } = await db.query(
+        `SELECT ps.id, ps.seq, ps.week, ps.status, ps.location, to_char(ps.planned_date, 'YYYY-MM-DD') AS planned_date,
+                a.id AS assignment_id, a.name AS assignment_name, a.status AS assignment_status,
+                (SELECT count(*)::int FROM app.planned_session x WHERE x.assignment_id = a.id AND x.status <> 'cancelled') AS total,
+                p.id AS patient_id, p.given_name, p.family_name, p.preferred_locale, p.alert, p.colour_vision_deficiency,
+                to_char(p.date_of_birth, 'YYYY-MM-DD') AS date_of_birth, p.tone_age_group, p.tones_enabled,
+                app.patient_can_play(p.id) AS can_play
+           FROM app.planned_session ps
+           JOIN app.protocol_assignment a ON a.id = ps.assignment_id
+           JOIN app.patient p ON p.id = ps.patient_id
+          WHERE ps.id = $1 AND ps.patient_id = $2`,
+        [sessionId, childId],
+      );
+      const row = rows[0];
+      if (!row) return { error: "not_found" as const };
+      if (row.location !== "home") return { error: "not_home_session" as const };
+      if (!row.can_play) return { error: "consent_required" as const };
+      if (row.assignment_status !== "active") return { error: "protocol_not_active" as const };
+      if (row.status !== "planned" && row.status !== "in_progress") return { error: "session_closed" as const };
+
+      // Load steps
+      const steps = await db.query<StepRow & { done: boolean }>(
+        `SELECT s.id, s.ordinal, s.step_type, s.video_id, s.game_id, s.session_mode, s.duration_s, s.lives, s.lives_auto,
+                s.current_difficulty, s.hemisphere, s.timer_position, s.monochrome, s.practice, s.trial_window_ms,
+                s.game_params, s.sessions_completed, s.progression, s.region_id, s.tones_enabled,
+                CASE WHEN s.step_type = 'video'
+                     THEN EXISTS (SELECT 1 FROM app.video_view w WHERE w.planned_session_id = $2 AND w.assignment_step_id = s.id)
+                     ELSE EXISTS (SELECT 1 FROM app.game_session g WHERE g.planned_session_id = $2 AND g.assignment_step_id = s.id) END AS done
+           FROM app.assignment_step s WHERE s.assignment_id = $1 ORDER BY s.ordinal`,
+        [row.assignment_id, sessionId],
+      );
+
+      // Load videos
+      const videoIds = steps.rows.filter((s) => s.step_type === "video").map((s) => s.video_id!);
+      const videos = new Map<string, { id: string; version: number; source: "upload" | "youtube"; youtube_id: string | null; duration_s: number | null; titles: Record<string, string>; sha256: Buffer | null; has_file: boolean }>();
+      if (videoIds.length) {
+        const v = await db.query(
+          `SELECT v.id, v.version, v.source, v.youtube_id, v.duration_s, f.sha256, v.file_id IS NOT NULL AS has_file,
+                  COALESCE((SELECT jsonb_object_agg(i.locale, i.title) FROM app.video_i18n i WHERE i.video_id = v.id), '{}') AS titles
+             FROM app.video v LEFT JOIN app.file_object f ON f.id = v.file_id WHERE v.id = ANY($1::uuid[])`,
+          [videoIds],
+        );
+        for (const r of v.rows) videos.set(r.id, r);
+      }
+
+      const regions = steps.rows.some((s) => s.region_id) ? await loadRegionCatalog(db) : undefined;
+
+      // Mark as in_progress
+      await db.query(`UPDATE app.planned_session SET status = 'in_progress' WHERE id = $1 AND status = 'planned'`, [sessionId]);
+
+      // Session-level tones
+      const firstGameStep = steps.rows.find((s) => s.step_type !== "video");
+      const sessionTones = row.tones_enabled && row.date_of_birth && firstGameStep
+        ? toneParamsForPatient(row.date_of_birth, firstGameStep.hemisphere as "left" | "right", row.tone_age_group) ?? undefined
+        : undefined;
+
+      const pkg: LaunchPackage = {
+        planned_session_id: sessionId,
+        seq: row.seq,
+        week: row.week,
+        total: row.total,
+        patient: { id: row.patient_id, given_name: row.given_name, family_name: row.family_name, preferred_locale: row.preferred_locale, alert: row.alert },
+        assignment: { id: row.assignment_id, name: row.assignment_name },
+        steps: steps.rows.map((s): LaunchStep => {
+          if (s.step_type === "video") {
+            const v = videos.get(s.video_id!)!;
+            return {
+              kind: "video",
+              assignment_step_id: s.id,
+              ordinal: s.ordinal,
+              video: {
+                id: v.id, version: v.version, source: v.source, youtube_id: v.youtube_id, duration_s: v.duration_s,
+                title: pick(v.titles, row.preferred_locale) ?? "",
+                file_url: v.source === "upload" && v.has_file ? `/v1/videos/${v.id}/file?v=${v.version}` : null,
+                sha256: v.sha256 ? v.sha256.toString("hex") : null,
+              },
+              done: s.done,
+            };
+          }
+          const params = buildParams(s, row, randomInt(1, 2 ** 31), regions);
+          // For home sessions the ticket's sub is the guardian user, not a therapist
+          const ticket = tickets.sign({ jti: crypto.randomUUID(), psid: sessionId, asid: s.id, pid: row.patient_id, gid: s.game_id, ph: paramsHash(params), sub: me }, HOME_TICKET_TTL_S);
+          return { kind: "game", assignment_step_id: s.id, ordinal: s.ordinal, game_id: s.game_id, params, ticket, done: s.done };
+        }),
+        ...(sessionTones ? { tones: sessionTones } : {}),
+      };
+      return pkg;
+    });
+
+    if ("error" in result) {
+      const status = result.error === "not_found" ? 404 : result.error === "forbidden" ? 403 : result.error === "not_home_session" ? 403 : 409;
+      return c.json({ error: result.error }, status);
+    }
+    return c.json({ launch: result });
+  });
+
+  /**
+   * GET /v1/parent/children/:id/history — full session history for one child.
+   * Returns the same clinical detail as the therapist view (accuracy, RT, etc).
+   */
+  app.get("/children/:id/history", async (c) => {
+    const childId = c.req.param("id");
+    if (!UUID.test(childId)) return c.json({ error: "not_found" }, 404);
+
+    const sessions = await run(c, async (db) => {
+      if (!(await isLinkedGuardian(db, childId, c.get("user").id))) return null;
+
+      const { rows } = await db.query<GameSessionView>(
+        `SELECT g.id, g.game_id, g.status, g.session_mode, g.difficulty, g.hemisphere, g.started_at, g.ended_at, g.active_ms,
+                g.accuracy::float8 AS accuracy, g.rt_median_ms, g.trials_total, g.correct, g.errors, g.lives_lost, g.highest_level,
+                g.planned_session_id, ps.seq, g.metrics, COALESCE((g.config_echo->>'monochrome')::boolean, false) AS monochrome,
+                CASE WHEN g.config_echo ? 'region' THEN jsonb_build_object('path', g.config_echo->'region'->'path', 'sublobe', g.config_echo->'region'->'sublobe',
+                  'drawn', g.config_echo->'region'->'drawn', 'revision', g.config_echo->'region'->'revision') END AS region,
+                r.counts, CASE WHEN r.review_reason IS NULL THEN NULL ELSE json_build_object('reason', r.review_reason, 'decision', r.decision) END AS review,
+                a.id AS assignment_id, a.name AS assignment_name
+           FROM app.game_session g LEFT JOIN app.planned_session ps ON ps.id = g.planned_session_id
+           LEFT JOIN app.protocol_assignment a ON a.id = ps.assignment_id
+           JOIN app.game_session_review r ON r.id = g.id
+          WHERE g.patient_id = $1 AND g.is_valid
+          ORDER BY g.ended_at DESC LIMIT 500`,
+        [childId],
+      );
+      return rows;
+    });
+
+    if (!sessions) return c.json({ error: "not_found" }, 404);
+    return c.json({ sessions });
   });
 
   return app;
