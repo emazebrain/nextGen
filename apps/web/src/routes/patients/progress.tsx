@@ -12,7 +12,7 @@ import { ArrowDown, ArrowUp, BarChart3, LineChart, Table2 } from "lucide-react";
 import { activity, skillsPlayed, trend, type GameInfo, type TrendPoint, type View } from "@emb/metrics";
 import type { GameSessionView, ProgressionDecisionView } from "@emb/contracts";
 import { Button, Card, Chip, DataList, EmptyState, MazeLoader, SelectField, type Column } from "@emb/ui";
-import { usePatientSessions, useProgression, useReview } from "../../api/queries.ts";
+import { usePatientAssignments, usePatientSessions, useProgression, useReview, type PatientAssignment } from "../../api/queries.ts";
 import { GAMES, findGame, localText } from "../../games/registry.ts";
 import { usePrefs, useT, type MessageId } from "../../i18n/index.tsx";
 import { iso } from "../../lib/format.ts";
@@ -33,12 +33,15 @@ export function PatientProgress() {
   const { locale } = usePrefs();
   const { patient: p } = usePatientCtx();
   const sessions = usePatientSessions(p.id);
+  const assignments = usePatientAssignments(p.id);
   const decisions = useProgression(p.id);
   const [viewKey, setViewKey] = useState<ViewKey>("accuracy");
   const [asTable, setAsTable] = useState(false);
   const [shown, setShown] = useState(HISTORY_PAGE);
+  const [filterAssignment, setFilterAssignment] = useState<string>("");
 
-  const all = sessions.data ?? [];
+  const allSessions = sessions.data ?? [];
+  const all = filterAssignment ? allSessions.filter((s) => s.assignment_id === filterAssignment) : allSessions;
   // Results kept for review but not counted (excluded, or consent withdrawn and not yet reviewed) stay out of the
   // charts and totals; the history below still lists them with why (offline devices spec §7.4).
   const list = useMemo(() => all.filter((s) => s.counts !== false), [all]);
@@ -181,10 +184,30 @@ export function PatientProgress() {
         <Decisions q={decisions} gameName={gameName} date={date} />
       </Card>
 
-      <section aria-labelledby="history-title" className="progress-history">
-        <h2 id="history-title" className="app-cardtitle">
-          {t("progress.history.title")}
+      <Card as="section" labelledBy="assignments-title">
+        <h2 id="assignments-title" className="app-cardtitle">
+          {t("progress.assignments.title")}
         </h2>
+        <AssignmentList
+          assignments={assignments.data ?? []}
+          loading={assignments.isPending}
+          selected={filterAssignment}
+          onSelect={(id) => { setFilterAssignment(id); setShown(HISTORY_PAGE); }}
+          date={date}
+        />
+      </Card>
+
+      <section aria-labelledby="history-title" className="progress-history">
+        <div className="progress-head">
+          <h2 id="history-title" className="app-cardtitle">
+            {t("progress.history.title")}
+          </h2>
+          {filterAssignment && (
+            <Button variant="ghost" onClick={() => setFilterAssignment("")}>
+              {t("progress.assignments.showAll")}
+            </Button>
+          )}
+        </div>
         <History sessions={all.slice(0, shown)} gameName={gameName} date={date} patientId={p.id} />
         {all.length > shown && (
           <Button variant="secondary" onClick={() => setShown((n) => n + HISTORY_PAGE)}>
@@ -259,6 +282,44 @@ export function ReviewCell({ session, patientId }: { session: GameSessionView; p
   );
 }
 
+function AssignmentList({
+  assignments,
+  loading,
+  selected,
+  onSelect,
+  date,
+}: {
+  assignments: PatientAssignment[];
+  loading: boolean;
+  selected: string;
+  onSelect: (id: string) => void;
+  date: (s: string) => string;
+}) {
+  const t = useT();
+  if (loading) return <MazeLoader label={t("common.loading")} />;
+  if (assignments.length === 0) return <p className="app-muted">{t("progress.assignments.empty")}</p>;
+
+  const statusTone = (s: string) => (s === "active" ? "brand" : s === "completed" ? "success" : "neutral");
+  const statusLabel = (s: string) => t(`progress.assignments.status.${s}` as MessageId);
+
+  return (
+    <ul className="plainlist assignments">
+      {assignments.map((a) => (
+        <li key={a.id} className={`assignment${selected === a.id ? " assignment--selected" : ""}`}>
+          <button type="button" className="assignment__btn" onClick={() => onSelect(selected === a.id ? "" : a.id)}>
+            <span className="assignment__name">{a.name}</span>
+            <span className="assignment__meta">
+              <Chip tone={statusTone(a.status)}>{statusLabel(a.status)}</Chip>
+              <span className="app-muted emb-tnum">{date(a.start_date)}</span>
+              <span className="app-muted">{t("progress.assignments.weeks", { weeks: a.weeks, spw: a.sessions_per_week })}</span>
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function History({ sessions, gameName, date, patientId }: { sessions: GameSessionView[]; gameName: (id: string) => string; date: (s: string) => string; patientId: string }) {
   const t = useT();
   const intl = useIntl();
@@ -278,6 +339,7 @@ function History({ sessions, gameName, date, patientId }: { sessions: GameSessio
   };
   const columns: Column<GameSessionView>[] = [
     { id: "date", header: t("progress.col.date"), primary: true, cell: (s) => <span className="emb-tnum">{date(s.ended_at)}</span> },
+    { id: "protocol", header: t("progress.col.protocol"), cell: (s) => s.assignment_name ?? "—" },
     { id: "game", header: t("progress.col.game"), cell: (s) => gameName(s.game_id) },
     { id: "difficulty", header: t("progress.col.difficulty"), numeric: true, cell: (s) => s.difficulty },
     { id: "mode", header: t("progress.col.mode"), hideOnCard: true, cell: (s) => t("game.mode", { mode: s.session_mode }) },

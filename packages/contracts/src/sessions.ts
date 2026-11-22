@@ -177,6 +177,9 @@ export interface GameSessionView {
   /** False when a review excluded it, or it was flagged consent_withdrawn and nobody has reviewed it yet. */
   counts: boolean;
   review: { reason: string; decision: "accept" | "exclude" | null } | null;
+  /** The protocol assignment this session belongs to. */
+  assignment_id: string | null;
+  assignment_name: string | null;
 }
 
 /** An automatic difficulty change, for the progress chart's markers (design doc §5.5). */

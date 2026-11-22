@@ -317,6 +317,27 @@ export function protocolRoutes(pool: pg.Pool) {
 
   // ---- Assignments
 
+  /** All protocol assignments for a patient (active + completed + cancelled), for history. */
+  r.get("/patients/:id/assignments", async (c) => {
+    const id = c.req.param("id");
+    if (!UUID.test(id)) return notFound(c);
+    const result = await run(c, async (db) => {
+      const seen = await db.query(`SELECT 1 FROM app.patient WHERE id = $1`, [id]);
+      if (!seen.rowCount) return undefined;
+      const { rows } = await db.query<{ id: string; name: string; status: string; start_date: string; weeks: number; sessions_per_week: number; setting: string; created_at: string }>(
+        `SELECT a.id, a.name, a.status, to_char(a.start_date, 'YYYY-MM-DD') AS start_date,
+                a.weeks, a.sessions_per_week, a.setting, a.created_at::text
+           FROM app.protocol_assignment a
+          WHERE a.patient_id = $1
+          ORDER BY a.created_at DESC`,
+        [id],
+      );
+      return rows;
+    });
+    if (result === undefined) return notFound(c);
+    return c.json({ assignments: result });
+  });
+
   r.get("/patients/:id/assignment", async (c) => {
     const id = c.req.param("id");
     if (!UUID.test(id)) return notFound(c);

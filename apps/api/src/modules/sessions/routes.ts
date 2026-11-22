@@ -426,8 +426,10 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
                 g.planned_session_id, ps.seq, g.metrics, COALESCE((g.config_echo->>'monochrome')::boolean, false) AS monochrome,
                 CASE WHEN g.config_echo ? 'region' THEN jsonb_build_object('path', g.config_echo->'region'->'path', 'sublobe', g.config_echo->'region'->'sublobe',
                   'drawn', g.config_echo->'region'->'drawn', 'revision', g.config_echo->'region'->'revision') END AS region,
-                r.counts, CASE WHEN r.review_reason IS NULL THEN NULL ELSE json_build_object('reason', r.review_reason, 'decision', r.decision) END AS review
+                r.counts, CASE WHEN r.review_reason IS NULL THEN NULL ELSE json_build_object('reason', r.review_reason, 'decision', r.decision) END AS review,
+                a.id AS assignment_id, a.name AS assignment_name
            FROM app.game_session g LEFT JOIN app.planned_session ps ON ps.id = g.planned_session_id
+           LEFT JOIN app.protocol_assignment a ON a.id = ps.assignment_id
            JOIN app.game_session_review r ON r.id = g.id
           WHERE g.patient_id = $1 AND g.is_valid
           ORDER BY g.ended_at DESC LIMIT 500`,

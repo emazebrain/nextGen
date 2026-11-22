@@ -483,6 +483,8 @@ function row(
     planned_session_id: planned,
     seq,
     metrics,
+    assignment_id: null,
+    assignment_name: null,
   };
 }
 

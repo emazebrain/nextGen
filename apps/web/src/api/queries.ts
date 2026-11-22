@@ -351,6 +351,25 @@ export function usePatientSessions(patientId: string) {
   });
 }
 
+export interface PatientAssignment {
+  id: string;
+  name: string;
+  status: string;
+  start_date: string;
+  weeks: number;
+  sessions_per_week: number;
+  setting: string;
+  created_at: string;
+}
+
+export function usePatientAssignments(patientId: string) {
+  return useQuery({
+    queryKey: ["assignments", patientId],
+    queryFn: ({ signal }) => apiGet<{ assignments: PatientAssignment[] }>(`/v1/patients/${patientId}/assignments`, { signal }).then((r) => r.assignments),
+    retry,
+  });
+}
+
 /** Count or don't count a flagged result (offline devices spec §7.4). */
 export function useReview(patientId: string) {
   const qc = useQueryClient();
