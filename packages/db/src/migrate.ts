@@ -65,7 +65,9 @@ export async function migrate(client: pg.Client, dir = MIGRATIONS_DIR): Promise<
       await client.query("BEGIN");
       try {
         await client.query(sql);
-        await client.query("INSERT INTO public.schema_migrations (name) VALUES ($1)", [file]);
+        // The migration SQL may already contain its own INSERT INTO schema_migrations
+        // (for manual execution in Supabase SQL Editor). Use ON CONFLICT to avoid duplicates.
+        await client.query("INSERT INTO public.schema_migrations (name) VALUES ($1) ON CONFLICT (name) DO NOTHING", [file]);
         await client.query("COMMIT");
         applied.push(file);
         break;
