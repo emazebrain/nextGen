@@ -53,11 +53,13 @@ export function authPool(databaseUrl: string, schema?: string): pg.Pool {
   // by a statement, not a startup option, because connection poolers in front
   // of managed Postgres do not all pass startup options through.
   const name = authSchemaName(schema);
-  const pool = new pg.Pool({ connectionString: databaseUrl, max: 5 });
-  pool.on("connect", (client) => {
-    client.query(`SET search_path TO ${name}`).catch(() => {
-      // A connection that cannot set its search path fails its first query instead.
-    });
+  // Set search_path via connection options parameter. This runs at connect time
+  // inside the protocol handshake, avoiding a separate SET query that races with
+  // Better Auth's first query (pg@9 deprecation warning).
+  const pool = new pg.Pool({
+    connectionString: databaseUrl,
+    max: 5,
+    options: `-c search_path=${name}`,
   });
   return pool;
 }
@@ -103,7 +105,10 @@ export function createAuth(config: AuthConfig, servicePool: pg.Pool) {
     advanced: {
       database: { generateId: () => uuidv7() },
       cookiePrefix: "emb",
-      ipAddress: { ipAddressHeaders: config.ipAddressHeaders ?? ["x-forwarded-for"] },
+      ipAddress: {
+        ipAddressHeaders: config.ipAddressHeaders ?? ["x-forwarded-for"],
+        trustedProxies: ["*"],
+      },
     },
     databaseHooks: {
       user: {
