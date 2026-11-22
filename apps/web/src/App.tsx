@@ -136,6 +136,8 @@ export function RequireStaff({ bare = false }: { bare?: boolean }) {
   }
   // Invited by an admin: nothing else opens until the temporary password is replaced (system admin spec).
   if (me.data.user_status === "invited" && location.pathname !== "/change-password") return <Navigate to="/change-password" replace />;
+  // Guardian users (no staff memberships) land in the parent portal, not the therapist app.
+  if (me.data.memberships.length === 0 && !me.data.is_platform_admin) return <Navigate to="/parent" replace />;
   return <StaffArea me={me.data} bare={bare} online />;
 }
 

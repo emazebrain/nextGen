@@ -1,8 +1,9 @@
 /** Parent portal shell — bottom tabs: Home · Progress · Messages (§5.10, §4.1). */
-import { NavLink, Outlet, useNavigate } from "react-router";
+import { NavLink, Navigate, Outlet, useNavigate } from "react-router";
 import { Home, BarChart3, MessageSquare } from "lucide-react";
 import { useT } from "../../i18n/index.tsx";
 import { useParentMe, type ParentChild } from "../../api/parent.ts";
+import { ApiError } from "../../api/http.ts";
 import { MazeLoader } from "@emb/ui";
 import { createContext, useContext, useState, type ReactNode } from "react";
 
@@ -28,7 +29,20 @@ export function ParentShell() {
   const [activeChildId, setActiveChildId] = useState<string>("");
 
   if (me.isPending) return <MazeLoader label={t("common.loading")} />;
-  if (me.isError || !me.data) {
+  if (me.isError) {
+    // Not signed in: redirect to sign-in with a return path
+    if (me.error instanceof ApiError && me.error.status === 401) {
+      return <Navigate to="/sign-in?next=/parent" replace />;
+    }
+    return (
+      <div className="parent-shell">
+        <div className="app-page" style={{ textAlign: "center", paddingBlockStart: "4rem" }}>
+          <p>{t("errors.generic")}</p>
+        </div>
+      </div>
+    );
+  }
+  if (!me.data) {
     return (
       <div className="parent-shell">
         <div className="app-page" style={{ textAlign: "center", paddingBlockStart: "4rem" }}>
