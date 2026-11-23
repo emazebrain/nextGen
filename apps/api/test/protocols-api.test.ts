@@ -209,4 +209,21 @@ describe.skipIf(!ADMIN_URL)("protocols API", () => {
     const assist = await yael("/v1/templates", { method: "POST", body: template({ steps: [{ ...bc, game_params: { paddle_assist: 1.5 } }] }) });
     expect(assist.body.issues).toEqual([{ path: "steps.0.game_params.paddle_assist", code: "invalid_setting" }]);
   });
+  it("It's Left, It's Right goes into a template and onto a patient's plan like any other game", async () => {
+    const lr = step({ game_id: "its-left-its-right", game_params: {} });
+    const made = await yael("/v1/templates", { method: "POST", body: template({ name: "Left and right", steps: [lr] }) });
+    expect(made.status).toBe(201);
+    expect(made.body.template.steps[0]).toMatchObject({ game_id: "its-left-its-right" });
+
+    const other = randomUUID();
+    await env.db.query(`INSERT INTO app.patient (id, clinic_id, given_name, family_name, date_of_birth, status) VALUES ($1,$2,'Eli','Baron','2017-05-05','active')`, [other, ids.clinic]);
+    await env.db.query(`INSERT INTO app.patient_care_team (patient_id, user_id) VALUES ($1,$2)`, [other, ids.yael]);
+    const assigned = await yael(`/v1/patients/${other}/assignment`, {
+      method: "POST",
+      body: { template_id: made.body.template.id, name: "Left and right", description: null, weeks: 2, sessions_per_week: 2, setting: "clinic", start_date: new Date().toISOString().slice(0, 10), steps: [lr] },
+    });
+    expect(assigned.status).toBe(201);
+    expect(assigned.body.assignment.steps[0]).toMatchObject({ game_id: "its-left-its-right" });
+    expect(assigned.body.assignment.sessions).toHaveLength(4);
+  });
 });
