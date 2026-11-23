@@ -834,7 +834,7 @@
   "admin.appearance.blur.light": "Light",
   "admin.appearance.blur.strong": "Strong",
   "admin.appearance.preview": "Preview",
-  "admin.appearance.previewCard": "Cards and text stay on a solid surface, so they remain easy to read.",
+  "admin.appearance.previewCard": "Cards become frosted glass over the background; text stays sharp.",
   "admin.appearance.save": "Save background",
   "admin.appearance.saved": "Background saved. Everyone sees it the next time they open the app.",
   "admin.organizations.title": "Organizations",

@@ -1765,47 +1765,30 @@ a.gamecard:hover {
   flex-shrink: 0;
 }
 /* ------------------------------------------------------------ Reports (reports dashboard design 2026-11-23)
- * Tiles are plain cards by default. When a platform background is set (Admin → Appearance), they turn to frosted
- * glass over it and the page's own veil lightens so the background shows between them. Text, chips and chart marks
- * are always opaque. Where the browser can't blur what's behind, the tiles stay nearly solid. */
+ * Tiles are plain cards by default and frosted glass when a platform background is set (see "App background").
+ * Text, chips and chart marks are always opaque. */
 .reports {
-  --r-glass: var(--bg-surface);
   --r-well: var(--bg-subtle);
   --r-solid: var(--bg-surface);
-  --r-stroke: transparent;
-  --r-radius: var(--radius-card);
   --r-chart-1: var(--chart-1);
   --r-chart-2: var(--status-info);
   display: grid;
   gap: var(--space-4);
 }
 :root[data-app-bg] .reports {
-  --r-glass: color-mix(in srgb, var(--bg-surface) 74%, transparent);
-  --r-well: color-mix(in srgb, var(--text-primary) 7%, transparent);
-  --r-solid: color-mix(in srgb, var(--bg-surface) 88%, transparent);
-  --r-stroke: color-mix(in srgb, var(--bg-surface) 80%, transparent);
-  --r-radius: 24px;
-}
-:root[data-app-bg] .emb-main:has(.reports) {
-  background: color-mix(in srgb, var(--bg-canvas) 26%, transparent);
-  backdrop-filter: saturate(1.2) blur(5px);
+  --r-well: var(--glass-well);
+  --r-solid: var(--glass-solid);
 }
 .reports .glass {
-  background: var(--r-glass);
-  border: 1px solid var(--r-stroke);
-  border-radius: var(--r-radius);
+  background: var(--bg-surface);
+  border: 1px solid transparent;
+  border-radius: var(--radius-card);
   box-shadow: var(--elev-1);
 }
 :root[data-app-bg] .reports .glass {
-  backdrop-filter: saturate(1.5) blur(14px);
-}
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  :root[data-app-bg] .reports {
-    --r-glass: color-mix(in srgb, var(--bg-surface) 94%, transparent);
-  }
-  :root[data-app-bg] .emb-main:has(.reports) {
-    background: color-mix(in srgb, var(--bg-canvas) 80%, transparent);
-  }
+  background: var(--glass);
+  border-color: var(--glass-stroke);
+  border-radius: var(--glass-radius);
 }
 .reports__head {
   padding: var(--space-3) var(--space-4);
@@ -3381,9 +3364,11 @@ a.gamecard:hover {
 
 
 /* ------------------------------------------------------------ App background (platform appearance, migration 0040)
- * A platform admin may put a solid colour or an image behind the app. The layer sits under everything; the content
- * areas then carry a veil in the theme's own canvas colour, so text keeps its contrast in light and dark whatever
- * was chosen. Cards stay solid. Screens with their own full background (sign-in, hand-off, sessions) cover it. */
+ * A platform admin may put a solid colour or an image behind the app. The layer sits under everything. With it
+ * set, the whole app takes a glass look: a light veil over the content area, and cards, page titles, the rail and
+ * the top bar as frosted tiles mixed from the theme's own surface colour, so light and dark both work. Text, chips,
+ * inputs, menus and dialogs stay opaque. Screens with their own full background (sign-in, hand-off, sessions)
+ * cover it. */
 .app-bg {
   position: fixed;
   inset: 0;
@@ -3402,37 +3387,139 @@ a.gamecard:hover {
   inset: -48px;
   filter: blur(14px);
 }
-:root[data-app-bg] .emb-main {
-  margin: var(--space-4);
-  border-radius: 24px;
-  background: color-mix(in srgb, var(--bg-canvas) 72%, transparent);
-  backdrop-filter: saturate(1.4) blur(18px);
-  box-shadow: var(--elev-2);
+:root[data-app-bg] {
+  --glass: color-mix(in srgb, var(--bg-surface) 74%, transparent);
+  --glass-solid: color-mix(in srgb, var(--bg-surface) 90%, transparent);
+  --glass-stroke: color-mix(in srgb, var(--bg-surface) 80%, transparent);
+  --glass-well: color-mix(in srgb, var(--text-primary) 7%, transparent);
+  --glass-veil: color-mix(in srgb, var(--bg-canvas) 42%, transparent);
+  --glass-radius: 24px;
+  --glass-blur: saturate(1.5) blur(14px);
+  /* The theme's real surface colour, for the few things that must stay opaque. */
+  --surface-solid: var(--bg-surface);
 }
+/* Devices that can't blur what's behind an element get nearly solid surfaces instead. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root[data-app-bg] {
+    --glass: color-mix(in srgb, var(--bg-surface) 94%, transparent);
+    --glass-solid: var(--bg-surface);
+    --glass-veil: color-mix(in srgb, var(--bg-canvas) 80%, transparent);
+  }
+}
+
+/* The stage: a light veil the tiles sit on. */
+:root[data-app-bg] .emb-main,
 :root[data-app-bg] .parent-shell__content {
   margin: var(--space-3);
+  border-radius: 28px;
+  background: var(--glass-veil);
+  -webkit-backdrop-filter: saturate(1.2) blur(8px);
+  backdrop-filter: saturate(1.2) blur(8px);
+  box-shadow: var(--elev-2);
+  /* Every surface inside the content area turns to glass, including screens' own tiles and rows. --glass was
+     worked out from the real surface colour at the root, so this doesn't refer to itself. */
+  --bg-surface: var(--glass);
+}
+/* Fields, menus and dialogs keep the real surface: what is typed or chosen must never sit on a see-through ground. */
+:root[data-app-bg] :is(.emb-main, .parent-shell__content) :is(.emb-input, .emb-select, .emb-textarea, .emb-dialog, .emb-disclosure__panel, dialog, [role="dialog"], [role="menu"], [role="listbox"]) {
+  --bg-surface: var(--surface-solid);
+}
+:root[data-app-bg] .parent-shell__content {
   margin-block-end: calc(var(--space-3) + 60px);
   padding-block-end: var(--space-4);
-  border-radius: 24px;
-  background: color-mix(in srgb, var(--bg-canvas) 72%, transparent);
-  backdrop-filter: saturate(1.4) blur(18px);
+}
+
+/* Tiles: cards, page headers, list cards and anything marked .glass. */
+:root[data-app-bg] .emb-card,
+:root[data-app-bg] .emb-rowcard,
+:root[data-app-bg] .emb-pagehead,
+:root[data-app-bg] .glass {
+  background: var(--glass);
+  border: 1px solid var(--glass-stroke);
+  border-radius: var(--glass-radius);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--elev-1);
+}
+:root[data-app-bg] .emb-rowcard {
+  border-radius: 18px;
+}
+/* A page title would otherwise sit straight on the picture: it gets its own tile. */
+:root[data-app-bg] .emb-pagehead {
+  padding: var(--space-3) var(--space-4);
+}
+/* A tile inside a tile stays flat, so glass never stacks. */
+:root[data-app-bg] .emb-card .emb-card,
+:root[data-app-bg] .emb-card .emb-rowcard,
+:root[data-app-bg] .emb-card .emb-pagehead,
+:root[data-app-bg] .glass .emb-pagehead,
+:root[data-app-bg] .glass .emb-card {
+  background: var(--glass-well);
+  border-color: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+:root[data-app-bg] .glass .emb-pagehead {
+  padding: 0;
+  background: none;
+}
+:root[data-app-bg] .emb-table thead th {
+  background: var(--glass-solid);
+}
+/* A table that fills its card follows the card's rounded corners. */
+:root[data-app-bg] .emb-card > .emb-datalist--table {
+  border-radius: inherit;
+}
+
+/* Navigation: a floating glass rail and top bar; the current item is a solid pill. */
+:root[data-app-bg] .emb-rail {
+  inset-block-start: var(--space-3);
+  block-size: calc(100dvh - 2 * var(--space-3));
+  margin-block: var(--space-3);
+  margin-inline-start: var(--space-3);
+  border: 1px solid var(--glass-stroke);
+  border-radius: 28px;
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
   box-shadow: var(--elev-2);
 }
+:root[data-app-bg] .emb-topbar {
+  inset-block-start: var(--space-3);
+  margin-block-start: var(--space-3);
+  margin-inline: var(--space-3);
+  border: 1px solid var(--glass-stroke);
+  border-radius: var(--radius-pill);
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--elev-1);
+}
+:root[data-app-bg] .emb-nav:hover,
+:root[data-app-bg] .emb-rail__toggle:hover {
+  background: var(--glass-well);
+}
+:root[data-app-bg] .emb-nav.is-active {
+  background: var(--glass-solid);
+  box-shadow: var(--elev-1);
+}
+:root[data-app-bg] .emb-tabs,
 :root[data-app-bg] .parent-shell__tabs {
-  background: var(--bg-surface);
-  border-block-start: 1px solid var(--border-decorative);
+  border: 1px solid var(--glass-stroke);
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
 }
 @media (max-width: 767px) {
   :root[data-app-bg] .emb-main {
     margin: var(--space-2);
-    border-radius: 18px;
+    border-radius: 20px;
   }
-}
-/* Devices that can't blur what's behind an element get a nearly solid veil instead. */
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  :root[data-app-bg] .emb-main,
-  :root[data-app-bg] .parent-shell__content {
-    background: color-mix(in srgb, var(--bg-canvas) 94%, transparent);
+  :root[data-app-bg] .emb-topbar {
+    margin-inline: var(--space-2);
+    margin-block-start: var(--space-2);
+    inset-block-start: var(--space-2);
   }
 }
 
@@ -3533,14 +3620,15 @@ a.gamecard:hover {
   place-items: center;
   padding: var(--space-4);
   border-radius: 18px;
-  background: color-mix(in srgb, var(--bg-canvas) 72%, transparent);
-  backdrop-filter: saturate(1.4) blur(10px);
+  background: color-mix(in srgb, var(--bg-canvas) 30%, transparent);
+  backdrop-filter: saturate(1.2) blur(3px);
 }
 .appearance__previewcard {
   max-inline-size: 320px;
   padding: var(--space-4);
-  border-radius: var(--radius-card);
-  background: var(--bg-surface);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--bg-surface) 74%, transparent);
+  backdrop-filter: saturate(1.5) blur(10px);
   box-shadow: var(--elev-1);
   font-size: var(--text-14);
   text-align: center;

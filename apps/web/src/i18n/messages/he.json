@@ -834,7 +834,7 @@
   "admin.appearance.blur.light": "קל",
   "admin.appearance.blur.strong": "חזק",
   "admin.appearance.preview": "תצוגה מקדימה",
-  "admin.appearance.previewCard": "כרטיסים וטקסט נשארים על משטח אטום, כך שקל לקרוא אותם.",
+  "admin.appearance.previewCard": "הכרטיסים הופכים לזכוכית חלבית מעל הרקע, והטקסט נשאר חד.",
   "admin.appearance.save": "שמירת הרקע",
   "admin.appearance.saved": "הרקע נשמר. כל המשתמשים יראו אותו בפעם הבאה שיפתחו את האפליקציה.",
   "admin.organizations.title": "ארגונים",
