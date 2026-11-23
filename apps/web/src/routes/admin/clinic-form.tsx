@@ -47,10 +47,13 @@ function ClinicForm({ org, existing }: { org: AdminOrg; existing?: AdminClinic }
   const [name, setName] = useState(existing?.name ?? "");
   const [country, setCountry] = useState(existing?.country_code ?? defaults.country);
   const [timezone, setTimezone] = useState(existing?.timezone ?? defaults.timezone);
+  const [address, setAddress] = useState(existing?.address ?? "");
+  const [phone, setPhone] = useState(existing?.phone ?? "");
+  const [license, setLicense] = useState(existing?.license_no ?? "");
   const [errors, setErrors] = useState<Partial<Record<"name" | "country" | "timezone", MessageId>>>({});
   const [error, setError] = useState<MessageId | null>(null);
   const save = useAdminMutation(() =>
-    existing ? patchClinic(existing.id, { name: name.trim(), timezone }) : createClinic(org.id, { name: name.trim(), country_code: country, timezone }),
+    existing ? patchClinic(existing.id, { name: name.trim(), timezone, address, phone, license_no: license }) : createClinic(org.id, { name: name.trim(), country_code: country, timezone }),
   );
   const title = existing ? t("admin.clinics.edit") : t("admin.clinics.new");
   useTitle(title);
@@ -175,6 +178,16 @@ function ClinicForm({ org, existing }: { org: AdminOrg; existing?: AdminClinic }
               {fieldError("timezone")}
             </div>
           </div>
+          {existing && (
+            <>
+              <p className="pform__hint">{t("admin.clinics.letterheadHint")}</p>
+              <TextField label={t("admin.clinics.address")} name="address" autoComplete="off" maxLength={300} value={address} onChange={(e) => setAddress(e.target.value)} />
+              <div className="pform__row">
+                <TextField label={t("admin.clinics.phone")} name="phone" type="tel" dir="ltr" autoComplete="off" maxLength={40} value={phone} onChange={(e) => setPhone(e.target.value)} />
+                <TextField label={t("admin.clinics.license")} name="license_no" dir="ltr" autoComplete="off" maxLength={60} value={license} onChange={(e) => setLicense(e.target.value)} />
+              </div>
+            </>
+          )}
           <div className="pform__actions">
             <Link to={backTo} className="emb-btn emb-btn--secondary">
               {t("common.cancel")}

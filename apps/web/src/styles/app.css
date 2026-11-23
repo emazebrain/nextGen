@@ -3633,3 +3633,322 @@ a.gamecard:hover {
   font-size: var(--text-14);
   text-align: center;
 }
+
+
+/* ------------------------------------------------------------ Progress reports (migration 0042)
+ * The document is paper: white with dark ink in every theme, so it looks on screen as it will print. The colours
+ * here are fixed on purpose and are not theme tokens. */
+.preports {
+  display: grid;
+  gap: var(--space-2);
+}
+.preports__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--bg-subtle);
+}
+.preports__text {
+  display: grid;
+  flex: 1;
+  min-inline-size: 0;
+}
+.preports__link {
+  color: inherit;
+  font-weight: 600;
+}
+.preports__dates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+.preports__count {
+  justify-self: end;
+  font-size: var(--text-12);
+}
+.preports__share {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: var(--target-min);
+  cursor: pointer;
+}
+.preports__share input {
+  inline-size: 20px;
+  block-size: 20px;
+  accent-color: var(--brand-primary);
+}
+.rdoc-page {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-4);
+}
+.rdoc-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  inline-size: 100%;
+  max-inline-size: 210mm;
+}
+.rdoc-bar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+.rdoc-bar__hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: var(--text-14);
+  text-align: end;
+}
+.rdoc {
+  --ink: #111827;
+  --ink-2: #4b5563;
+  --rule: #d5d9e2;
+  --accent: #4a3bc4;
+  box-sizing: border-box;
+  inline-size: 100%;
+  max-inline-size: 210mm;
+  min-block-size: 280mm;
+  padding: 16mm;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 11pt;
+  line-height: 1.5;
+  box-shadow: var(--elev-2);
+  color-scheme: light;
+}
+.rdoc p {
+  margin: 0;
+}
+.rdoc__letterhead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8mm;
+  padding-block-end: 5mm;
+  border-block-end: 2px solid var(--accent);
+  color: var(--ink-2);
+  font-size: 9.5pt;
+}
+.rdoc__clinic {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 14pt;
+  font-weight: 600;
+}
+.rdoc__title {
+  margin: 0;
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-size: 20pt;
+  font-weight: 600;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+.rdoc__facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 3mm 6mm;
+  margin: 6mm 0 0;
+}
+.rdoc__facts dt,
+.rdoc__stats dt {
+  color: var(--ink-2);
+  font-size: 8.5pt;
+}
+.rdoc__facts dd,
+.rdoc__stats dd {
+  margin: 0;
+  font-weight: 600;
+}
+.rdoc__section {
+  margin-block-start: 7mm;
+  break-inside: avoid;
+}
+.rdoc__section h2 {
+  margin: 0 0 2.5mm;
+  padding-block-end: 1mm;
+  border-block-end: 1px solid var(--rule);
+  font-family: var(--font-display);
+  font-size: 12pt;
+  font-weight: 600;
+}
+.rdoc__summary {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.rdoc__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 3mm 6mm;
+  margin: 0;
+}
+.rdoc__stats dd {
+  font-size: 14pt;
+  font-variant-numeric: tabular-nums;
+}
+.rdoc__table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.rdoc__table th,
+.rdoc__table td {
+  padding: 1.6mm 2mm;
+  border-block-end: 1px solid var(--rule);
+  text-align: start;
+  font-weight: 400;
+}
+.rdoc__table thead th {
+  color: var(--ink-2);
+  font-size: 8.5pt;
+}
+.rdoc__table tbody th {
+  font-weight: 600;
+}
+.rdoc__table .is-num {
+  text-align: end;
+}
+.rdoc__figure {
+  margin: 3mm 0 0;
+}
+.rdoc__chart {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+  direction: ltr;
+}
+.rdoc__chart text {
+  fill: var(--ink-2);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.rdoc__grid {
+  stroke: var(--rule);
+}
+.rdoc__base {
+  stroke: var(--ink-2);
+  stroke-dasharray: 4 3;
+}
+.rdoc__lineplot {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.rdoc__dot {
+  fill: var(--accent);
+}
+.rdoc__figure figcaption {
+  display: flex;
+  align-items: center;
+  gap: 2mm;
+  color: var(--ink-2);
+  font-size: 8.5pt;
+}
+.rdoc__key {
+  inline-size: 8mm;
+  border-block-start: 1.5px dashed var(--ink-2);
+}
+.rdoc__list {
+  margin: 0;
+  padding-inline-start: 5mm;
+}
+.rdoc__sign {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 12mm;
+  margin-block-start: 16mm;
+  color: var(--ink-2);
+  font-size: 9pt;
+  break-inside: avoid;
+}
+.rdoc__line {
+  display: block;
+  margin-block-end: 1.5mm;
+  border-block-end: 1px solid var(--ink);
+  block-size: 8mm;
+}
+.rdoc__footer {
+  margin-block-start: 10mm;
+  padding-block-start: 3mm;
+  border-block-start: 1px solid var(--rule);
+  color: var(--ink-2);
+  font-size: 8.5pt;
+}
+@media (max-width: 600px) {
+  .rdoc {
+    padding: 6mm;
+    font-size: 10pt;
+  }
+  .rdoc__facts,
+  .rdoc__stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .rdoc__letterhead {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .rdoc-bar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rdoc-bar__actions,
+  .rdoc-bar__hint {
+    justify-content: flex-start;
+    text-align: start;
+  }
+}
+
+/* On paper only the document is left: no navigation, no background, no glass, no toolbar. */
+@page {
+  size: A4;
+  margin: 14mm;
+}
+@media print {
+  html,
+  body {
+    background: #ffffff !important;
+  }
+  .app-bg,
+  .emb-rail,
+  .emb-topbar,
+  .emb-tabs,
+  .emb-skiplink,
+  .parent-shell__tabs,
+  .app-footer,
+  .no-print {
+    display: none !important;
+  }
+  .emb-shell {
+    display: block;
+    min-block-size: 0;
+  }
+  .emb-main,
+  .parent-shell__content,
+  .app-page {
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    background: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    box-shadow: none !important;
+    max-inline-size: none;
+  }
+  .rdoc {
+    max-inline-size: none;
+    min-block-size: 0;
+    padding: 0;
+    box-shadow: none;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

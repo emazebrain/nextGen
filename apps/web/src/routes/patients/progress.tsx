@@ -19,6 +19,7 @@ import { iso } from "../../lib/format.ts";
 import { LoadError } from "../shared.tsx";
 import { usePatientCtx } from "./detail.tsx";
 import { TrendChart } from "./TrendChart.tsx";
+import { ProgressReportsCard } from "./reports.tsx";
 import { regionLabel, useRegionCatalog } from "../protocols/StepRegion.tsx";
 
 const GAME_INFO: GameInfo[] = GAMES.map((g) => ({ id: g.manifest.id, metrics: g.manifest.metrics }));
@@ -183,6 +184,8 @@ export function PatientProgress() {
         </h2>
         <Decisions q={decisions} gameName={gameName} date={date} />
       </Card>
+
+      <ProgressReportsCard patientId={p.id} />
 
       <Card as="section" labelledBy="assignments-title">
         <h2 id="assignments-title" className="app-cardtitle">

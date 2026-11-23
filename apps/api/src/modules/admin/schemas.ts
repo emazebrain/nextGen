@@ -44,10 +44,22 @@ export const createClinicSchema = z.object({
   timezone,
 });
 
+/** A letterhead detail for progress reports: trimmed, and empty means "none". */
+const detail = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .nullable()
+    .transform((v) => (v ? v : null));
+
 export const patchClinicSchema = z.object({
   name: name.optional(),
   status: z.enum(["active", "inactive", "pending"]).optional(),
   timezone: timezone.optional(),
+  address: detail(300).optional(),
+  phone: detail(40).optional(),
+  license_no: detail(60).optional(),
 });
 
 export const createUserSchema = z.object({

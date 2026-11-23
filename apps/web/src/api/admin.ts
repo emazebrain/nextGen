@@ -29,6 +29,10 @@ export interface AdminClinic {
   timezone: string;
   status: ClinicStatus;
   created_at: string;
+  /** Printed at the top of progress reports. */
+  address?: string | null;
+  phone?: string | null;
+  license_no?: string | null;
 }
 export interface AdminUser {
   id: string;
@@ -70,7 +74,7 @@ export const listClinics = (orgId: string, signal?: AbortSignal) =>
 export const getClinic = (id: string, signal?: AbortSignal) => apiGet<{ clinic: AdminClinic }>(`/v1/admin/clinics/${enc(id)}`, signal ? { signal } : {}).then((r) => r.clinic);
 export const createClinic = (orgId: string, data: { name: string; country_code: string; timezone: string }) =>
   apiSend<{ clinic: AdminClinic }>("POST", `/v1/admin/organizations/${enc(orgId)}/clinics`, data).then((r) => r.clinic);
-export const patchClinic = (id: string, data: Partial<{ name: string; status: ClinicStatus; timezone: string }>) =>
+export const patchClinic = (id: string, data: Partial<{ name: string; status: ClinicStatus; timezone: string; address: string | null; phone: string | null; license_no: string | null }>) =>
   apiSend<{ clinic: AdminClinic }>("PATCH", `/v1/admin/clinics/${enc(id)}`, data).then((r) => r.clinic);
 
 export const listUsers = (filters: UserFilters, signal?: AbortSignal) => {

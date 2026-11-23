@@ -26,7 +26,7 @@ import {
 } from "./schemas.ts";
 
 const ORG_COLS = `id, name, region, default_locale, status, created_at`;
-const CLINIC_COLS = `id, organization_id, name, country_code, timezone, status, created_at`;
+const CLINIC_COLS = `id, organization_id, name, country_code, timezone, status, created_at, address, phone, license_no`;
 const USER_COLS = `id, email, full_name, status, created_at`;
 
 type C = Context<Env>;
@@ -178,7 +178,7 @@ export function adminRoutes(pool: pg.Pool, auth: Auth, mailer: Mailer, publicApp
     if (!UUID.test(id)) return notFound(c);
     const clinic = await run(c, async (db) => {
       const { rows } = await db.query(
-        `SELECT c.id, c.organization_id, o.name AS organization_name, c.name, c.country_code, c.timezone, c.status, c.created_at
+        `SELECT c.id, c.organization_id, o.name AS organization_name, c.name, c.country_code, c.timezone, c.status, c.created_at, c.address, c.phone, c.license_no
            FROM app.clinic c JOIN app.organization o ON o.id = c.organization_id
           WHERE c.id = $1 AND c.deleted_at IS NULL`,
         [id],
@@ -193,7 +193,7 @@ export function adminRoutes(pool: pg.Pool, auth: Auth, mailer: Mailer, publicApp
     const id = c.req.param("id");
     if (!UUID.test(id)) return notFound(c);
     const input = await body(c, patchClinicSchema);
-    const set = input && setClause({ name: input.name, status: input.status, timezone: input.timezone });
+    const set = input && setClause({ name: input.name, status: input.status, timezone: input.timezone, address: input.address, phone: input.phone, license_no: input.license_no });
     if (!set) return invalid(c);
     try {
       const clinic = await run(c, async (db) => {

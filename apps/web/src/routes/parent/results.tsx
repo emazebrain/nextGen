@@ -9,6 +9,8 @@ import { useTitle } from "../../lib/title.ts";
 import { useParentContext } from "./shell.tsx";
 import { useChildProgress, useChildHistory } from "../../api/parent.ts";
 import { findGame, localText } from "../../games/registry.ts";
+import { useChildReports } from "../../api/progress-reports.ts";
+import { ReportList } from "../patients/reports.tsx";
 
 const HISTORY_PAGE = 20;
 
@@ -43,6 +45,7 @@ function ChildResults({ childId, childName }: { childId: string; childName: stri
   const { locale } = usePrefs();
   const progress = useChildProgress(childId);
   const history = useChildHistory(childId);
+  const reports = useChildReports(childId);
   const [shown, setShown] = useState(HISTORY_PAGE);
 
   if (progress.isPending) return <MazeLoader label={t("common.loading")} />;
@@ -91,6 +94,13 @@ function ChildResults({ childId, childName }: { childId: string; childName: stri
             </div>
           ))}
         </div>
+      )}
+
+      {reports.data && reports.data.length > 0 && (
+        <>
+          <h3 className="app-muted" style={{ marginBlockStart: "var(--space-4)", marginBlockEnd: "var(--space-2)" }}>{t("pr.ui.parentSection")}</h3>
+          <ReportList reports={reports.data} href={(r) => `/parent/reports/${r.id}`} />
+        </>
       )}
 
       {sessions.length > 0 ? (
