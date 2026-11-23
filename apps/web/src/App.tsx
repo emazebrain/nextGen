@@ -36,6 +36,8 @@ import { OrgFormPage } from "./routes/admin/org-form.tsx";
 import { ClinicFormPage } from "./routes/admin/clinic-form.tsx";
 import { ClinicDetailPage } from "./routes/admin/clinic-detail.tsx";
 import { UserFormPage } from "./routes/admin/user-form.tsx";
+import { AppearancePage } from "./routes/admin/appearance.tsx";
+import { AppBackground } from "./shell/AppBackground.tsx";
 import { ReportsPage } from "./routes/reports.tsx";
 import { ManageArea } from "./routes/manage/common.tsx";
 import { ManageOverviewPage } from "./routes/manage/overview.tsx";
@@ -280,6 +282,7 @@ export const routes: RouteObject[] = [
           { path: "/admin/clinics/:id", element: <ClinicDetailPage /> },
           { path: "/admin/clinics/:id/edit", element: <ClinicFormPage /> },
           { path: "/admin/users/new", element: <UserFormPage /> },
+          { path: "/admin/appearance", element: <AppearancePage /> },
         ],
       },
       { path: "/settings", element: <SettingsPage /> },
@@ -302,6 +305,7 @@ export function App({ queryClient = makeQueryClient(), hashRouting = false }: { 
     <PrefsProvider>
       <DeviceProvider>
         <QueryClientProvider client={queryClient}>
+          <AppBackground />
           <RouterProvider router={router} />
         </QueryClientProvider>
       </DeviceProvider>

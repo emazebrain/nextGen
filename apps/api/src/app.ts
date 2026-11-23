@@ -10,6 +10,7 @@ import { sessionRoutes } from "./modules/sessions/routes.ts";
 import { videoRoutes } from "./modules/videos/routes.ts";
 import { deviceRoutes } from "./modules/devices/routes.ts";
 import { offlineRoutes } from "./modules/offline/routes.ts";
+import { adminAppearanceRoutes, publicAppearanceRoutes } from "./modules/appearance/routes.ts";
 import { adminRoutes } from "./modules/admin/routes.ts";
 import { orgAdminRoutes } from "./modules/org/routes.ts";
 import { publicConsentRoutes } from "./modules/consent/public-routes.ts";
@@ -126,6 +127,8 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
     v1.route("/", videoRoutes(deps.pool, deps.files ?? localFileStore(process.env.FILE_STORE_DIR ?? ".data/files")));
     v1.route("/", deviceRoutes(deps.pool, deps.deviceKey ?? deviceKey(undefined)));
     v1.route("/", offlineRoutes(deps.pool, deps.tickets ?? ticketSigner()));
+    // Before the general admin router, so its own gate answers for these paths.
+    v1.route("/admin/appearance", adminAppearanceRoutes(deps.pool));
     v1.route("/admin", adminRoutes(deps.pool, deps.auth, mailer, deps.publicAppUrl));
     v1.route("/org", orgAdminRoutes(deps.pool, deps.auth, mailer, deps.publicAppUrl));
     v1.route("/messages", messagingRoutes(deps.pool));
@@ -146,6 +149,9 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
     const consentRouter = publicConsentRoutes(deps.pool);
     app.route("/api/consent", consentRouter);
     app.route("/consent", consentRouter);
+
+    // The app background: read by every screen, including sign-in (no session needed).
+    app.route("/api/appearance", publicAppearanceRoutes(deps.pool));
 
     // Public parent portal registration — outside /v1 (no auth required)
     const portalRouter = publicParentPortalRoutes(deps.pool, deps.auth);

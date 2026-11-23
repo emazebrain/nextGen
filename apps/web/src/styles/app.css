@@ -2989,3 +2989,170 @@ a.gamecard:hover {
   opacity: 0.6;
   margin-block-start: auto;
 }
+
+
+/* ------------------------------------------------------------ App background (platform appearance, migration 0040)
+ * A platform admin may put a solid colour or an image behind the app. The layer sits under everything; the content
+ * areas then carry a veil in the theme's own canvas colour, so text keeps its contrast in light and dark whatever
+ * was chosen. Cards stay solid. Screens with their own full background (sign-in, hand-off, sessions) cover it. */
+.app-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+/* Blurred layers reach past the screen edge so the blur doesn't fade to the page colour there. */
+.app-bg[data-blur="light"] {
+  inset: -16px;
+  filter: blur(4px);
+}
+.app-bg[data-blur="strong"] {
+  inset: -48px;
+  filter: blur(14px);
+}
+:root[data-app-bg] .emb-main {
+  margin: var(--space-4);
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--bg-canvas) 72%, transparent);
+  backdrop-filter: saturate(1.4) blur(18px);
+  box-shadow: var(--elev-2);
+}
+:root[data-app-bg] .parent-shell__content {
+  margin: var(--space-3);
+  margin-block-end: calc(var(--space-3) + 60px);
+  padding-block-end: var(--space-4);
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--bg-canvas) 72%, transparent);
+  backdrop-filter: saturate(1.4) blur(18px);
+  box-shadow: var(--elev-2);
+}
+:root[data-app-bg] .parent-shell__tabs {
+  background: var(--bg-surface);
+  border-block-start: 1px solid var(--border-decorative);
+}
+@media (max-width: 767px) {
+  :root[data-app-bg] .emb-main {
+    margin: var(--space-2);
+    border-radius: 18px;
+  }
+}
+/* Devices that can't blur what's behind an element get a nearly solid veil instead. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root[data-app-bg] .emb-main,
+  :root[data-app-bg] .parent-shell__content {
+    background: color-mix(in srgb, var(--bg-canvas) 94%, transparent);
+  }
+}
+
+/* Admin → Appearance */
+.appearance {
+  display: grid;
+  gap: var(--space-4);
+  max-inline-size: 760px;
+}
+.swatches {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-inline-size: 0;
+}
+.swatches__grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.swatch {
+  position: relative;
+  display: grid;
+  place-items: center;
+  inline-size: var(--target-min);
+  block-size: var(--target-min);
+  cursor: pointer;
+}
+.swatch input {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.swatch__chip {
+  inline-size: 36px;
+  block-size: 36px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-control);
+}
+.swatch input:checked + .swatch__chip {
+  outline: 3px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+.swatch input:focus-visible + .swatch__chip {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 4px;
+}
+.appearance__hex {
+  max-inline-size: 220px;
+}
+.appearance__upload {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.appearance__file {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.appearance__file:focus-visible + label {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.appearance__preview {
+  position: relative;
+  overflow: hidden;
+  block-size: 220px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border-decorative);
+  background: var(--bg-canvas);
+}
+.appearance__previewbg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+}
+.appearance__previewbg[data-blur="light"] {
+  inset: -8px;
+  filter: blur(2px);
+}
+.appearance__previewbg[data-blur="strong"] {
+  inset: -24px;
+  filter: blur(7px);
+}
+.appearance__previewveil {
+  position: absolute;
+  inset: var(--space-4);
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--bg-canvas) 72%, transparent);
+  backdrop-filter: saturate(1.4) blur(10px);
+}
+.appearance__previewcard {
+  max-inline-size: 320px;
+  padding: var(--space-4);
+  border-radius: var(--radius-card);
+  background: var(--bg-surface);
+  box-shadow: var(--elev-1);
+  font-size: var(--text-14);
+  text-align: center;
+}

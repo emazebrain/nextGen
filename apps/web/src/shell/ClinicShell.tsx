@@ -20,6 +20,7 @@ import {
   Users,
   UsersRound,
   Film,
+  Palette,
   Building2,
   Search,
   UserRoundCog,
@@ -105,6 +106,7 @@ export function ClinicShell({ me }: { me: Me }) {
   if (me.is_platform_admin) {
     items.push({ id: "organizations", href: "/admin/organizations", label: t("admin.nav.organizations"), icon: Building2 });
     items.push({ id: "videos", href: "/admin/videos", label: t("nav.videos"), icon: Film });
+    items.push({ id: "appearance", href: "/admin/appearance", label: t("admin.nav.appearance"), icon: Palette });
   }
   if (me.memberships.some((m) => m.role === "org_admin")) {
     items.push({ id: "manage", href: "/manage", label: t("manage.nav"), icon: Building2 });

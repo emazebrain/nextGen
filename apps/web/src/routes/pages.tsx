@@ -8,6 +8,7 @@ import { useIntl } from "react-intl";
 import {
   Building2,
   Film,
+  Palette,
   ArrowLeft,
   BarChart3,
   BookOpen,
@@ -385,6 +386,7 @@ export function MorePage() {
       ? [
           { to: "/admin/organizations", label: "admin.nav.organizations" as MessageId, icon: Building2 },
           { to: "/admin/videos", label: "nav.videos" as MessageId, icon: Film },
+          { to: "/admin/appearance", label: "admin.nav.appearance" as MessageId, icon: Palette },
         ]
       : []),
     { to: "/settings", label: "nav.settings", icon: SettingsIcon },
