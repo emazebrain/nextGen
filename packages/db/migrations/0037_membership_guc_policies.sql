@@ -25,22 +25,14 @@ CREATE POLICY membership_manager ON app.membership FOR ALL
     clinic_id IS NOT NULL
     AND (
       clinic_id::text = ANY(string_to_array(current_setting('app.manager_clinics', true), ','))
-      OR EXISTS (
-        SELECT 1 FROM app.clinic c
-         WHERE c.id = membership.clinic_id
-           AND c.organization_id::text = ANY(string_to_array(current_setting('app.admin_orgs', true), ','))
-      )
+      OR (organization_id IS NOT NULL AND organization_id::text = ANY(string_to_array(current_setting('app.admin_orgs', true), ',')))
     )
   )
   WITH CHECK (
     clinic_id IS NOT NULL
     AND (
       clinic_id::text = ANY(string_to_array(current_setting('app.manager_clinics', true), ','))
-      OR EXISTS (
-        SELECT 1 FROM app.clinic c
-         WHERE c.id = membership.clinic_id
-           AND c.organization_id::text = ANY(string_to_array(current_setting('app.admin_orgs', true), ','))
-      )
+      OR (organization_id IS NOT NULL AND organization_id::text = ANY(string_to_array(current_setting('app.admin_orgs', true), ',')))
     )
     AND role NOT IN ('platform_admin', 'org_admin', 'clinic_manager')
   );
