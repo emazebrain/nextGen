@@ -116,19 +116,19 @@ class ItsLeftItsRight implements GameModule {
     this.level = typeof p.start_level === "number" ? Math.min(MAX_LEVEL, Math.max(1, p.start_level)) : 1;
 
     // Game-specific params
-    const tl = p["its-left-its-right.time_limit_ms"];
+    const tl = p["its_left_its_right.time_limit_ms"];
     this.timeLimitOverride = typeof tl === "number" ? tl : 0;
-    const mr = p["its-left-its-right.max_rotation"];
+    const mr = p["its_left_its_right.max_rotation"];
     this.maxRotationOverride = typeof mr === "number" ? mr : 0;
-    const bp = p["its-left-its-right.body_parts"];
+    const bp = p["its_left_its_right.body_parts"];
     this.bodyPartsOverride = typeof bp === "string" && bp !== "auto" ? bp.split("+") as BodyPart[] : [];
-    const bg = p["its-left-its-right.background"];
+    const bg = p["its_left_its_right.background"];
     this.textured = bg === "textured";
 
     // Rotation bias from region
     this.rotationBias = p.region?.rotation === "ccw" ? "ccw" : "cw";
 
-    const temp = p["its-left-its-right.bg_temperature"];
+    const temp = p["its_left_its_right.bg_temperature"];
     this.look = ctx.monochrome ? LOOKS.mono : LOOKS[temp === "warm" || temp === "cold" ? temp : ctx.palette];
 
     const seed = Math.floor(ctx.rng() * 2 ** 31);
