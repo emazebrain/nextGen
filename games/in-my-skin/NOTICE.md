@@ -1,4 +1,11 @@
-# In My Skin — third-party artwork
+# In My Skin — artwork
+
+## Cartoons
+
+The twenty pictures of the "cartoons" category were supplied by the product owner on 2026-11-23, who holds the
+right to use them. `scripts/import-pictures.py` trimmed and resized them; they are otherwise unchanged.
+
+## Placeholders
 
 The 3D-style pictures in `assets/` and the flat pictures in `src/flat.generated.ts` are a curated subset of
 **Fluent Emoji**: Copyright (c) Microsoft Corporation, licensed under the

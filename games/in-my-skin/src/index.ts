@@ -30,7 +30,7 @@ const LEAD_IN_MS = 450;
 const BUTTON = 124;
 const BUTTON_GAP = 16;
 const MASK = 48;
-const TEX = 256;
+const TEX = 384;
 
 interface Look {
   sky: [string, string];

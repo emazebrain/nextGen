@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Rebuilds the picture files for In My Skin from Microsoft Fluent Emoji (MIT licence; see ../NOTICE.md).
+Rebuilds the placeholder picture files for In My Skin from Microsoft Fluent Emoji (MIT licence; see ../NOTICE.md).
 
   npm pack @lobehub/fluent-emoji-3d@1.1.0 && tar xzf lobehub-fluent-emoji-3d-1.1.0.tgz -C 3d
   npm pack @iconify-json/fluent-emoji-flat@1.2.6 && tar xzf iconify-json-fluent-emoji-flat-1.2.6.tgz -C flat
@@ -17,9 +17,6 @@ ROOT = os.path.join(HERE, "..")
 
 # id -> Unicode code point of the Fluent 3D picture
 THREE_D = {
-    # cartoons in general
-    "giraffe": "1f992", "parrot": "1f99c", "eagle": "1f985", "horse": "1f40e", "dolphin": "1f42c", "t-rex": "1f996",
-    "turtle": "1f422", "dragon": "1f409", "whale": "1f40b", "kangaroo": "1f998", "sauropod": "1f995", "crocodile": "1f40a",
     # 3D objects
     "rocket": "1f680", "helicopter": "1f681", "racing-car": "1f3ce", "airplane": "2708", "locomotive": "1f682", "flying-saucer": "1f6f8",
     "sailboat": "26f5", "tractor": "1f69c", "fire-engine": "1f692", "bus": "1f68c", "motorcycle": "1f3cd", "speedboat": "1f6a4",

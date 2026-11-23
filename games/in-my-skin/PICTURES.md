@@ -1,6 +1,6 @@
 # In My Skin — pictures
 
-The pictures now in this game are **placeholders**. The product owner supplies the final set; do not add or generate more here.
+The product owner supplies the pictures; do not add or generate more here. **Cartoons** is the owner's final set (20 pictures). Every other category still holds **placeholders**.
 
 ## What to supply
 
@@ -12,7 +12,7 @@ The pictures now in this game are **placeholders**. The product owner supplies t
 
 ## How they are added
 
-1. Put the files in `assets/` as `<id>.webp` (256 px is enough on screen).
+1. Name the PNGs `<id>.png`, put them in a folder and run `python3 scripts/import-pictures.py <folder>`: it trims the margin, drops stray specks and writes `assets/<id>.webp`.
 2. List each one in `src/pictures.ts` with its category and `faces`.
 3. `pnpm --filter @emb/game-in-my-skin test` checks every listed picture has a file.
 

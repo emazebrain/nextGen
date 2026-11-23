@@ -1,6 +1,6 @@
 /**
  * The pictures of In My Skin and the hemisphere each category is used for (product owner, 2026-11-23).
- * 3D-style pictures are files in ../assets; flat ones are inline SVG (flat.generated.ts); the rest are drawn in code.
+ * Cartoons are the product owner's pictures and the other 3D-style pictures are placeholders, all files in ../assets; flat ones are inline SVG (flat.generated.ts); the rest are drawn in code.
  * Real-life faces and real-life photographs are not here yet: they need licensed photographs.
  */
 import type { Locale } from "@emb/game-sdk";
@@ -51,7 +51,10 @@ export const PICTURES: Picture[] = [
   ...drawn("numbers", DIGITS.map((d) => `number-${d}`)),
   ...drawn("operations", Object.keys(OPERATIONS).map((k) => `op-${k}`)),
   ...drawn("shapes", SHAPE_IDS.map((s) => `shape-${s}`)),
-  ...files("cartoons", "left", ["giraffe", "parrot", "eagle", "horse", "dolphin", "t-rex", "turtle", "dragon", "whale", "kangaroo", "sauropod", "crocodile"]),
+  // Supplied by the product owner (2026-11-23); see NOTICE.md.
+  ...files("cartoons", null, ["monster-pink", "monster-green-torch", "monster-blue", "troll-blue-hair", "troll-walking", "troll-bicycle", "giraffe-laughing", "dog-pink", "gorilla-rocker", "chicken-hero", "koala-skateboard", "groovy-dancer", "troll-green-hair"]),
+  ...files("cartoons", "right", ["monster-orange", "dog-tongue", "boy-elephant-skateboard", "elephant-skateboard"]),
+  ...files("cartoons", "left", ["boy-balloons", "dinosaur-pink", "dinosaur-green"]),
   ...files("sports", null, ["soccer-ball", "basketball", "tennis", "boxing-glove", "ping-pong", "curling-stone", "softball", "dartboard", "flying-disc", "ice-hockey", "badminton", "roller-skate"]),
   ...drawn("road_signs", SIGN_IDS),
   ...drawn("arrows", ARROW_IDS),
