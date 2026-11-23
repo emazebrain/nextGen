@@ -34,8 +34,30 @@ export async function withUser<T>(
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    // Set user_id first — membership_own (user_id = current_user_id()) needs it
+    // to safely query the user's own membership rows in the next step.
+    await client.query("SELECT set_config('app.user_id', $1, true)", [userId]);
+    // Cache the user's roles in GUC variables. This runs BEFORE SET LOCAL ROLE,
+    // so only membership_own fires (GUC-based policies evaluate to false since
+    // the GUCs aren't set yet). This breaks the recursion chain on Supabase
+    // where postgres has no BYPASSRLS.
+    await client.query(
+      `SELECT
+        set_config('app.is_admin', CASE WHEN EXISTS(
+          SELECT 1 FROM app.membership WHERE user_id = $1 AND status = 'active' AND role = 'platform_admin'
+        ) THEN 'true' ELSE 'false' END, true),
+        set_config('app.manager_clinics', COALESCE((
+          SELECT string_agg(clinic_id::text, ',') FROM app.membership
+           WHERE user_id = $1 AND status = 'active' AND role IN ('clinic_manager') AND clinic_id IS NOT NULL
+        ), ''), true),
+        set_config('app.admin_orgs', COALESCE((
+          SELECT string_agg(DISTINCT organization_id::text, ',') FROM app.membership
+           WHERE user_id = $1 AND status = 'active' AND role = 'org_admin' AND organization_id IS NOT NULL
+        ), ''), true),
+        set_config('app.request_id', $2, true)`,
+      [userId, requestId],
+    );
     await client.query("SET LOCAL ROLE emb_app");
-    await client.query("SELECT set_config('app.user_id', $1, true), set_config('app.request_id', $2, true)", [userId, requestId]);
     const out = await fn(client);
     await client.query("COMMIT");
     return out;
