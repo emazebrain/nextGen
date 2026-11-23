@@ -182,6 +182,38 @@ describe.skipIf(!ADMIN_URL)("row-level security", () => {
     expect(missing, `tables without forced RLS: ${missing.join(", ")}`).toEqual([]);
   });
 
+  // Postgres works out a policy loop when it plans a statement, whatever the data. Planning every kind of statement
+  // on every table as the app role therefore proves no policy leads back to its own table (the 0025 parent-portal
+  // policy did, through guardian_patient; migration 0041 removed it and this keeps it from returning).
+  it("no policy loops back to its own table, for any statement on any table", async () => {
+    const { rows } = await db.query<{ t: string; col: string }>(
+      `SELECT c.relname AS t, (SELECT a.attname FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped ORDER BY a.attnum LIMIT 1) AS col
+         FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'app' AND c.relkind = 'r' ORDER BY 1`,
+    );
+    const loops: string[] = [];
+    for (const { t, col } of rows) {
+      for (const sql of [
+        `SELECT 1 FROM app."${t}"`,
+        `INSERT INTO app."${t}" SELECT * FROM app."${t}" WHERE false`,
+        `UPDATE app."${t}" SET "${col}" = "${col}" WHERE false`,
+        `DELETE FROM app."${t}" WHERE false`,
+      ]) {
+        await asUser(ids.therapistA, async (c) => {
+          await c.query("SAVEPOINT plan");
+          const err = await c.query(`EXPLAIN ${sql}`).then(
+            () => null,
+            (e: Error) => e.message,
+          );
+          await c.query("ROLLBACK TO SAVEPOINT plan");
+          // Not being allowed to write a table is fine here; only a loop is a defect.
+          if (err && /infinite recursion/.test(err)) loops.push(`${sql.split(" ")[0]} ${t}: ${err}`);
+        });
+      }
+    }
+    expect(loops).toEqual([]);
+  });
+
   it("the application role cannot bypass RLS", async () => {
     const { rows } = await db.query<{ rolbypassrls: boolean }>(
       `SELECT rolbypassrls FROM pg_roles WHERE rolname = 'emb_app'`,
