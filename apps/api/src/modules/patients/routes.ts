@@ -276,13 +276,23 @@ export function patientRoutes(pool: pg.Pool, mailer?: Mailer, publicAppUrl?: str
       if (guardian.user_id) return { error: "already_registered" as const };
       if (!guardian.email) return { error: "no_email" as const };
 
-      // Cancel any existing pending invites for this guardian
+      // Check if a user with this email already exists on the platform.
+      // If so, link the guardian to the existing account immediately — no invite needed.
+      const { rows: existing } = await db.query(
+        `SELECT id FROM app.app_user WHERE email = $1`,
+        [guardian.email],
+      );
+      if (existing[0]) {
+        await db.query(`UPDATE app.guardian SET user_id = $1 WHERE id = $2`, [existing[0].id, gid]);
+        return { linked: true as const, guardian_email: guardian.email, guardian_name: guardian.full_name };
+      }
+
+      // No existing account — create an invite for the guardian to register
       await db.query(
         `UPDATE app.portal_invite SET status = 'cancelled' WHERE guardian_id = $1 AND status = 'pending'`,
         [gid],
       );
 
-      // Create the invite
       const inviteId = uuidv7();
       const { rows: invites } = await db.query(
         `INSERT INTO app.portal_invite (id, guardian_id, clinic_id, created_by)
@@ -306,7 +316,12 @@ export function patientRoutes(pool: pg.Pool, mailer?: Mailer, publicAppUrl?: str
       if (result.error === "no_email") return c.json({ error: "no_email", message: "Guardian needs an email address for a portal invite" }, 422);
     }
 
-    // Send the portal invite email
+    // Auto-linked to existing account — no email needed
+    if ("linked" in result) {
+      return c.json({ ok: true, linked: true, message: "Guardian already has an account and has been linked automatically." }, 200);
+    }
+
+    // New account needed — send the portal invite email
     if (mailer && "token" in result) {
       const portalUrl = `${publicAppUrl ?? "https://next-gen-cyan.vercel.app"}/parent/register/${result.token}`;
       void mailer.sendPortalInvite(result.guardian_email, result.clinic_name, portalUrl, "he");
