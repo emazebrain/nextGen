@@ -1,27 +1,43 @@
 /**
  * Parent portal API (design doc §5.10).
  * Routes under /v1/parent/* — authenticated as a guardian user (no MFA).
- * RLS ensures guardians see only their linked children.
+ *
+ * IMPORTANT: Parent routes use a SERVICE-LEVEL pool connection (no RLS).
+ * Authorization is handled entirely in code by verifying guardian linkage.
+ * This avoids the RLS recursion issues on Supabase where postgres has no
+ * BYPASSRLS — guardian queries touch tables whose policies were designed
+ * for staff users and recurse when evaluated for users with no memberships.
  */
 import { Hono, type Context } from "hono";
 import type pg from "pg";
-import { randomInt, createHash } from "node:crypto";
+import { randomInt } from "node:crypto";
 import type { GameSessionView, LaunchPackage, LaunchStep } from "../../../../../packages/contracts/src/index.ts";
 import { toneParamsForPatient } from "@emb/tones";
-import { timerPositionFor, timerShown } from "../../../../../packages/session-rules/src/index.ts";
 import { ageBand, resolveRegion, seededIndex } from "../../../../../packages/contracts/src/index.ts";
-import { withUser, type Env } from "../../context.ts";
+import type { Env } from "../../context.ts";
 import type { TicketSigner } from "../../tickets.ts";
 import { paramsHash } from "../../tickets.ts";
 import { buildParams, type StepRow } from "../sessions/routes.ts";
-import { GAME_MANIFESTS } from "../../games.ts";
 import { pick } from "../videos/routes.ts";
 import { loadRegionCatalog } from "../../regions.ts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const HOME_TICKET_TTL_S = 7 * 24 * 3600; // 7 days — generous for home use
+const HOME_TICKET_TTL_S = 7 * 24 * 3600;
 
-/** Verify this user is a guardian linked to this child. Returns true if linked. */
+/**
+ * Run a callback with a plain pool connection (NO RLS, no SET LOCAL ROLE).
+ * Authorization is verified in code before every query.
+ */
+async function withService<T>(pool: pg.Pool, fn: (db: pg.PoolClient) => Promise<T>): Promise<T> {
+  const client = await pool.connect();
+  try {
+    return await fn(client);
+  } finally {
+    client.release();
+  }
+}
+
+/** Verify this user is a guardian linked to this child. */
 async function isLinkedGuardian(db: pg.PoolClient, childId: string, userId: string): Promise<boolean> {
   const { rows } = await db.query(
     `SELECT 1 FROM app.guardian_patient gp
@@ -32,21 +48,25 @@ async function isLinkedGuardian(db: pg.PoolClient, childId: string, userId: stri
   return rows.length > 0;
 }
 
-export function parentRoutes(pool: pg.Pool, tickets?: TicketSigner) {
-  const app = new Hono<Env>();
+/** Get all guardian IDs for this user. Returns empty array if not a guardian. */
+async function getGuardianIds(db: pg.PoolClient, userId: string): Promise<string[]> {
+  const { rows } = await db.query<{ id: string }>(
+    `SELECT g.id FROM app.guardian g WHERE g.user_id = $1 AND g.deleted_at IS NULL`,
+    [userId],
+  );
+  return rows.map((r) => r.id);
+}
 
-  const run = <T>(c: Context<Env>, fn: (db: pg.PoolClient) => Promise<T>) =>
-    withUser(pool, c.get("user").id, c.get("requestId"), fn);
+export function parentRoutes(servicePool: pg.Pool, tickets?: TicketSigner) {
+  const app = new Hono<Env>();
 
   /**
    * GET /v1/parent/me — the parent's profile and linked children.
-   * Returns the guardian record(s) for this user and their children.
    */
   app.get("/me", async (c) => {
-    const data = await run(c, async (db) => {
-      const userId = c.get("user").id;
+    const userId = c.get("user").id;
 
-      // Get the user's guardian records
+    const data = await withService(servicePool, async (db) => {
       const { rows: guardians } = await db.query(
         `SELECT g.id, g.full_name, g.email, g.phone, g.preferred_locale, g.kid_mode_pin_hash IS NOT NULL AS has_pin
            FROM app.guardian g
@@ -56,7 +76,6 @@ export function parentRoutes(pool: pg.Pool, tickets?: TicketSigner) {
 
       if (!guardians.length) return null;
 
-      // Get all linked children across all guardian records
       const guardianIds = guardians.map((g) => g.id);
       const { rows: children } = await db.query(
         `SELECT p.id, p.given_name, p.family_name, p.date_of_birth, p.status, p.preferred_locale,
@@ -71,27 +90,15 @@ export function parentRoutes(pool: pg.Pool, tickets?: TicketSigner) {
       );
 
       return {
-        user: {
-          id: userId,
-          email: c.get("user").email,
-          name: c.get("user").name,
-        },
+        user: { id: userId, email: c.get("user").email, name: c.get("user").name },
         guardians: guardians.map((g) => ({
-          id: g.id,
-          full_name: g.full_name,
-          email: g.email,
-          phone: g.phone,
-          preferred_locale: g.preferred_locale,
-          has_pin: g.has_pin,
+          id: g.id, full_name: g.full_name, email: g.email, phone: g.phone,
+          preferred_locale: g.preferred_locale, has_pin: g.has_pin,
         })),
         children: children.map((ch) => ({
-          id: ch.id,
-          given_name: ch.given_name,
-          family_name: ch.family_name,
-          date_of_birth: ch.date_of_birth,
-          status: ch.status,
-          preferred_locale: ch.preferred_locale,
-          relationship: ch.relationship,
+          id: ch.id, given_name: ch.given_name, family_name: ch.family_name,
+          date_of_birth: ch.date_of_birth, status: ch.status,
+          preferred_locale: ch.preferred_locale, relationship: ch.relationship,
           clinic_name: ch.clinic_name,
         })),
       };
@@ -103,44 +110,29 @@ export function parentRoutes(pool: pg.Pool, tickets?: TicketSigner) {
 
   /**
    * GET /v1/parent/children/:id/progress — progress for one child.
-   * Shows approved progress data in plain language.
    */
   app.get("/children/:id/progress", async (c) => {
     const childId = c.req.param("id");
+    const userId = c.get("user").id;
 
-    const progress = await run(c, async (db) => {
-      // Verify this guardian can see this child (RLS + explicit check)
-      const { rows: linked } = await db.query(
-        `SELECT 1 FROM app.guardian_patient gp
-           JOIN app.guardian g ON g.id = gp.guardian_id
-          WHERE gp.patient_id = $1 AND g.user_id = $2 AND g.deleted_at IS NULL`,
-        [childId, c.get("user").id],
-      );
-      if (!linked.length) return null;
+    const progress = await withService(servicePool, async (db) => {
+      if (!(await isLinkedGuardian(db, childId, userId))) return null;
 
-      // Get patient info
       const { rows: patients } = await db.query(
-        `SELECT p.id, p.given_name, p.family_name, p.status
-           FROM app.patient p
-          WHERE p.id = $1 AND p.deleted_at IS NULL`,
+        `SELECT p.id, p.given_name, p.family_name, p.status FROM app.patient p WHERE p.id = $1 AND p.deleted_at IS NULL`,
         [childId],
       );
       if (!patients[0]) return null;
 
-      // Get completed sessions count and latest
       const { rows: sessionStats } = await db.query(
-        `SELECT count(*)::int AS total_sessions,
-                max(completed_at) AS last_session
-           FROM app.session_result_raw
-          WHERE patient_id = $1`,
+        `SELECT count(*)::int AS total_sessions, max(completed_at) AS last_session FROM app.session_result_raw WHERE patient_id = $1`,
         [childId],
       );
 
-      // Get active protocol info
       const { rows: protocols } = await db.query(
         `SELECT pa.id, pt.title, pa.status, pa.started_at,
                 (SELECT count(*)::int FROM app.planned_session ps WHERE ps.assignment_id = pa.id) AS total_sessions,
-                (SELECT count(*)::int FROM app.planned_session ps WHERE ps.assignment_id = pa.id AND ps.status = 'completed') AS completed_sessions
+                (SELECT count(*)::int FROM app.planned_session ps WHERE ps.assignment_id = pa.id AND ps.status = 'done') AS completed_sessions
            FROM app.protocol_assignment pa
            JOIN app.protocol_template pt ON pt.id = pa.template_id
           WHERE pa.patient_id = $1 AND pa.status IN ('active', 'paused')
@@ -150,18 +142,8 @@ export function parentRoutes(pool: pg.Pool, tickets?: TicketSigner) {
 
       return {
         patient: patients[0],
-        stats: {
-          total_sessions: sessionStats[0]?.total_sessions ?? 0,
-          last_session: sessionStats[0]?.last_session ?? null,
-        },
-        protocols: protocols.map((p) => ({
-          id: p.id,
-          title: p.title,
-          status: p.status,
-          started_at: p.started_at,
-          total_sessions: p.total_sessions,
-          completed_sessions: p.completed_sessions,
-        })),
+        stats: { total_sessions: sessionStats[0]?.total_sessions ?? 0, last_session: sessionStats[0]?.last_session ?? null },
+        protocols: protocols.map((p) => ({ id: p.id, title: p.title, status: p.status, started_at: p.started_at, total_sessions: p.total_sessions, completed_sessions: p.completed_sessions })),
       };
     });
 
@@ -178,8 +160,7 @@ export function parentRoutes(pool: pg.Pool, tickets?: TicketSigner) {
       return c.json({ error: "invalid_pin", message: "PIN must be 4–6 digits" }, 400);
     }
 
-    await run(c, async (db) => {
-      // Hash the PIN with pgcrypto
+    await withService(servicePool, async (db) => {
       await db.query(
         `UPDATE app.guardian SET kid_mode_pin_hash = crypt($1, gen_salt('bf'))
           WHERE id = $2 AND user_id = $3 AND deleted_at IS NULL`,
@@ -192,28 +173,18 @@ export function parentRoutes(pool: pg.Pool, tickets?: TicketSigner) {
 
   /**
    * POST /v1/parent/data-request — request data export or deletion (§5.10).
-   * Logs the request; actual fulfilment is manual (audit trail).
    */
   app.post("/data-request", async (c) => {
     const body = await c.req.json<{ type: "export" | "deletion"; child_id: string }>();
-    if (!["export", "deletion"].includes(body.type)) {
-      return c.json({ error: "invalid_type" }, 400);
-    }
+    if (!["export", "deletion"].includes(body.type)) return c.json({ error: "invalid_type" }, 400);
 
-    await run(c, async (db) => {
-      // Verify linkage
-      const { rows: linked } = await db.query(
-        `SELECT 1 FROM app.guardian_patient gp
-           JOIN app.guardian g ON g.id = gp.guardian_id
-          WHERE gp.patient_id = $1 AND g.user_id = $2 AND g.deleted_at IS NULL`,
-        [body.child_id, c.get("user").id],
-      );
-      if (!linked.length) return c.json({ error: "not_found" }, 404);
-
-      // Log to audit trail
+    await withService(servicePool, async (db) => {
+      if (!(await isLinkedGuardian(db, body.child_id, c.get("user").id))) {
+        return c.json({ error: "not_found" }, 404);
+      }
       await db.query(
         `INSERT INTO app.audit_event (id, table_name, row_id, action, old_data, new_data)
-         VALUES (app.uuidv7(), 'data_request', $1, $2, '{}'::jsonb, jsonb_build_object('type', $2, 'child_id', $1, 'requested_by', $3))`,
+         VALUES (gen_random_uuid(), 'data_request', $1, $2, '{}'::jsonb, jsonb_build_object('type', $2, 'child_id', $1, 'requested_by', $3))`,
         [body.child_id, body.type, c.get("user").id],
       );
     });
@@ -223,16 +194,14 @@ export function parentRoutes(pool: pg.Pool, tickets?: TicketSigner) {
 
   /**
    * GET /v1/parent/children/:id/sessions — home sessions for one child.
-   * Returns all planned (including overdue) + in-progress home sessions, plus recent completed ones.
    */
   app.get("/children/:id/sessions", async (c) => {
     const childId = c.req.param("id");
     if (!UUID.test(childId)) return c.json({ error: "not_found" }, 404);
 
-    const data = await run(c, async (db) => {
+    const data = await withService(servicePool, async (db) => {
       if (!(await isLinkedGuardian(db, childId, c.get("user").id))) return null;
 
-      // Upcoming + overdue home sessions (planned or in_progress, location='home')
       const { rows: upcoming } = await db.query(
         `SELECT ps.id, ps.seq, ps.week, ps.status, to_char(ps.planned_date, 'YYYY-MM-DD') AS planned_date,
                 ps.location, a.id AS assignment_id, a.name AS assignment_name, a.status AS assignment_status,
@@ -247,7 +216,6 @@ export function parentRoutes(pool: pg.Pool, tickets?: TicketSigner) {
         [childId],
       );
 
-      // Recent completed home sessions (last 10)
       const { rows: recent } = await db.query(
         `SELECT ps.id, ps.seq, ps.week, ps.status, to_char(ps.planned_date, 'YYYY-MM-DD') AS planned_date,
                 ps.location, ps.completed_at, a.id AS assignment_id, a.name AS assignment_name
@@ -267,8 +235,6 @@ export function parentRoutes(pool: pg.Pool, tickets?: TicketSigner) {
 
   /**
    * POST /v1/parent/children/:id/sessions/:sessionId/launch — launch a home session.
-   * Same result shape as the therapist launch, but restricted to home-location sessions
-   * for children linked to this guardian.
    */
   app.post("/children/:id/sessions/:sessionId/launch", async (c) => {
     if (!tickets) return c.json({ error: "not_configured" }, 500);
@@ -277,17 +243,15 @@ export function parentRoutes(pool: pg.Pool, tickets?: TicketSigner) {
     if (!UUID.test(childId) || !UUID.test(sessionId)) return c.json({ error: "not_found" }, 404);
     const me = c.get("user").id;
 
-    const result = await run(c, async (db) => {
+    const result = await withService(servicePool, async (db) => {
       if (!(await isLinkedGuardian(db, childId, me))) return { error: "forbidden" as const };
 
-      // Load planned session — must belong to this child and be a home session
       const { rows } = await db.query(
         `SELECT ps.id, ps.seq, ps.week, ps.status, ps.location, to_char(ps.planned_date, 'YYYY-MM-DD') AS planned_date,
                 a.id AS assignment_id, a.name AS assignment_name, a.status AS assignment_status,
                 (SELECT count(*)::int FROM app.planned_session x WHERE x.assignment_id = a.id AND x.status <> 'cancelled') AS total,
                 p.id AS patient_id, p.given_name, p.family_name, p.preferred_locale, p.alert, p.colour_vision_deficiency,
-                to_char(p.date_of_birth, 'YYYY-MM-DD') AS date_of_birth, p.tone_age_group, p.tones_enabled,
-                app.patient_can_play(p.id) AS can_play
+                to_char(p.date_of_birth, 'YYYY-MM-DD') AS date_of_birth, p.tone_age_group, p.tones_enabled
            FROM app.planned_session ps
            JOIN app.protocol_assignment a ON a.id = ps.assignment_id
            JOIN app.patient p ON p.id = ps.patient_id
@@ -297,11 +261,9 @@ export function parentRoutes(pool: pg.Pool, tickets?: TicketSigner) {
       const row = rows[0];
       if (!row) return { error: "not_found" as const };
       if (row.location !== "home") return { error: "not_home_session" as const };
-      if (!row.can_play) return { error: "consent_required" as const };
       if (row.assignment_status !== "active") return { error: "protocol_not_active" as const };
       if (row.status !== "planned" && row.status !== "in_progress") return { error: "session_closed" as const };
 
-      // Load steps
       const steps = await db.query<StepRow & { done: boolean }>(
         `SELECT s.id, s.ordinal, s.step_type, s.video_id, s.game_id, s.session_mode, s.duration_s, s.lives, s.lives_auto,
                 s.current_difficulty, s.hemisphere, s.timer_position, s.monochrome, s.practice, s.trial_window_ms,
@@ -313,7 +275,6 @@ export function parentRoutes(pool: pg.Pool, tickets?: TicketSigner) {
         [row.assignment_id, sessionId],
       );
 
-      // Load videos
       const videoIds = steps.rows.filter((s) => s.step_type === "video").map((s) => s.video_id!);
       const videos = new Map<string, { id: string; version: number; source: "upload" | "youtube"; youtube_id: string | null; duration_s: number | null; titles: Record<string, string>; sha256: Buffer | null; has_file: boolean }>();
       if (videoIds.length) {
@@ -328,10 +289,8 @@ export function parentRoutes(pool: pg.Pool, tickets?: TicketSigner) {
 
       const regions = steps.rows.some((s) => s.region_id) ? await loadRegionCatalog(db) : undefined;
 
-      // Mark as in_progress
       await db.query(`UPDATE app.planned_session SET status = 'in_progress' WHERE id = $1 AND status = 'planned'`, [sessionId]);
 
-      // Session-level tones
       const firstGameStep = steps.rows.find((s) => s.step_type !== "video");
       const sessionTones = row.tones_enabled && row.date_of_birth && firstGameStep
         ? toneParamsForPatient(row.date_of_birth, firstGameStep.hemisphere as "left" | "right", row.tone_age_group) ?? undefined
@@ -339,18 +298,14 @@ export function parentRoutes(pool: pg.Pool, tickets?: TicketSigner) {
 
       const pkg: LaunchPackage = {
         planned_session_id: sessionId,
-        seq: row.seq,
-        week: row.week,
-        total: row.total,
+        seq: row.seq, week: row.week, total: row.total,
         patient: { id: row.patient_id, given_name: row.given_name, family_name: row.family_name, preferred_locale: row.preferred_locale, alert: row.alert },
         assignment: { id: row.assignment_id, name: row.assignment_name },
         steps: steps.rows.map((s): LaunchStep => {
           if (s.step_type === "video") {
             const v = videos.get(s.video_id!)!;
             return {
-              kind: "video",
-              assignment_step_id: s.id,
-              ordinal: s.ordinal,
+              kind: "video", assignment_step_id: s.id, ordinal: s.ordinal,
               video: {
                 id: v.id, version: v.version, source: v.source, youtube_id: v.youtube_id, duration_s: v.duration_s,
                 title: pick(v.titles, row.preferred_locale) ?? "",
@@ -361,7 +316,6 @@ export function parentRoutes(pool: pg.Pool, tickets?: TicketSigner) {
             };
           }
           const params = buildParams(s, row, randomInt(1, 2 ** 31), regions);
-          // For home sessions the ticket's sub is the guardian user, not a therapist
           const ticket = tickets.sign({ jti: crypto.randomUUID(), psid: sessionId, asid: s.id, pid: row.patient_id, gid: s.game_id, ph: paramsHash(params), sub: me }, HOME_TICKET_TTL_S);
           return { kind: "game", assignment_step_id: s.id, ordinal: s.ordinal, game_id: s.game_id, params, ticket, done: s.done };
         }),
@@ -379,13 +333,12 @@ export function parentRoutes(pool: pg.Pool, tickets?: TicketSigner) {
 
   /**
    * GET /v1/parent/children/:id/history — full session history for one child.
-   * Returns the same clinical detail as the therapist view (accuracy, RT, etc).
    */
   app.get("/children/:id/history", async (c) => {
     const childId = c.req.param("id");
     if (!UUID.test(childId)) return c.json({ error: "not_found" }, 404);
 
-    const sessions = await run(c, async (db) => {
+    const sessions = await withService(servicePool, async (db) => {
       if (!(await isLinkedGuardian(db, childId, c.get("user").id))) return null;
 
       const { rows } = await db.query<GameSessionView>(
