@@ -1,6 +1,6 @@
 # Reports dashboard redesign — design
 
-Status: draft for approval (2026-11-23). Extends design doc §5.9.2. Mockup: "Reports Dashboard Mockup" artifact (version 5).
+Status: approved 2026-11-23; built the same day. See "As built" at the end for where the build differs. Extends design doc §5.9.2. Mockup: "Reports Dashboard Mockup" artifact (version 5).
 
 ## Intent
 
@@ -110,3 +110,13 @@ The API tests for the report routes run against row-level security. That suite i
 - Exact SQL for loading the last eight scored sessions per patient in one query.
 - Tile and table breakpoints below 900 px.
 - Whether "Whole clinic" remembers its last value per user (default: not remembered).
+
+## As built
+
+- **No scope switch.** The API already shows a therapist their care team and a clinic manager the whole clinic (`app.can_treat_patient`), as the earlier report routes did. A "My caseload / Whole clinic" control would only have narrowed a manager's view; it was left out.
+- **Totals come from a new `GET /v1/reports/overview?days=`**, not an extended `/reports/summary`. The older `summary` and `sessions-over-time` routes remain but the page no longer calls them.
+- **"This week" is the last seven days**, today included, for the caseload column, the adherence chart and the tiles. Weeks start on different days in different places; a rolling week means the same thing everywhere.
+- **The baseline in each sparkline is always 100**, by definition of the score, so the row carries no separate baseline value.
+- **Both "Review" and "Open" lead to the patient's Progress page**, where flagged results are decided. The review queue on Today has no per-patient address to link to.
+- **Glass needs no new tokens.** The tile colours are mixed from the existing surface and text tokens, so they follow light and dark on their own. They apply only when a platform background is set.
+- The pure function is `caseloadSummary` in `@emb/metrics`; the routes are in `apps/api/src/modules/sessions/reports.ts`.

@@ -1764,71 +1764,460 @@ a.gamecard:hover {
   gap: var(--space-1, 4px);
   flex-shrink: 0;
 }
-/* Reports dashboard (design doc §5.9.2) */
-.reports-tiles {
+/* ------------------------------------------------------------ Reports (reports dashboard design 2026-11-23)
+ * Tiles are plain cards by default. When a platform background is set (Admin → Appearance), they turn to frosted
+ * glass over it and the page's own veil lightens so the background shows between them. Text, chips and chart marks
+ * are always opaque. Where the browser can't blur what's behind, the tiles stay nearly solid. */
+.reports {
+  --r-glass: var(--bg-surface);
+  --r-well: var(--bg-subtle);
+  --r-solid: var(--bg-surface);
+  --r-stroke: transparent;
+  --r-radius: var(--radius-card);
+  --r-chart-1: var(--chart-1);
+  --r-chart-2: var(--status-info);
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: var(--space-3, 12px);
-  margin-block-end: var(--space-4, 16px);
+  gap: var(--space-4);
 }
-.reports-tile {
-  text-align: center;
-  padding-block: var(--space-3, 12px);
+:root[data-app-bg] .reports {
+  --r-glass: color-mix(in srgb, var(--bg-surface) 74%, transparent);
+  --r-well: color-mix(in srgb, var(--text-primary) 7%, transparent);
+  --r-solid: color-mix(in srgb, var(--bg-surface) 88%, transparent);
+  --r-stroke: color-mix(in srgb, var(--bg-surface) 80%, transparent);
+  --r-radius: 24px;
 }
-.reports-tile dt {
-  font-size: 0.8125rem;
-  color: var(--text-muted);
-  margin-block-end: var(--space-1, 4px);
+:root[data-app-bg] .emb-main:has(.reports) {
+  background: color-mix(in srgb, var(--bg-canvas) 26%, transparent);
+  backdrop-filter: saturate(1.2) blur(5px);
 }
-.reports-tile dd {
-  font-size: 1.75rem;
-  font-weight: 600;
+.reports .glass {
+  background: var(--r-glass);
+  border: 1px solid var(--r-stroke);
+  border-radius: var(--r-radius);
+  box-shadow: var(--elev-1);
+}
+:root[data-app-bg] .reports .glass {
+  backdrop-filter: saturate(1.5) blur(14px);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root[data-app-bg] .reports {
+    --r-glass: color-mix(in srgb, var(--bg-surface) 94%, transparent);
+  }
+  :root[data-app-bg] .emb-main:has(.reports) {
+    background: color-mix(in srgb, var(--bg-canvas) 80%, transparent);
+  }
+}
+.reports__head {
+  padding: var(--space-3) var(--space-4);
+}
+.reports__head .emb-pagehead {
   margin: 0;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-default);
 }
-.reports-controls {
+.reports__stage {
+  display: grid;
+  gap: var(--space-4);
+}
+.reports__tile {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+  min-inline-size: 0;
+  padding: var(--space-4);
+}
+.reports__tilehead {
   display: flex;
-  gap: var(--space-2, 8px);
-  align-items: center;
   flex-wrap: wrap;
-  margin-block-end: var(--space-3, 12px);
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
 }
-.reports-chart {
-  min-block-size: 120px;
-  max-block-size: 180px;
+.reports__two {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: var(--space-4);
+}
+.reports__count {
+  margin-inline-start: var(--space-2);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-primary);
+  color: var(--text-on-brand);
+  font-size: var(--text-12);
+  font-weight: 600;
+}
+.reports__stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+@media (max-width: 1100px) {
+  .reports__stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .reports__two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 520px) {
+  .reports__stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.rstat {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-1) var(--space-3);
+  align-items: end;
+  min-block-size: 132px;
+  padding: var(--space-3) var(--space-4);
+}
+.rstat__label {
+  grid-column: 1 / -1;
+  align-self: start;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-14);
+  font-weight: 600;
+}
+.rstat__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 30px;
+  block-size: 30px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-primary-subtle);
+  color: var(--brand-primary);
+}
+.rstat__value {
+  display: block;
+  font-family: var(--font-display);
+  font-size: var(--text-30);
+  font-weight: 600;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+.rstat small {
+  display: block;
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+}
+.rstat > svg,
+.rstat__faces {
+  justify-self: end;
+}
+.rstat__faces {
+  display: flex;
+  padding-inline-start: 8px;
+}
+.rstat__faces > * {
+  margin-inline-start: -8px;
+  box-shadow: 0 0 0 2px var(--bg-surface);
+}
+.rstat__more {
+  display: grid;
+  place-items: center;
+  min-inline-size: 30px;
+  block-size: 30px;
+  padding-inline: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: var(--text-12);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Worth a look */
+.rlook {
+  display: grid;
+  gap: var(--space-2);
+}
+.rlook__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: 18px;
+  background: var(--r-well);
+}
+.rlook__text {
+  display: grid;
+  gap: 4px;
+  min-inline-size: 0;
+}
+.rlook__name {
+  font-weight: 600;
+}
+.rlook__reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.rlook__reasons .emb-chip {
+  background-color: var(--r-solid);
+}
+.rlook__reasons .emb-chip--warning {
+  background-color: var(--status-warning-subtle);
+}
+@media (max-width: 520px) {
+  .rlook__item {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .rlook__go {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Plan chart legend */
+.rlegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+}
+.rlegend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.rlegend__sw {
+  inline-size: 10px;
+  block-size: 10px;
+  border-radius: var(--radius-pill);
+}
+.rlegend__sw--clinic {
+  background: var(--r-chart-1);
+}
+.rlegend__sw--home {
+  background: var(--r-chart-2);
+}
+.rlegend__sw--planned {
+  border: 1.5px dashed var(--chart-axis);
+}
+
+/* Caseload table */
+.rcase__scroll {
   overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
 }
-.reports-chart svg {
+.rcase {
   inline-size: 100%;
+  min-inline-size: 760px;
+  border-collapse: separate;
+  border-spacing: 0 6px;
+  margin-block: -6px;
+}
+.rcase th {
+  padding: 6px var(--space-3) 2px;
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+  font-weight: 500;
+  text-align: start;
+  white-space: nowrap;
+}
+.rcase td {
+  padding: 9px var(--space-3);
+  background: var(--r-well);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.rcase td:first-child {
+  border-start-start-radius: 16px;
+  border-end-start-radius: 16px;
+}
+.rcase td:last-child {
+  border-start-end-radius: 16px;
+  border-end-end-radius: 16px;
+}
+.rcase .is-num {
+  text-align: end;
+}
+.rcase__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-block-size: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.rcase__sort:hover {
+  color: var(--text-primary);
+}
+.rcase__who,
+.rcase__week,
+.rcase__diff {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.rcase__diff {
+  gap: 4px;
+}
+.rcase__name {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: none;
+}
+.rcase__name:hover {
+  color: var(--brand-primary);
+  text-decoration: underline;
+}
+.rcase__pips {
+  display: inline-flex;
+  gap: 3px;
+}
+.rcase__pip {
+  inline-size: 16px;
+  block-size: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--chart-grid);
+}
+.rcase__pip.is-done {
+  background: var(--r-chart-1);
+}
+
+/* Activities */
+.racts {
+  display: grid;
+  gap: var(--space-2);
+}
+.racts__row {
+  display: grid;
+  grid-template-columns: minmax(110px, 180px) minmax(0, 1fr) 4ch 5ch;
+  align-items: center;
+  gap: var(--space-3);
+}
+.racts__track {
+  overflow: hidden;
+  block-size: 10px;
+  border-radius: var(--radius-pill);
+  background: var(--chart-grid);
+}
+.racts__fill {
+  display: block;
   block-size: 100%;
-  max-block-size: 180px;
-  min-inline-size: 320px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, var(--r-chart-1), var(--r-chart-2));
 }
-.reports-bar {
-  fill: var(--brand-500, #6366f1);
-  transition: opacity 0.15s ease;
+[dir="rtl"] .racts__fill {
+  background: linear-gradient(270deg, var(--r-chart-1), var(--r-chart-2));
 }
-.reports-bar:hover {
-  opacity: 0.8;
+.racts__num {
+  text-align: end;
 }
-.reports-gridline {
-  stroke: var(--border-default, #e5e7eb);
-  stroke-width: 0.5;
+
+/* Charts: physical left-to-right, so they keep their direction in RTL pages */
+.rchart {
+  display: block;
+  max-inline-size: 100%;
+  direction: ltr;
+}
+.rchart--plan {
+  inline-size: 100%;
+  block-size: auto;
+}
+.rchart text {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.rchart__tick {
+  fill: var(--text-secondary);
+}
+.rchart__grid {
+  stroke: var(--chart-grid);
+}
+.rchart__baseline,
+.rchart__planned {
+  stroke: var(--chart-axis);
+}
+.rchart__baseline {
+  stroke-dasharray: 2 3;
+}
+.rchart__planned {
+  stroke-width: 1.5;
   stroke-dasharray: 4 3;
 }
-.reports-bar-label {
-  font-size: 0.625rem;
-  fill: var(--text-muted);
-  text-anchor: middle;
+.rchart__line {
+  fill: none;
+  stroke: var(--r-chart-1);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
 }
-.reports-bar-value {
-  font-size: 0.625rem;
-  font-weight: 500;
-  fill: var(--text-default);
-  text-anchor: middle;
-  font-variant-numeric: tabular-nums;
+.rchart__dot {
+  fill: var(--r-chart-1);
+}
+.rchart__fade-a {
+  stop-color: var(--r-chart-1);
+  stop-opacity: 0.3;
+}
+.rchart__fade-b {
+  stop-color: var(--r-chart-1);
+  stop-opacity: 0;
+}
+.rchart--alt .rchart__line {
+  stroke: var(--r-chart-2);
+  stroke-width: 2.5;
+}
+.rchart--alt .rchart__fade-a,
+.rchart--alt .rchart__fade-b {
+  stop-color: var(--r-chart-2);
+}
+.rchart--alt .rchart__knob {
+  stroke: var(--r-chart-2);
+  stroke-width: 2.5;
+}
+.rchart__track,
+.rchart__arc {
+  fill: none;
+  stroke-width: 8;
+  stroke-linecap: round;
+}
+.rchart__track {
+  stroke: var(--chart-grid);
+}
+.rchart__grad-a {
+  stop-color: var(--r-chart-2);
+}
+.rchart__grad-b {
+  stop-color: var(--r-chart-1);
+}
+.rchart__knob {
+  fill: var(--bg-surface);
+  stroke: var(--r-chart-1);
+  stroke-width: 3;
+}
+.rchart__bar {
+  fill: var(--chart-axis);
+  opacity: 0.4;
+}
+.rchart__bar--now {
+  fill: var(--r-chart-1);
+  opacity: 1;
+}
+.rchart__bubble {
+  fill: var(--bg-surface);
+}
+.rchart .rchart__bubbletext {
+  fill: var(--text-primary);
+  font-size: 11px;
+  font-weight: 600;
+}
+.rchart__clinic {
+  fill: var(--r-chart-1);
+}
+.rchart__home {
+  fill: var(--r-chart-2);
 }
 .review-cell {
   display: inline-flex;

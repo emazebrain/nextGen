@@ -437,41 +437,76 @@ export function useReviewFromQueue(clinicId: string | null) {
 
 // ---------------------------------------------------------------- reports (design doc §5.9.2)
 
-export interface ReportsSummary {
-  total_sessions: number;
+export type TrendSummary = "not_enough" | "improving" | "steady" | "declining";
+export type ReasonKind = "review" | "missed_home" | "missed_clinic" | "inactive" | "declining" | "stepped_down";
+export interface CaseloadReason {
+  kind: ReasonKind;
+  count?: number;
+  days?: number;
+}
+/** One patient on the Reports caseload (reports dashboard design 2026-11-23). */
+export interface CaseloadRow {
+  patient_id: string;
+  given_name: string;
+  family_name: string;
+  /** Up to eight latest scores, oldest first; 100 is the child's own baseline. */
+  scores: Array<number | null>;
+  summary: TrendSummary;
+  /** The last seven days. */
+  week: { done: number; planned: number };
+  difficulty: number | null;
+  last_change: "up" | "down" | null;
+  last_session_at: string | null;
+  reasons: CaseloadReason[];
+}
+export interface ReportsOverview {
+  sessions: number;
+  sessions_this_week: number;
   active_patients: number;
-  sessions_this_month: number;
+  in_care: number;
   avg_duration_ms: number | null;
+  /** Done ÷ (done + missed) planned sessions in the range; null when nothing was planned. */
+  plan_followed: number | null;
+  /** Six rolling weeks, oldest first. */
+  weekly: Array<{ week_start: string; sessions: number; avg_duration_ms: number | null }>;
+}
+export interface AdherenceWeek {
+  week_start: string;
+  planned: number;
+  done_clinic: number;
+  done_home: number;
 }
 
-export function useReportsSummary(clinicId: string | null) {
+const reportQs = (clinicId: string | null, extra: Record<string, string | number> = {}) => {
+  const q = new URLSearchParams();
+  if (clinicId) q.set("clinic", clinicId);
+  for (const [k, v] of Object.entries(extra)) q.set(k, String(v));
+  const qs = q.toString();
+  return qs ? `?${qs}` : "";
+};
+
+export function useCaseload(clinicId: string | null) {
   return useQuery({
-    queryKey: ["reports", "summary", clinicId],
-    queryFn: ({ signal }) => {
-      const q = clinicId ? `?clinic=${clinicId}` : "";
-      return apiGet<ReportsSummary>(`/v1/reports/summary${q}`, { signal });
-    },
+    queryKey: ["reports", "caseload", clinicId],
+    queryFn: ({ signal }) => apiGet<{ patients: CaseloadRow[] }>(`/v1/reports/caseload${reportQs(clinicId)}`, { signal }).then((r) => r.patients),
     retry,
     staleTime: 60_000,
   });
 }
 
-export interface TimeSeriesPoint {
-  period: string;
-  count: number;
+export function useReportsOverview(clinicId: string | null, days: number) {
+  return useQuery({
+    queryKey: ["reports", "overview", clinicId, days],
+    queryFn: ({ signal }) => apiGet<ReportsOverview>(`/v1/reports/overview${reportQs(clinicId, { days })}`, { signal }),
+    retry,
+    staleTime: 60_000,
+  });
 }
 
-export function useSessionsOverTime(clinicId: string | null, period: "day" | "week" | "month", from?: string, to?: string) {
+export function useAdherence(clinicId: string | null) {
   return useQuery({
-    queryKey: ["reports", "sessions-over-time", clinicId, period, from, to],
-    queryFn: ({ signal }) => {
-      const q = new URLSearchParams();
-      if (clinicId) q.set("clinic", clinicId);
-      q.set("period", period);
-      if (from) q.set("from", from);
-      if (to) q.set("to", to);
-      return apiGet<{ data: TimeSeriesPoint[] }>(`/v1/reports/sessions-over-time?${q}`, { signal }).then((r) => r.data);
-    },
+    queryKey: ["reports", "adherence", clinicId],
+    queryFn: ({ signal }) => apiGet<{ weeks: AdherenceWeek[] }>(`/v1/reports/adherence${reportQs(clinicId, { weeks: 6 })}`, { signal }).then((r) => r.weeks),
     retry,
     staleTime: 60_000,
   });

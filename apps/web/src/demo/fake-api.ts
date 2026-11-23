@@ -37,7 +37,8 @@ import type {
   VideoSummary,
   VideoViewInput,
 } from "@emb/contracts";
-import { findGame } from "../games/registry.ts";
+import { GAMES, findGame } from "../games/registry.ts";
+import { caseloadSummary, type PlannedInput } from "@emb/metrics";
 
 const KEY = "emb.demo.v3";
 const DAY = 86_400_000;
@@ -655,6 +656,83 @@ async function handle(path: string, method: string, q: URLSearchParams, body: Re
       // The demo user also manages the video library, so the Videos page can be tried (ADR 0018).
       is_platform_admin: true,
     });
+  }
+
+  // Reports, caseload first (reports dashboard design 2026-11-23): the same maths as the API, over the demo data.
+  if (r0 === "reports" && method === "GET") {
+    const clinic = q.get("clinic");
+    const mine = db.patients.filter((p) => !p.archived && (!clinic || p.clinic_id === clinic));
+    const now = new Date();
+    const dayMs = 86_400_000;
+    const ymd = (d: Date) => d.toISOString().slice(0, 10);
+    const today = ymd(now);
+    const counted = (pid: string) => db.games.filter((g) => g.patient_id === pid && g.counts !== false);
+    const plannedOf = (pid: string) =>
+      db.assignments.filter((x) => x.patient_id === pid).flatMap((x) => x.sessions.map((ps) => ({ planned_date: ps.planned_date, location: "clinic" as const, status: ps.status as PlannedInput["status"] })));
+    if (r1 === "caseload") {
+      const patients = mine
+        .map((p) => {
+          const c = caseloadSummary(
+            {
+              sessions: counted(p.id),
+              planned: plannedOf(p.id),
+              decisions: db.decisions.filter((d) => d.patient_id === p.id).map((d) => ({ decided_at: d.decided_at, action: d.action })),
+              reviewPending: db.games.filter((g) => g.patient_id === p.id && g.review && g.review.decision === null).length,
+              hasActiveAssignment: db.assignments.some((x) => x.patient_id === p.id && x.status === "active"),
+            },
+            GAMES.map((g) => ({ id: g.manifest.id, metrics: g.manifest.metrics })),
+            now,
+            { today },
+          );
+          return { patient_id: p.id, given_name: p.given_name, family_name: p.family_name, scores: c.scores, summary: c.summary, week: c.week, difficulty: c.difficulty, last_change: c.lastChange, last_session_at: c.lastSessionAt, reasons: c.reasons };
+        })
+        .sort((x, y) => y.reasons.length - x.reasons.length);
+      return json({ patients });
+    }
+    const ids = new Set(mine.map((p) => p.id));
+    const games = db.games.filter((g) => ids.has(g.patient_id) && g.counts !== false);
+    const weekOf = (iso: string) => Math.floor((now.getTime() - Date.parse(iso)) / (7 * dayMs));
+    const weekStart = (n: number) => ymd(new Date(now.getTime() - (n * 7 + 6) * dayMs));
+    if (r1 === "adherence") {
+      const all = mine.flatMap((p) => plannedOf(p.id));
+      const weeks = [5, 4, 3, 2, 1, 0].map((n) => {
+        const from = weekStart(n);
+        const to = ymd(new Date(now.getTime() - n * 7 * dayMs));
+        const inWeek = all.filter((ps) => ps.planned_date >= from && ps.planned_date <= to);
+        return { week_start: from, planned: inWeek.filter((ps) => ps.status !== "cancelled" && ps.status !== "skipped").length, done_clinic: inWeek.filter((ps) => ps.status === "done").length, done_home: 0 };
+      });
+      return json({ weeks });
+    }
+    if (r1 === "overview") {
+      const days = Number(q.get("days") ?? 30);
+      const inRange = games.filter((g) => Date.parse(g.ended_at) >= now.getTime() - days * dayMs);
+      const avg = (xs: number[]) => (xs.length ? Math.round(xs.reduce((x, y) => x + y, 0) / xs.length) : null);
+      const all = mine.flatMap((p) => plannedOf(p.id)).filter((ps) => ps.planned_date > ymd(new Date(now.getTime() - days * dayMs)) && ps.planned_date <= today);
+      const doneN = all.filter((ps) => ps.status === "done").length;
+      const missedN = all.filter((ps) => ps.status === "missed" || (ps.status === "planned" && ps.planned_date < today)).length;
+      return json({
+        sessions: inRange.length,
+        sessions_this_week: games.filter((g) => weekOf(g.ended_at) === 0).length,
+        active_patients: new Set(inRange.map((g) => g.patient_id)).size,
+        in_care: mine.length,
+        avg_duration_ms: avg(inRange.map((g) => g.active_ms)),
+        plan_followed: doneN + missedN === 0 ? null : doneN / (doneN + missedN),
+        weekly: [5, 4, 3, 2, 1, 0].map((n) => {
+          const w = games.filter((g) => weekOf(g.ended_at) === n);
+          return { week_start: weekStart(n), sessions: w.length, avg_duration_ms: avg(w.map((g) => g.active_ms)) };
+        }),
+      });
+    }
+    if (r1 === "activity-breakdown") {
+      const from = q.get("from");
+      const by = new Map<string, number[]>();
+      for (const g of games) if (!from || g.ended_at >= from) by.set(g.game_id, [...(by.get(g.game_id) ?? []), g.accuracy ?? NaN]);
+      const data = [...by].map(([game_id, acc]) => {
+        const real = acc.filter((x) => !Number.isNaN(x));
+        return { game_id, count: acc.length, avg_accuracy: real.length ? real.reduce((x, y) => x + y, 0) / real.length : null };
+      });
+      return json({ data: data.sort((x, y) => y.count - x.count) });
+    }
   }
 
   if (r0 === "clinics" && r2 === "staff") {

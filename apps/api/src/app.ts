@@ -10,6 +10,7 @@ import { sessionRoutes } from "./modules/sessions/routes.ts";
 import { videoRoutes } from "./modules/videos/routes.ts";
 import { deviceRoutes } from "./modules/devices/routes.ts";
 import { offlineRoutes } from "./modules/offline/routes.ts";
+import { reportRoutes } from "./modules/sessions/reports.ts";
 import { adminAppearanceRoutes, publicAppearanceRoutes } from "./modules/appearance/routes.ts";
 import { adminRoutes } from "./modules/admin/routes.ts";
 import { orgAdminRoutes } from "./modules/org/routes.ts";
@@ -124,6 +125,7 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
     v1.route("/clinics", clinicRoutes(deps.pool));
     v1.route("/", protocolRoutes(deps.pool));
     v1.route("/", sessionRoutes(deps.pool, deps.tickets ?? ticketSigner()));
+    v1.route("/", reportRoutes(deps.pool));
     v1.route("/", videoRoutes(deps.pool, deps.files ?? localFileStore(process.env.FILE_STORE_DIR ?? ".data/files")));
     v1.route("/", deviceRoutes(deps.pool, deps.deviceKey ?? deviceKey(undefined)));
     v1.route("/", offlineRoutes(deps.pool, deps.tickets ?? ticketSigner()));

@@ -236,3 +236,110 @@ function mean(xs: readonly number[]): number {
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
 }
+
+// ---------------------------------------------------------------- Reports caseload (reports dashboard design 2026-11-23)
+
+/** A session on the patient's plan (planned_session). */
+export interface PlannedInput {
+  /** YYYY-MM-DD. */
+  planned_date: string;
+  location: "clinic" | "home";
+  status: "planned" | "in_progress" | "done" | "missed" | "skipped" | "cancelled";
+}
+
+/** A difficulty change (progression_decision). */
+export interface DecisionInput {
+  /** ISO timestamp. */
+  decided_at: string;
+  action: "up" | "down";
+}
+
+export type ReasonKind = "review" | "missed_home" | "missed_clinic" | "inactive" | "declining" | "stepped_down";
+
+/** Why a patient is worth a look. Never a judgement of the child against anyone else (§11.6). */
+export interface Reason {
+  kind: ReasonKind;
+  /** review, missed_*: how many. */
+  count?: number;
+  /** inactive: days since the last counted session (absent when there has never been one). */
+  days?: number;
+}
+
+export interface CaseloadInput {
+  /** Counted sessions only (the caller leaves out results that are excluded or awaiting review). */
+  sessions: readonly SessionInput[];
+  planned: readonly PlannedInput[];
+  decisions: readonly DecisionInput[];
+  /** Flagged results nobody has decided on yet. */
+  reviewPending: number;
+  hasActiveAssignment: boolean;
+}
+
+export interface CaseloadSummary {
+  /** Up to eight latest scores, oldest first; 100 is the child's own baseline. */
+  scores: Array<number | null>;
+  summary: Summary;
+  /** The last seven days, today included: planned sessions that weren't cancelled or skipped, and how many are done. */
+  week: { done: number; planned: number };
+  /** Difficulty of the latest session. */
+  difficulty: number | null;
+  lastChange: "up" | "down" | null;
+  lastSessionAt: string | null;
+  reasons: Reason[];
+}
+
+export interface CaseloadOptions {
+  /** Days without a session before "inactive". */
+  inactiveDays?: number;
+  /** How far back a missed session still counts. */
+  missedDays?: number;
+  /** Today as YYYY-MM-DD in the clinic's calendar; defaults to `now` in UTC. */
+  today?: string;
+}
+
+const DAY_MS = 86_400_000;
+const addDays = (ymd: string, n: number) => new Date(Date.parse(`${ymd}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
+
+/** One patient's row on the Reports caseload. `now` is passed in (no clock here). */
+export function caseloadSummary(input: CaseloadInput, games: readonly GameInfo[], now: Date, options: CaseloadOptions = {}): CaseloadSummary {
+  const inactiveDays = options.inactiveDays ?? 14;
+  const missedDays = options.missedDays ?? 7;
+  const today = options.today ?? now.toISOString().slice(0, 10);
+
+  const tr = trend(input.sessions, games, { kind: "standard", key: "accuracy" });
+  const last = [...input.sessions].sort(byTime).at(-1) ?? null;
+  const decisions = [...input.decisions].sort((a, b) => Date.parse(a.decided_at) - Date.parse(b.decided_at));
+
+  const weekFrom = addDays(today, -6);
+  const inWeek = input.planned.filter((p) => p.planned_date >= weekFrom && p.planned_date <= today && p.status !== "cancelled" && p.status !== "skipped");
+
+  const missedFrom = addDays(today, -missedDays);
+  const missed = (location: "clinic" | "home") =>
+    input.planned.filter((p) => p.location === location && p.planned_date >= missedFrom && (p.status === "missed" || (p.status === "planned" && p.planned_date < today))).length;
+
+  const reasons: Reason[] = [];
+  if (input.reviewPending > 0) reasons.push({ kind: "review", count: input.reviewPending });
+  const home = missed("home");
+  const clinic = missed("clinic");
+  if (home > 0) reasons.push({ kind: "missed_home", count: home });
+  if (clinic > 0) reasons.push({ kind: "missed_clinic", count: clinic });
+  if (input.hasActiveAssignment) {
+    if (!last) reasons.push({ kind: "inactive" });
+    else {
+      const days = Math.floor((now.getTime() - Date.parse(last.ended_at)) / DAY_MS);
+      if (days >= inactiveDays) reasons.push({ kind: "inactive", days });
+    }
+  }
+  if (tr.summary === "declining") reasons.push({ kind: "declining" });
+  if (decisions.length >= 2 && decisions.at(-1)!.action === "down" && decisions.at(-2)!.action === "down") reasons.push({ kind: "stepped_down" });
+
+  return {
+    scores: tr.points.slice(-8).map((p) => p.score),
+    summary: tr.summary,
+    week: { done: inWeek.filter((p) => p.status === "done").length, planned: inWeek.length },
+    difficulty: last?.difficulty ?? null,
+    lastChange: decisions.at(-1)?.action ?? null,
+    lastSessionAt: last?.ended_at ?? null,
+    reasons,
+  };
+}
