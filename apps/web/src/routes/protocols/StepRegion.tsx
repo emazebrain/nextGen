@@ -73,6 +73,7 @@ export function StepRegion({ step: s, manifest: m, onChange }: { step: GameStepI
     if (m.regionUse?.direction) uses.push(t("stepRegion.usesDirection"));
     if (m.regionUse?.targetLocation) uses.push(t("stepRegion.usesTarget"));
     if (m.regionUse?.rotation) uses.push(t("stepRegion.usesRotation"));
+    if (m.regionUse?.movement) uses.push(t("stepRegion.usesMovement"));
   }
   const crossed = options.filter((o) => hemisphereForSetting(o.setting!) !== side);
   const areaLabel = (a: BrainRegion) => {

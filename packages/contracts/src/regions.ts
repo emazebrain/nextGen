@@ -10,6 +10,14 @@ import type { BrainRegion } from "./videos.ts";
 
 export type Direction = "ltr" | "rtl" | "ttb" | "btt" | "tldbr" | "brdtl" | "trdbl" | "bldtr";
 export const DIRECTIONS: Direction[] = ["ltr", "rtl", "ttb", "btt", "tldbr", "brdtl", "trdbl", "bldtr"];
+/**
+ * The names of the movement types stored as numbers in `motion.movement_types` (product owner, 2026-11-23).
+ * One word: the object crosses from A to B and re-enters at A. Two words: A to B by the first, back by the second.
+ * "Intervals" means the object jumps from spot to spot instead of gliding.
+ */
+export const MOVEMENT_TYPES = ["continuous", "intervals", "continuous-continuous", "continuous-intervals", "intervals-continuous", "intervals-intervals"] as const;
+export type MovementTypeName = (typeof MOVEMENT_TYPES)[number];
+export const movementTypeName = (n: number): MovementTypeName | null => MOVEMENT_TYPES[n] ?? null;
 export type Compass = "N" | "NE" | "E" | "SE" | "S" | "SW" | "W" | "NW";
 export const COMPASS: Compass[] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
 

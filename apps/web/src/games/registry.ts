@@ -9,6 +9,7 @@ import { manifest as beepBeep } from "@emb/game-beep-beep/manifest";
 import { manifest as blockCrasher } from "@emb/game-block-crasher/manifest";
 import { manifest as catchMe } from "@emb/game-catch-me/manifest";
 import { manifest as echoKeys } from "@emb/game-echo-keys/manifest";
+import { manifest as inMySkin } from "@emb/game-in-my-skin/manifest";
 import { manifest as itsLeftItsRight } from "@emb/game-its-left-its-right/manifest";
 import { manifest as orbitalOrder } from "@emb/game-orbital-order/manifest";
 import { manifest as peekPeek } from "@emb/game-peek-peek/manifest";
@@ -30,6 +31,7 @@ export const GAMES: GameEntry[] = [
   { manifest: echoKeys, loadFrame: () => import("@emb/game-runtime/frames/echo-keys.js?raw").then((m) => m.default) },
   { manifest: blockCrasher, loadFrame: () => import("@emb/game-runtime/frames/block-crasher.js?raw").then((m) => m.default) },
   { manifest: itsLeftItsRight, loadFrame: () => import("@emb/game-runtime/frames/its-left-its-right.js?raw").then((m) => m.default) },
+  { manifest: inMySkin, loadFrame: () => import("@emb/game-runtime/frames/in-my-skin.js?raw").then((m) => m.default) },
 ];
 
 /** v1 games still being rebuilt on the SDK (design doc §8.4). All seven are native now. */

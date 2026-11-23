@@ -13,9 +13,10 @@ import { manifest as tunnelRush } from "../../../games/tunnel-rush/src/manifest.
 import { manifest as peekPeek } from "../../../games/peek-peek/src/manifest.ts";
 import { manifest as pictureTrail } from "../../../games/picture-trail/src/manifest.ts";
 import { manifest as itsLeftItsRight } from "../../../games/its-left-its-right/src/manifest.ts";
+import { manifest as inMySkin } from "../../../games/in-my-skin/src/manifest.ts";
 import type { GameStepInput } from "../../../packages/contracts/src/index.ts";
 
-export const GAME_MANIFESTS: Record<string, GameManifest> = { [catchMe.id]: catchMe, [peekPeek.id]: peekPeek, [orbitalOrder.id]: orbitalOrder, [tunnelRush.id]: tunnelRush, [beepBeep.id]: beepBeep, [echoKeys.id]: echoKeys, [blockCrasher.id]: blockCrasher, [pictureTrail.id]: pictureTrail, [itsLeftItsRight.id]: itsLeftItsRight };
+export const GAME_MANIFESTS: Record<string, GameManifest> = { [catchMe.id]: catchMe, [peekPeek.id]: peekPeek, [orbitalOrder.id]: orbitalOrder, [tunnelRush.id]: tunnelRush, [beepBeep.id]: beepBeep, [echoKeys.id]: echoKeys, [blockCrasher.id]: blockCrasher, [pictureTrail.id]: pictureTrail, [itsLeftItsRight.id]: itsLeftItsRight, [inMySkin.id]: inMySkin };
 
 /** Checks a step against its game: the game exists, supports the mode, and its own settings match the schema. */
 export function checkStepAgainstGame(step: GameStepInput, index: number): Array<{ path: string; code: string }> {

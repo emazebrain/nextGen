@@ -156,3 +156,13 @@ describe("ageBand (picture-line game spec 2026-11-10)", () => {
     expect(ageBand(null, on)).toBe("10-12");
   });
 });
+
+describe("movement types", () => {
+  it("names the stored numbers in the product owner's order", async () => {
+    const { MOVEMENT_TYPES, movementTypeName } = await import("../src/regions.ts");
+    expect(MOVEMENT_TYPES).toEqual(["continuous", "intervals", "continuous-continuous", "continuous-intervals", "intervals-continuous", "intervals-intervals"]);
+    expect(movementTypeName(0)).toBe("continuous");
+    expect(movementTypeName(5)).toBe("intervals-intervals");
+    expect(movementTypeName(6)).toBeNull();
+  });
+});

@@ -1,6 +1,6 @@
 # In My Skin — game design
 
-Status: draft for approval (2026-11-23). Nothing is built yet.
+Status: approved and built 2026-11-23. See "As built" at the end for where the build differs from the text above.
 
 ## Intent and why
 
@@ -201,6 +201,33 @@ The Progress page already compares each child with their own earlier sessions of
 
 ## Open
 
-- Real-life faces and real-life photographs: waiting for licensed images.
+- **Pictures.** The product owner will supply the final pictures (decided 2026-11-23, after seeing the first set). The pictures in the repository are placeholders so the game can be played; no more are to be made here. `games/in-my-skin/PICTURES.md` says what to supply and how they are added.
+- Real-life faces and real-life photographs: part of the same delivery.
 - The level table and the blink timing are to be tuned after first play.
-- Whether Hebrew letters join English letters in one category or form their own.
+
+## As built
+
+- **Letters follow the patient's language** (product owner, 2026-11-23): Hebrew letters when the patient's language is Hebrew, Latin letters otherwise. One "letters" category.
+- **A wrong stop costs a life only in modes that have lives** (product owner, 2026-11-23). The game reports `stopped_early`, `stopped_late` or `no_stop` for every wrong round; Session Rules applies it in lives modes and ignores it in a timed-only session.
+- **Level table.** Picture size is a share of the play field's short side, not of the travel line, and the glide speed is derived from the time in the right zone (zone = 30% of the picture's length), so the time a child has is exact at every screen size:
+
+  | Levels | Picture size | Right zone lasts | Jump: spots / time on each |
+  |---|---|---|---|
+  | 1 | 44% | 420 ms | 8 / 650 ms |
+  | 6 | 40% | 340 ms | 9 / 550 ms |
+  | 11 | 36% | 270 ms | 10 / 450 ms |
+  | 16 | 32% | 210 ms | 10 / 380 ms |
+  | 21 | 28% | 160 ms | 11 / 320 ms |
+  | 26 | 24% | 115 ms | 12 / 260 ms |
+  | 30 | 22% | 103 ms | 12 / 244 ms |
+
+  The platform's speed scale (0.5–1) slows both kinds of movement.
+- **Jump legs:** a stop anywhere in the outline spot's time slot is on time, including the short blink-off at its end.
+- **Timing measures come from glide stops only.** `timing_error_ms`, `timing_bias_ms` and `timing_spread_ms` are not defined for a jump stop, which is judged by spot; `jump_accuracy` covers those.
+- **`timing_bias_ms` is nearer-zero-is-better**, which the metric definition cannot express; it is marked lower-is-better. Read its sign, not its trend.
+- **Pictures setting:** automatic, or one category (the settings form has no multi-select).
+- **Practice** is two glide rounds at level 1.
+- **No brain region on the step:** continuous movement, left-to-right or right-to-left.
+- **The outline keeps clear of the Stop button**, and the preview's Close button moved to the bottom centre so it no longer covers a game's corner buttons.
+- **Skills:** `anticipation_timing`, `visual_tracking`, and the existing `inhibition` and `sustained_attention`.
+- Movement-type names are exported from `packages/contracts` (`MOVEMENT_TYPES`); the protocol builder's region summary now lists "movement type" for games that use it. No screen showed the raw numbers, so there was nothing else to rename.
