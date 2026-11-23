@@ -47,6 +47,7 @@ export interface PortalInviteInfo {
   guardian_email: string;
   clinic_name: string;
   preferred_locale: string;
+  has_existing_account?: boolean;
 }
 
 // ---- API functions

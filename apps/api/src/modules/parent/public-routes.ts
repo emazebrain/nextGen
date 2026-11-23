@@ -68,11 +68,18 @@ export function publicParentPortalRoutes(pool: pg.Pool, auth: Auth) {
       if (invite.status === "cancelled") return c.json({ error: "cancelled" }, 410);
       if (invite.user_id) return c.json({ error: "already_registered" }, 410);
 
+      // Check if an account with this email already exists
+      const { rows: existing } = await client.query(
+        `SELECT 1 FROM app.app_user WHERE email = $1`,
+        [invite.email],
+      );
+
       return c.json({
         guardian_name: invite.full_name,
         guardian_email: invite.email,
         clinic_name: invite.clinic_name,
         preferred_locale: invite.preferred_locale,
+        has_existing_account: existing.length > 0,
       });
     } finally {
       client.release();
@@ -111,8 +118,24 @@ export function publicParentPortalRoutes(pool: pg.Pool, auth: Auth) {
       if (invite.user_id) return c.json({ error: "already_registered" }, 410);
       if (!invite.email) return c.json({ error: "no_email", message: "Guardian must have an email address" }, 400);
 
-      // Create the auth user via Better Auth's internal API
-      const userId = uuidv7();
+      // Check if a user with this email already exists on the platform
+      const { rows: existingUsers } = await client.query(
+        `SELECT u.id FROM app.app_user u WHERE u.email = $1`,
+        [invite.email],
+      );
+
+      if (existingUsers[0]) {
+        // User already has an account — link the existing user to the guardian
+        // and mark the invite as accepted. No new account needed.
+        const existingUserId = existingUsers[0].id;
+        await withServiceUser(pool, invite.created_by, c.get("requestId"), async (db) => {
+          await db.query(`UPDATE app.guardian SET user_id = $1 WHERE id = $2 AND user_id IS NULL`, [existingUserId, invite.guardian_id]);
+          await db.query(`UPDATE app.portal_invite SET status = 'accepted', accepted_at = now() WHERE id = $1`, [invite.id]);
+        });
+        return c.json({ ok: true, user_id: existingUserId, existing_account: true }, 200);
+      }
+
+      // No existing account — create a new auth user
       const authUser = await auth.api.signUpEmail({
         body: {
           email: invite.email,
@@ -127,8 +150,12 @@ export function publicParentPortalRoutes(pool: pg.Pool, auth: Auth) {
 
       // Link to guardian and mark invite accepted (service connection — no RLS)
       await withServiceUser(pool, invite.created_by, c.get("requestId"), async (db) => {
-        // Update the app_user kind to guardian
-        await db.query(`UPDATE app.app_user SET kind = 'guardian' WHERE id = $1`, [authUser.user.id]);
+        // Update the app_user kind to guardian (unless they already have a staff role)
+        await db.query(
+          `UPDATE app.app_user SET kind = 'guardian' WHERE id = $1
+           AND NOT EXISTS (SELECT 1 FROM app.membership m WHERE m.user_id = $1 AND m.status = 'active')`,
+          [authUser.user.id],
+        );
 
         // Link guardian → user
         await db.query(`UPDATE app.guardian SET user_id = $1 WHERE id = $2`, [authUser.user.id, invite.guardian_id]);
