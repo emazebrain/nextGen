@@ -1,7 +1,7 @@
 /** Messaging — therapist-side thread list and conversation (§5.11). */
 import { useState, useRef, useEffect, type FormEvent } from "react";
 import { useSearchParams } from "react-router";
-import { MessageSquare, Send } from "lucide-react";
+import { ArrowLeft, MessageSquare, Send } from "lucide-react";
 import { Button, Card, EmptyState, MazeLoader, PageHeader } from "@emb/ui";
 import {
   useThreads,
@@ -14,9 +14,12 @@ import {
 import { useT } from "../i18n/index.tsx";
 import { useTitle } from "../lib/title.ts";
 import { useMe } from "../api/queries.ts";
+import { useIntl } from "react-intl";
+import { LoadError } from "./shared.tsx";
 
 export function MessagesPage() {
   const t = useT();
+  const intl = useIntl();
   const [params] = useSearchParams();
   const patientFilter = params.get("patient") ?? undefined;
   const threads = useThreads(patientFilter ? { patient_id: patientFilter } : undefined);
@@ -25,12 +28,21 @@ export function MessagesPage() {
   useTitle(t("messages.title"));
 
   if (threads.isPending) return <MazeLoader label={t("common.loading")} />;
+  // A failed load must not look like an empty inbox.
+  if (threads.isError) {
+    return (
+      <div className="app-page">
+        <PageHeader title={t("messages.title")} />
+        <LoadError error={threads.error} retry={() => void threads.refetch()} />
+      </div>
+    );
+  }
 
   const threadList = threads.data ?? [];
   const activeThread = threadList.find((t) => t.id === activeThreadId) ?? null;
 
   return (
-    <div className="messages-layout">
+    <div className={`messages-layout${activeThread ? " messages-layout--open" : ""}`}>
       {/* Thread list */}
       <aside className="messages-sidebar">
         <PageHeader title={t("messages.title")} />
@@ -53,7 +65,7 @@ export function MessagesPage() {
                   <span className="messages-item__name">
                     <bdi>{thread.guardian_name}</bdi>
                     {thread.unread_count > 0 && (
-                      <span className="messages-item__badge">{thread.unread_count}</span>
+                      <span className="messages-item__badge emb-tnum" aria-label={t("messages.unread", { count: thread.unread_count })}>{thread.unread_count}</span>
                     )}
                   </span>
                   <span className="messages-item__patient">
@@ -61,7 +73,7 @@ export function MessagesPage() {
                   </span>
                   {thread.last_message_at && (
                     <time className="messages-item__time">
-                      {new Date(thread.last_message_at).toLocaleDateString()}
+                      {intl.formatDate(new Date(thread.last_message_at), { day: "numeric", month: "short" })}
                     </time>
                   )}
                 </button>
@@ -72,24 +84,21 @@ export function MessagesPage() {
       </aside>
 
       {/* Conversation */}
-      <main className="messages-conversation">
+      <section className="messages-conversation" aria-label={t("messages.conversation")}>
         {activeThread ? (
-          <ConversationView
-            thread={activeThread}
-            myUserId={me.data?.user.id ?? ""}
-          />
+          <ConversationView thread={activeThread} myUserId={me.data?.user.id ?? ""} onBack={() => setActiveThreadId("")} />
         ) : (
           <div className="messages-empty-state">
             <MessageSquare size={48} aria-hidden="true" />
             <p>{t("messages.selectThread")}</p>
           </div>
         )}
-      </main>
+      </section>
     </div>
   );
 }
 
-function ConversationView({ thread, myUserId }: { thread: MessageThread; myUserId: string }) {
+function ConversationView({ thread, myUserId, onBack }: { thread: MessageThread; myUserId: string; onBack: () => void }) {
   const t = useT();
   const messages = useMessages(thread.id);
   const send = useSendMessage(thread.id);
@@ -111,6 +120,10 @@ function ConversationView({ thread, myUserId }: { thread: MessageThread; myUserI
   return (
     <div className="conversation">
       <header className="conversation__header">
+        <button type="button" className="conversation__back" onClick={onBack}>
+          <ArrowLeft size={18} aria-hidden="true" className="emb-flip-rtl" />
+          {t("messages.all")}
+        </button>
         <h2 className="conversation__name">
           <bdi>{thread.guardian_name}</bdi>
         </h2>

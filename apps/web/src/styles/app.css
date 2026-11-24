@@ -4037,3 +4037,156 @@ a.gamecard:hover {
   flex: 1 1 9rem;
   min-inline-size: 0;
 }
+
+/* ------------------------------------------------------------ Parent portal: header, messages tab, spacing (UI critique 2026-11-24) */
+.app-sr-only {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.parent-shell__header {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-block-size: 56px;
+  padding: var(--space-2) var(--space-4);
+  padding-block-start: calc(var(--space-2) + env(safe-area-inset-top, 0px));
+  background: var(--bg-surface);
+  border-block-end: 1px solid var(--border-decorative);
+}
+.parent-shell__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+.parent-shell__clinic {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.parent-shell__actions {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: var(--space-1);
+}
+.parent-shell__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-block-size: var(--target-min);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--text-14);
+  font-weight: 500;
+  cursor: pointer;
+}
+.parent-shell__action:hover {
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+}
+.parent-shell__action:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+/* The child cards and sections never touch. */
+.parent-shell__content .app-page {
+  display: grid;
+  gap: var(--space-4);
+}
+.parent-shell__content .app-page > * {
+  min-inline-size: 0;
+  margin-block: 0;
+}
+.parent-shell__tabs {
+  padding-block-end: calc(var(--space-2) + env(safe-area-inset-bottom, 0px));
+}
+.parent-shell__tab {
+  flex: 1;
+  min-block-size: var(--target-min);
+  justify-content: center;
+  font-weight: 500;
+}
+.parent-shell__tab.active {
+  font-weight: 600;
+}
+.parent-shell__tab:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+.parent-shell__tabicon {
+  position: relative;
+  display: inline-flex;
+}
+.parent-shell__badge {
+  position: absolute;
+  inset-block-start: -6px;
+  inset-inline-end: -10px;
+  min-inline-size: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-primary);
+  color: var(--text-on-brand);
+  font-size: var(--text-12);
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+@media (max-width: 420px) {
+  /* On a narrow phone Sign out keeps its icon only; the language keeps its name, which is how a parent finds it. */
+  .parent-shell__action--signout span {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .parent-shell__action--signout {
+    justify-content: center;
+    min-inline-size: var(--target-min);
+    padding: 0;
+  }
+}
+
+/* ------------------------------------------------------------ Messages on a phone: the list, then the conversation (UI critique 2026-11-24) */
+.messages-item__name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.conversation__back {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  min-block-size: var(--target-min);
+  margin-block-end: var(--space-1);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--brand-primary);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+@media (max-width: 640px) {
+  .messages-layout:not(.messages-layout--open) .messages-conversation,
+  .messages-layout--open .messages-sidebar {
+    display: none;
+  }
+  .conversation__back {
+    display: inline-flex;
+  }
+}

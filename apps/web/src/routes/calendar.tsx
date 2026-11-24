@@ -24,6 +24,7 @@ import { useT } from "../i18n/index.tsx";
 import { useClinic } from "../lib/clinic.tsx";
 import { useTitle } from "../lib/title.ts";
 import { useIntl } from "react-intl";
+import { LoadError } from "./shared.tsx";
 
 // ---- Date helpers
 
@@ -158,6 +159,8 @@ export function CalendarPage() {
         <Alert tone="info">{t("calendar.noClinic")}</Alert>
       ) : events.isPending ? (
         <MazeLoader label={t("common.loading")} />
+      ) : events.isError ? (
+        <LoadError error={events.error} retry={() => void events.refetch()} />
       ) : view === "day" ? (
         <DayView events={events.data ?? []} date={date} isManager={clinic.isManager} onNewAppt={(h) => setNewApptSlot({ date, hour: h })} onEdit={setRescheduleTarget} />
       ) : view === "week" ? (

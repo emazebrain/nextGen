@@ -28,7 +28,8 @@ export function ParentHomePage() {
     <div className="app-page">
       <PageHeader title={t("parent.kidsTitle")} description={t("parent.kidsIntro")} />
       {children.map((child) => (
-        <ChildCard key={child.id} childId={child.id} name={`${child.given_name} ${child.family_name}`} clinicName={child.clinic_name} />
+        // With one clinic for every child the header already names it.
+        <ChildCard key={child.id} childId={child.id} name={`${child.given_name} ${child.family_name}`} clinicName={new Set(children.map((c) => c.clinic_name)).size > 1 ? child.clinic_name : ""} />
       ))}
     </div>
   );
@@ -64,7 +65,7 @@ function ChildCard({ childId, name, clinicName }: { childId: string; name: strin
       <div className="parent-kid">
         <div className="parent-kid__header">
           <h2 className="parent-kid__name"><bdi>{name}</bdi></h2>
-          <span className="app-muted">{clinicName}</span>
+          {clinicName && <span className="app-muted">{clinicName}</span>}
         </div>
 
         {sessions.isPending && <MazeLoader label={t("common.loading")} />}
@@ -77,7 +78,7 @@ function ChildCard({ childId, name, clinicName }: { childId: string; name: strin
                   <span className="parent-session__name"><bdi>{s.assignment_name}</bdi></span>
                   <span className="parent-session__meta app-muted">
                     {t("parent.sessionMeta", { seq: s.seq, total: s.total ?? 0, week: s.week })}
-                    {s.planned_date < today && <Chip tone="warning">{t("parent.overdue")}</Chip>}
+                    {s.planned_date < today ? <Chip tone="warning">{t("parent.overdue")}</Chip> : <Chip tone="neutral">{t("parent.dueToday")}</Chip>}
                   </span>
                 </div>
                 <Button

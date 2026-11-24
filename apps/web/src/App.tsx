@@ -51,6 +51,7 @@ import { ParentShell } from "./routes/parent/shell.tsx";
 import { ParentHomePage } from "./routes/parent/home.tsx";
 import { ParentCalendarPage } from "./routes/parent/calendar.tsx";
 import { ParentResultsPage } from "./routes/parent/results.tsx";
+import { ParentMessagesPage } from "./routes/parent/messages.tsx";
 import { ParentReportPage } from "./routes/parent/report.tsx";
 import { NewProgressReportPage, ProgressReportPage } from "./routes/patients/reports.tsx";
 import { ParentRegisterPage, ParentRegisterSuccessPage } from "./routes/parent/register.tsx";
@@ -220,6 +221,7 @@ export const routes: RouteObject[] = [
       { index: true, element: <ParentHomePage /> },
       { path: "calendar", element: <ParentCalendarPage /> },
       { path: "results", element: <ParentResultsPage /> },
+      { path: "messages", element: <ParentMessagesPage /> },
       { path: "reports/:rid", element: <ParentReportPage /> },
     ],
   },

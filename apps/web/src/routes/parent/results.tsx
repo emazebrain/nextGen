@@ -55,21 +55,14 @@ function ChildResults({ childId, childName }: { childId: string; childName: stri
   const sessions = history.data?.sessions ?? [];
   const gameName = (id: string) => (findGame(id) ? localText(findGame(id)!.manifest.name, locale) : id);
   const date = (s: string) => intl.formatDate(new Date(s), { day: "numeric", month: "short", year: "numeric" });
-  const time = (ms: number) => {
-    const m = Math.floor(ms / 60000);
-    const s = Math.round((ms % 60000) / 1000);
-    return `${m}:${String(s).padStart(2, "0")}`;
-  };
 
+  // What a parent can read at a glance: when, which activity, how much was right, how long. The therapist's own
+  // columns (difficulty, how the round ended, reaction time) stay on the clinic side.
   const columns: Column<GameSessionView>[] = [
     { id: "date", header: t("progress.col.date"), primary: true, cell: (s) => <span className="emb-tnum">{date(s.ended_at)}</span> },
-    { id: "protocol", header: t("progress.col.protocol"), cell: (s) => s.assignment_name ?? "—" },
-    { id: "game", header: t("progress.col.game"), cell: (s) => gameName(s.game_id) },
-    { id: "difficulty", header: t("progress.col.difficulty"), numeric: true, cell: (s) => s.difficulty },
-    { id: "result", header: t("progress.col.result"), cell: (s) => t("result.status", { status: s.status }) },
-    { id: "accuracy", header: t("result.accuracy"), numeric: true, cell: (s) => (s.accuracy !== null ? intl.formatNumber(s.accuracy, { style: "percent" }) : "—") },
-    { id: "rt", header: t("result.rt"), numeric: true, hideOnCard: true, cell: (s) => (s.rt_median_ms !== null ? t("result.ms", { n: s.rt_median_ms }) : "—") },
-    { id: "time", header: t("result.time"), numeric: true, cell: (s) => <span className="emb-tnum" dir="ltr">{time(s.active_ms)}</span> },
+    { id: "game", header: t("parent.col.activity"), cell: (s) => gameName(s.game_id) },
+    { id: "accuracy", header: t("parent.col.correct"), numeric: true, cell: (s) => (s.accuracy !== null ? intl.formatNumber(s.accuracy, { style: "percent" }) : "—") },
+    { id: "time", header: t("result.time"), numeric: true, cell: (s) => <span className="emb-tnum">{t("parent.minutes", { n: Math.max(1, Math.round(s.active_ms / 60000)) })}</span> },
   ];
 
   return (

@@ -1,7 +1,7 @@
 /** Parent messages — thread list and conversation (§5.11). */
 import { useState, useRef, useEffect, type FormEvent } from "react";
-import { MessageSquare, Send } from "lucide-react";
-import { Button, Card, EmptyState, MazeLoader, PageHeader } from "@emb/ui";
+import { ArrowLeft, MessageSquare, Send } from "lucide-react";
+import { Alert, Button, Card, EmptyState, MazeLoader, PageHeader } from "@emb/ui";
 import {
   useParentThreads,
   useParentMessages,
@@ -20,6 +20,19 @@ export function ParentMessagesPage() {
   useTitle(t("parent.messages"));
 
   if (threads.isPending) return <MazeLoader label={t("common.loading")} />;
+  if (threads.isError) {
+    return (
+      <div className="app-page">
+        <PageHeader title={t("parent.messages")} />
+        <Alert tone="danger">
+          <p>{t("errors.generic")}</p>
+          <Button variant="secondary" onClick={() => void threads.refetch()}>
+            {t("common.retry")}
+          </Button>
+        </Alert>
+      </div>
+    );
+  }
 
   const threadList = threads.data ?? [];
   const activeThread = threadList.find((th) => th.id === activeThreadId) ?? null;
@@ -38,7 +51,7 @@ export function ParentMessagesPage() {
   }
 
   return (
-    <div className="messages-layout messages-layout--parent">
+    <div className={`messages-layout messages-layout--parent${activeThread ? " messages-layout--open" : ""}`}>
       <aside className="messages-sidebar">
         <PageHeader title={t("parent.messages")} />
         <ul className="messages-list">
@@ -55,7 +68,7 @@ export function ParentMessagesPage() {
                 <span className="messages-item__name">
                   <bdi>{thread.therapist_name}</bdi>
                   {thread.unread_count > 0 && (
-                    <span className="messages-item__badge">{thread.unread_count}</span>
+                    <span className="messages-item__badge emb-tnum" aria-label={t("messages.unread", { count: thread.unread_count })}>{thread.unread_count}</span>
                   )}
                 </span>
                 <span className="messages-item__patient">
@@ -67,21 +80,21 @@ export function ParentMessagesPage() {
         </ul>
       </aside>
 
-      <main className="messages-conversation">
+      <section className="messages-conversation" aria-label={t("messages.conversation")}>
         {activeThread ? (
-          <ParentConversationView thread={activeThread} />
+          <ParentConversationView thread={activeThread} onBack={() => setActiveThreadId("")} />
         ) : (
           <div className="messages-empty-state">
             <MessageSquare size={48} aria-hidden="true" />
             <p>{t("messages.selectThread")}</p>
           </div>
         )}
-      </main>
+      </section>
     </div>
   );
 }
 
-function ParentConversationView({ thread }: { thread: MessageThread }) {
+function ParentConversationView({ thread, onBack }: { thread: MessageThread; onBack: () => void }) {
   const t = useT();
   const messages = useParentMessages(thread.id);
   const send = useSendParentMessage(thread.id);
@@ -102,6 +115,10 @@ function ParentConversationView({ thread }: { thread: MessageThread }) {
   return (
     <div className="conversation">
       <header className="conversation__header">
+        <button type="button" className="conversation__back" onClick={onBack}>
+          <ArrowLeft size={18} aria-hidden="true" className="emb-flip-rtl" />
+          {t("messages.all")}
+        </button>
         <h2 className="conversation__name">
           <bdi>{thread.therapist_name}</bdi>
         </h2>
