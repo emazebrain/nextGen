@@ -18,7 +18,7 @@ function mockApi(over: { caseload?: unknown[] | "fail" } = {}) {
     const ok = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
     const p = url.pathname;
     if (p === "/v1/me") return ok({ user: { id: "u", email: "y@synthetic.test", name: "Yael Bar" }, memberships: [{ clinic_id: "c1", organization_id: "o", role: "therapist", clinic_name: "Clinic" }] });
-    if (p === "/v1/patients") return ok({ data: [patient("p1", "Dana", "Katz"), patient("p2", "Amit", "Lavi"), patient("p3", "Eli", "Baron")] });
+    if (p === "/v1/patients") return ok({ patients: [patient("p1", "Dana", "Katz"), patient("p2", "Amit", "Lavi"), patient("p3", "Eli", "Baron")] });
     if (p === "/v1/today") return ok({ items: [], appointments: [], review_count: 0 });
     if (p === "/v1/reports/caseload") return over.caseload === "fail" ? new Response("{}", { status: 500 }) : ok({ patients: over.caseload ?? [AMIT, DANA] });
     return ok({});
