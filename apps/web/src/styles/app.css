@@ -899,7 +899,7 @@
 .consentreq__icon {
   flex-shrink: 0;
   margin-block-start: 2px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .consentreq__text {
@@ -1397,6 +1397,8 @@ a.gamecard:hover {
 /* ------------------------------------------------------------ Progress (slice 5) */
 .progress {
   display: grid;
+  /* minmax(0, …): a wide table or chart scrolls inside its own card instead of widening the page. */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
 }
 .progress-tiles {
@@ -1684,8 +1686,8 @@ a.gamecard:hover {
   padding-block: 8px;
   padding-inline: 12px;
   border-radius: 10px;
-  background: var(--emb-surface-muted, #f4f3fb);
-  color: var(--emb-text-muted, #4b4867);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
   font-size: 0.875rem;
 }
 
@@ -1717,7 +1719,7 @@ a.gamecard:hover {
 }
 .today-reviewq__chevron {
   transition: transform 0.2s ease;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 .today-reviewq__chevron--open {
   transform: rotate(90deg);
@@ -1738,8 +1740,8 @@ a.gamecard:hover {
   align-items: center;
   gap: var(--space-2, 8px);
   padding: var(--space-2, 8px);
-  border-radius: var(--radius-md, 8px);
-  background: var(--surface-raised, var(--gray-50, #f9fafb));
+  border-radius: var(--radius-control);
+  background: var(--bg-subtle);
   flex-wrap: wrap;
 }
 .reviewq-item__info {
@@ -2259,29 +2261,29 @@ a.gamecard:hover {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  margin-block-end: var(--space-5);
+  margin-block-end: 20px;
 }
 .manage-nav__item {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-decorative);
+  border-radius: var(--radius-control);
   color: var(--text-primary);
   text-decoration: none;
-  font-size: var(--text-sm);
+  font-size: var(--text-14);
   transition: border-color 0.1s, background 0.1s;
 }
 .manage-nav__item:hover {
-  border-color: var(--accent);
-  background: var(--surface-hover);
+  border-color: var(--brand-primary);
+  background: var(--bg-subtle);
 }
 .manage-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: var(--space-3);
-  margin-block-end: var(--space-5);
+  margin-block-end: 20px;
 }
 .manage-stat {
   display: flex;
@@ -2295,9 +2297,9 @@ a.gamecard:hover {
   justify-content: center;
   inline-size: 44px;
   block-size: 44px;
-  border-radius: var(--radius-full);
-  background: var(--accent-subtle, #e8f0fe);
-  color: var(--accent);
+  border-radius: var(--radius-pill);
+  background: var(--brand-primary-subtle);
+  color: var(--brand-primary);
   flex-shrink: 0;
 }
 .manage-stat__body {
@@ -2305,16 +2307,16 @@ a.gamecard:hover {
   flex-direction: column;
 }
 .manage-stat__value {
-  font-size: var(--text-2xl);
+  font-size: var(--text-24);
   font-weight: 700;
   line-height: 1;
 }
 .manage-stat__label {
-  font-size: var(--text-sm);
+  font-size: var(--text-14);
   color: var(--text-secondary);
 }
 .manage-stat__sub {
-  font-size: var(--text-xs);
+  font-size: var(--text-12);
   color: var(--text-secondary);
 }
 
@@ -2335,8 +2337,8 @@ a.gamecard:hover {
   inset-inline: 0;
   display: flex;
   justify-content: space-around;
-  background: var(--surface-raised);
-  border-block-start: 1px solid var(--border);
+  background: var(--bg-surface);
+  border-block-start: 1px solid var(--border-decorative);
   padding-block: var(--space-2);
   z-index: 10;
 }
@@ -2346,41 +2348,41 @@ a.gamecard:hover {
   align-items: center;
   gap: 2px;
   padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   color: var(--text-secondary);
   text-decoration: none;
-  font-size: var(--text-xs);
+  font-size: var(--text-12);
   transition: color 0.15s;
 }
 .parent-shell__tab.active {
-  color: var(--accent);
+  color: var(--brand-primary);
 }
 .parent-shell__switcher {
   display: flex;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
   overflow-x: auto;
-  background: var(--surface-raised);
-  border-block-end: 1px solid var(--border);
+  background: var(--bg-surface);
+  border-block-end: 1px solid var(--border-decorative);
 }
 .parent-shell__child-btn {
   padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-full);
-  border: 1px solid var(--border);
-  background: var(--surface);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-decorative);
+  background: var(--bg-surface);
   color: var(--text-primary);
-  font-size: var(--text-sm);
+  font-size: var(--text-14);
   cursor: pointer;
   white-space: nowrap;
 }
 .parent-shell__child-btn--active {
-  background: var(--accent);
-  color: var(--on-accent);
-  border-color: var(--accent);
+  background: var(--brand-primary);
+  color: var(--text-on-brand);
+  border-color: var(--brand-primary);
 }
 .parent-child-card__name {
   margin: 0 0 var(--space-3);
-  font-size: var(--text-lg);
+  font-size: var(--text-18);
 }
 .parent-child-card__details {
   display: grid;
@@ -2388,7 +2390,7 @@ a.gamecard:hover {
   gap: var(--space-3);
 }
 .parent-child-card__detail dt {
-  font-size: var(--text-xs);
+  font-size: var(--text-12);
   color: var(--text-secondary);
   margin-block-end: var(--space-1);
 }
@@ -2406,32 +2408,32 @@ a.gamecard:hover {
 }
 .parent-stat__value {
   display: block;
-  font-size: var(--text-2xl);
+  font-size: var(--text-24);
   font-weight: 600;
 }
 .parent-stat__label {
-  font-size: var(--text-xs);
+  font-size: var(--text-12);
   color: var(--text-secondary);
 }
 .parent-protocol__title {
   margin: 0 0 var(--space-2);
-  font-size: var(--text-base);
+  font-size: var(--text-16);
 }
 .parent-protocol__bar {
   block-size: 8px;
-  background: var(--border);
-  border-radius: var(--radius-full);
+  background: var(--border-decorative);
+  border-radius: var(--radius-pill);
   overflow: hidden;
   margin-block-end: var(--space-2);
 }
 .parent-protocol__fill {
   block-size: 100%;
-  background: var(--accent);
-  border-radius: var(--radius-full);
+  background: var(--brand-primary);
+  border-radius: var(--radius-pill);
   transition: width 0.3s;
 }
 .parent-protocol__label {
-  font-size: var(--text-sm);
+  font-size: var(--text-14);
   color: var(--text-secondary);
   margin: 0;
 }
@@ -2477,7 +2479,7 @@ a.gamecard:hover {
 }
 .parent-kid__name {
   margin: 0;
-  font-size: var(--text-lg);
+  font-size: var(--text-18);
 }
 .parent-kid__sessions {
   display: grid;
@@ -2523,7 +2525,7 @@ a.gamecard:hover {
   flex-shrink: 0;
 }
 .parent-calendar__date--overdue {
-  color: var(--status-serious);
+  color: var(--status-danger);
 }
 .parent-calendar__details {
   display: grid;
@@ -2535,14 +2537,14 @@ a.gamecard:hover {
   flex-shrink: 0;
 }
 .parent-calendar__overdue {
-  color: var(--status-serious);
+  color: var(--status-danger);
   font-weight: 500;
-  font-size: var(--text-sm);
+  font-size: var(--text-14);
 }
 .parent-calendar__today {
   color: var(--brand-primary);
   font-weight: 500;
-  font-size: var(--text-sm);
+  font-size: var(--text-14);
 }
 
 /* ------------------------------------------------------------ Messaging */
@@ -2551,13 +2553,13 @@ a.gamecard:hover {
   grid-template-columns: 320px 1fr;
   min-block-size: calc(100dvh - 60px);
   gap: 1px;
-  background: var(--border);
+  background: var(--border-decorative);
 }
 .messages-layout--parent {
   min-block-size: calc(100dvh - 120px);
 }
 .messages-sidebar {
-  background: var(--surface);
+  background: var(--bg-surface);
   padding: var(--space-3);
   overflow-y: auto;
 }
@@ -2572,7 +2574,7 @@ a.gamecard:hover {
   align-items: baseline;
   gap: var(--space-1);
   padding: var(--space-3);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   border: none;
   background: none;
   inline-size: 100%;
@@ -2581,10 +2583,10 @@ a.gamecard:hover {
   transition: background 0.1s;
 }
 .messages-item:hover {
-  background: var(--surface-hover);
+  background: var(--bg-subtle);
 }
 .messages-item--active {
-  background: var(--accent-subtle);
+  background: var(--brand-primary-subtle);
 }
 .messages-item__name {
   font-weight: 600;
@@ -2596,23 +2598,23 @@ a.gamecard:hover {
   justify-content: center;
   min-inline-size: 20px;
   block-size: 20px;
-  border-radius: var(--radius-full);
-  background: var(--accent);
-  color: var(--on-accent);
-  font-size: var(--text-xs);
+  border-radius: var(--radius-pill);
+  background: var(--brand-primary);
+  color: var(--text-on-brand);
+  font-size: var(--text-12);
   padding-inline: 4px;
 }
 .messages-item__patient {
-  font-size: var(--text-xs);
+  font-size: var(--text-12);
   color: var(--text-secondary);
   inline-size: 100%;
 }
 .messages-item__time {
-  font-size: var(--text-xs);
+  font-size: var(--text-12);
   color: var(--text-secondary);
 }
 .messages-conversation {
-  background: var(--surface);
+  background: var(--bg-surface);
   display: flex;
   flex-direction: column;
 }
@@ -2632,14 +2634,14 @@ a.gamecard:hover {
 }
 .conversation__header {
   padding: var(--space-3) var(--space-4);
-  border-block-end: 1px solid var(--border);
+  border-block-end: 1px solid var(--border-decorative);
 }
 .conversation__name {
   margin: 0;
-  font-size: var(--text-base);
+  font-size: var(--text-16);
 }
 .conversation__patient {
-  font-size: var(--text-sm);
+  font-size: var(--text-14);
   color: var(--text-secondary);
 }
 .conversation__messages {
@@ -2654,7 +2656,7 @@ a.gamecard:hover {
   display: flex;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
-  border-block-start: 1px solid var(--border);
+  border-block-start: 1px solid var(--border-decorative);
   align-items: flex-end;
 }
 .conversation__compose .emb-field {
@@ -2664,20 +2666,20 @@ a.gamecard:hover {
 .msg-bubble {
   max-inline-size: 70%;
   padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-card);
   position: relative;
 }
 .msg-bubble--mine {
   margin-inline-start: auto;
-  background: var(--accent);
-  color: var(--on-accent);
+  background: var(--brand-primary);
+  color: var(--text-on-brand);
 }
 .msg-bubble--theirs {
   margin-inline-end: auto;
-  background: var(--surface-raised);
+  background: var(--bg-surface);
 }
 .msg-bubble__sender {
-  font-size: var(--text-xs);
+  font-size: var(--text-12);
   font-weight: 600;
   display: block;
   margin-block-end: 2px;
@@ -2690,14 +2692,14 @@ a.gamecard:hover {
 .msg-bubble__attachment {
   display: block;
   margin-block-start: var(--space-1);
-  font-size: var(--text-sm);
+  font-size: var(--text-14);
   text-decoration: underline;
 }
 .msg-bubble--mine .msg-bubble__attachment {
-  color: var(--on-accent);
+  color: var(--text-on-brand);
 }
 .msg-bubble__time {
-  font-size: var(--text-xs);
+  font-size: var(--text-12);
   opacity: 0.7;
   display: block;
   margin-block-start: 2px;
@@ -2724,17 +2726,17 @@ a.gamecard:hover {
   gap: var(--space-2);
 }
 .cal-toolbar__date {
-  font-size: var(--text-base);
+  font-size: var(--text-16);
   font-weight: 600;
   background: none;
   border: none;
   cursor: pointer;
   padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   color: var(--text-primary);
 }
-.cal-toolbar__date:hover { background: var(--surface-hover); }
-.cal-toolbar__date--today { color: var(--accent); }
+.cal-toolbar__date:hover { background: var(--bg-subtle); }
+.cal-toolbar__date--today { color: var(--brand-primary); }
 .cal-toolbar__actions {
   display: flex;
   align-items: center;
@@ -2748,11 +2750,11 @@ a.gamecard:hover {
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
   margin-block-end: var(--space-2);
-  background: var(--surface-raised);
-  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  border-radius: var(--radius-control);
 }
 .cal-unscheduled__label {
-  font-size: var(--text-xs);
+  font-size: var(--text-12);
   color: var(--text-secondary);
   white-space: nowrap;
 }
@@ -2765,16 +2767,16 @@ a.gamecard:hover {
   display: inline-flex;
   flex-direction: column;
   padding: 6px 10px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-decorative);
   border-radius: 10px;
-  background: var(--surface);
-  font-size: var(--text-xs);
+  background: var(--bg-surface);
+  font-size: var(--text-12);
   cursor: pointer;
   text-align: start;
   box-shadow: 0 1px 3px rgba(0,0,0,0.06);
   transition: all 0.15s;
 }
-.cal-chip:hover { border-color: var(--accent); box-shadow: 0 2px 8px rgba(0,0,0,0.1); transform: translateY(-1px); }
+.cal-chip:hover { border-color: var(--brand-primary); box-shadow: 0 2px 8px rgba(0,0,0,0.1); transform: translateY(-1px); }
 .cal-chip__label { color: var(--text-secondary); }
 .cal-chip__therapist { color: var(--text-secondary); font-style: italic; }
 
@@ -2786,35 +2788,40 @@ a.gamecard:hover {
 .cal-color--red     { --cal-bg: #ffebee; --cal-border: #c62828; --cal-text: #b71c1c; }
 .cal-color--teal    { --cal-bg: #e0f2f1; --cal-border: #00796b; --cal-text: #004d40; }
 .cal-color--pink    { --cal-bg: #fce4ec; --cal-border: #c2185b; --cal-text: #880e4f; }
-.cal-color--yellow  { --cal-bg: #fffde7; --cal-border: #f9a825; --cal-text: #f57f17; }
+.cal-color--yellow  { --cal-bg: #fffde7; --cal-border: #f9a825; --cal-text: #7a4a00; }
+/* Dark theme: the pastel fills would glare and hide the text, so each colour is mixed into the dark surface. */
+:root[data-theme="dark"] [class*="cal-color--"] { --cal-bg: color-mix(in srgb, var(--cal-border) 24%, var(--bg-surface)); --cal-text: color-mix(in srgb, var(--cal-border) 22%, #ffffff); }
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] [class*="cal-color--"] { --cal-bg: color-mix(in srgb, var(--cal-border) 24%, var(--bg-surface)); --cal-text: color-mix(in srgb, var(--cal-border) 22%, #ffffff); }
+}
 
 /* Time grid */
 .cal-grid {
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-decorative);
   border-radius: 16px;
   overflow: hidden;
-  background: var(--surface);
+  background: var(--bg-surface);
   box-shadow: 0 2px 12px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.03);
 }
 .cal-row {
   display: grid;
   grid-template-columns: 64px 1fr;
   min-block-size: 60px;
-  border-block-end: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  border-block-end: 1px solid color-mix(in srgb, var(--border-decorative) 50%, transparent);
   cursor: pointer;
   transition: background 0.15s;
 }
 .cal-row:last-child { border-block-end: none; }
-.cal-row:hover { background: color-mix(in srgb, var(--accent) 4%, var(--surface)); }
+.cal-row:hover { background: color-mix(in srgb, var(--brand-primary) 4%, var(--bg-surface)); }
 .cal-row__time {
   display: flex;
   align-items: start;
   justify-content: end;
   padding: var(--space-2) var(--space-2) 0 0;
-  font-size: var(--text-xs);
+  font-size: var(--text-12);
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
-  border-inline-end: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  border-inline-end: 1px solid color-mix(in srgb, var(--border-decorative) 50%, transparent);
   user-select: none;
 }
 .cal-row__slot {
@@ -2830,9 +2837,9 @@ a.gamecard:hover {
   padding: var(--space-2) var(--space-3);
   border-radius: 10px;
   cursor: pointer;
-  font-size: var(--text-sm);
-  border-inline-start: 4px solid var(--cal-border, var(--accent));
-  background: var(--cal-bg, var(--accent-subtle, #e8f0fe));
+  font-size: var(--text-14);
+  border-inline-start: 4px solid var(--cal-border, var(--brand-primary));
+  background: var(--cal-bg, var(--brand-primary-subtle));
   color: var(--cal-text, var(--text-primary));
   box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04);
   transition: box-shadow 0.2s, transform 0.2s;
@@ -2847,8 +2854,8 @@ a.gamecard:hover {
   box-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 .cal-event--session {
-  --cal-bg: var(--accent-subtle, #e8f0fe);
-  --cal-border: var(--accent);
+  --cal-bg: var(--brand-primary-subtle);
+  --cal-border: var(--brand-primary);
   --cal-text: var(--text-primary);
 }
 .cal-event__header {
@@ -2857,15 +2864,15 @@ a.gamecard:hover {
   justify-content: space-between;
   gap: var(--space-2);
 }
-.cal-event__patient { font-weight: 600; font-size: var(--text-sm); }
-.cal-event__time { font-size: var(--text-xs); color: var(--text-secondary); white-space: nowrap; }
-.cal-event__detail { font-size: var(--text-xs); color: var(--text-secondary); margin-block-start: 1px; }
+.cal-event__patient { font-weight: 600; font-size: var(--text-14); }
+.cal-event__time { font-size: var(--text-12); color: var(--text-secondary); white-space: nowrap; }
+.cal-event__detail { font-size: var(--text-12); color: var(--text-secondary); margin-block-start: 1px; }
 .cal-event__start {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: var(--text-xs);
-  color: var(--accent);
+  font-size: var(--text-12);
+  color: var(--brand-primary);
   text-decoration: none;
   margin-block-start: 2px;
 }
@@ -2911,7 +2918,7 @@ a.gamecard:hover {
 .cal-color-dot--active {
   border-color: var(--text-primary);
   transform: scale(1.1);
-  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--text-primary);
+  box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 4px var(--text-primary);
 }
 .cal-color-dot[data-color="blue"]   { background: #1976d2; }
 .cal-color-dot[data-color="green"]  { background: #388e3c; }
@@ -2932,7 +2939,7 @@ a.gamecard:hover {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  font-size: var(--text-sm);
+  font-size: var(--text-14);
   cursor: pointer;
 }
 .calendar-dialog__shift input { margin: 0; }
@@ -2947,9 +2954,9 @@ a.gamecard:hover {
   list-style: none;
   margin: 0;
   padding: var(--space-1) 0;
-  background: var(--surface-raised);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-decorative);
+  border-radius: var(--radius-control);
   box-shadow: 0 4px 12px rgba(0,0,0,0.1);
   max-block-size: 200px;
   overflow-y: auto;
@@ -2962,14 +2969,14 @@ a.gamecard:hover {
   border: none;
   background: none;
   cursor: pointer;
-  font-size: var(--text-sm);
+  font-size: var(--text-14);
 }
-.cal-patient-option:hover { background: var(--surface-hover); }
+.cal-patient-option:hover { background: var(--bg-subtle); }
 
 /* View switcher — pill style */
 .cal-view-switcher {
   display: inline-flex;
-  background: var(--surface-raised, #f1f3f5);
+  background: var(--bg-subtle);
   border-radius: 10px;
   padding: 3px;
   gap: 2px;
@@ -2979,49 +2986,49 @@ a.gamecard:hover {
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  font-size: var(--text-sm);
+  font-size: var(--text-14);
   font-weight: 500;
   cursor: pointer;
   border-radius: 8px;
   transition: all 0.2s;
 }
-.cal-view-btn:hover { color: var(--text-primary); background: rgba(0,0,0,0.04); }
+.cal-view-btn:hover { color: var(--text-primary); background: color-mix(in srgb, var(--text-primary) 6%, transparent); }
 .cal-view-btn--active {
-  background: var(--surface);
+  background: var(--bg-surface);
   color: var(--text-primary);
   box-shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
 }
 
 /* ---- Week view */
-.cal-week { border: 1px solid var(--border); border-radius: 16px; overflow: auto; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+.cal-week { border: 1px solid var(--border-decorative); border-radius: 16px; overflow: auto; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
 .cal-week__header {
   display: grid;
   grid-template-columns: 64px repeat(7, 1fr);
-  border-block-end: 1px solid var(--border);
+  border-block-end: 1px solid var(--border-decorative);
   position: sticky;
   inset-block-start: 0;
-  background: var(--surface);
+  background: var(--bg-surface);
   z-index: 2;
 }
-.cal-week__time-col { border-inline-end: 1px solid var(--border); }
+.cal-week__time-col { border-inline-end: 1px solid var(--border-decorative); }
 .cal-week__day-header {
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: var(--space-2) 0;
-  border-inline-end: 1px solid var(--border);
-  font-size: var(--text-xs);
+  border-inline-end: 1px solid var(--border-decorative);
+  font-size: var(--text-12);
 }
 .cal-week__day-header:last-child { border-inline-end: none; }
-.cal-week__day-header--today { color: var(--accent); font-weight: 700; }
+.cal-week__day-header--today { color: var(--brand-primary); font-weight: 700; }
 .cal-week__day-name { text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); }
-.cal-week__day-num { font-size: var(--text-lg); font-weight: 600; }
+.cal-week__day-num { font-size: var(--text-18); font-weight: 600; }
 .cal-week__body { display: contents; }
 .cal-week__row {
   display: grid;
   grid-template-columns: 64px repeat(7, 1fr);
   min-block-size: 48px;
-  border-block-end: 1px solid var(--border);
+  border-block-end: 1px solid var(--border-decorative);
 }
 .cal-week__row:last-child { border-block-end: none; }
 .cal-week__time {
@@ -3029,20 +3036,20 @@ a.gamecard:hover {
   align-items: start;
   justify-content: end;
   padding: 2px var(--space-2) 0 0;
-  font-size: var(--text-xs);
+  font-size: var(--text-12);
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
-  border-inline-end: 1px solid var(--border);
+  border-inline-end: 1px solid var(--border-decorative);
 }
 .cal-week__cell {
-  border-inline-end: 1px solid var(--border);
+  border-inline-end: 1px solid var(--border-decorative);
   padding: 1px 2px;
   cursor: pointer;
   min-block-size: 46px;
   overflow: hidden;
 }
 .cal-week__cell:last-child { border-inline-end: none; }
-.cal-week__cell:hover { background: var(--surface-hover); }
+.cal-week__cell:hover { background: var(--bg-subtle); }
 .cal-week__event {
   padding: 2px 6px;
   border-radius: 6px;
@@ -3053,8 +3060,8 @@ a.gamecard:hover {
   text-overflow: ellipsis;
   margin-block-end: 2px;
   cursor: pointer;
-  border-inline-start: 3px solid var(--cal-border, var(--accent));
-  background: var(--cal-bg, var(--accent-subtle, #e8f0fe));
+  border-inline-start: 3px solid var(--cal-border, var(--brand-primary));
+  background: var(--cal-bg, var(--brand-primary-subtle));
   color: var(--cal-text, var(--text-primary));
   box-shadow: 0 1px 2px rgba(0,0,0,0.06);
   transition: box-shadow 0.15s, transform 0.15s;
@@ -3067,17 +3074,17 @@ a.gamecard:hover {
 .cal-week__event-clinic { font-size: 10px; color: var(--text-secondary); margin-inline-start: 4px; }
 
 /* ---- Month view */
-.cal-month { border: 1px solid var(--border); border-radius: 16px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+.cal-month { border: 1px solid var(--border-decorative); border-radius: 16px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
 .cal-month__header {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  border-block-end: 1px solid var(--border);
-  background: var(--surface-raised);
+  border-block-end: 1px solid var(--border-decorative);
+  background: var(--bg-surface);
 }
 .cal-month__wday {
   text-align: center;
   padding: var(--space-2) 0;
-  font-size: var(--text-xs);
+  font-size: var(--text-12);
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -3089,18 +3096,18 @@ a.gamecard:hover {
 .cal-month__day {
   min-block-size: 80px;
   padding: var(--space-1) var(--space-2);
-  border-inline-end: 1px solid var(--border);
-  border-block-end: 1px solid var(--border);
+  border-inline-end: 1px solid var(--border-decorative);
+  border-block-end: 1px solid var(--border-decorative);
   cursor: pointer;
   transition: background 0.1s;
 }
 .cal-month__day:nth-child(7n) { border-inline-end: none; }
-.cal-month__day:hover { background: var(--surface-hover); }
+.cal-month__day:hover { background: var(--bg-subtle); }
 .cal-month__day--outside { opacity: 0.4; }
 .cal-month__day--today .cal-month__num {
-  background: var(--accent);
-  color: var(--on-accent);
-  border-radius: var(--radius-full);
+  background: var(--brand-primary);
+  color: var(--text-on-brand);
+  border-radius: var(--radius-pill);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3108,7 +3115,7 @@ a.gamecard:hover {
   block-size: 24px;
   font-weight: 700;
 }
-.cal-month__num { font-size: var(--text-sm); font-weight: 500; }
+.cal-month__num { font-size: var(--text-14); font-weight: 500; }
 .cal-month__events {
   display: flex;
   gap: 3px;
@@ -3118,11 +3125,11 @@ a.gamecard:hover {
 .cal-month__dot {
   inline-size: 8px;
   block-size: 8px;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-pill);
   box-shadow: 0 1px 2px rgba(0,0,0,0.15);
 }
-.cal-month__dot--session { background: var(--accent); }
-.cal-month__dot--appointment { background: var(--cal-border, var(--success, #34a853)); }
+.cal-month__dot--session { background: var(--brand-primary); }
+.cal-month__dot--appointment { background: var(--cal-border, var(--status-success)); }
 .cal-month__more {
   font-size: 10px;
   color: var(--text-secondary);
@@ -3135,7 +3142,7 @@ a.gamecard:hover {
   .cal-week__header,
   .cal-week__row { grid-template-columns: 48px repeat(7, 1fr); }
   .cal-month__day { min-block-size: 48px; padding: 2px; }
-  .cal-month__num { font-size: var(--text-xs); }
+  .cal-month__num { font-size: var(--text-12); }
 }
 
 /* ─── Command palette (§4.3) ─── */
@@ -3361,7 +3368,6 @@ a.gamecard:hover {
   text-align: center;
   font-size: var(--text-12);
   color: var(--text-secondary);
-  opacity: 0.6;
   margin-block-start: auto;
 }
 
@@ -3953,5 +3959,43 @@ a.gamecard:hover {
     box-shadow: none;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+}
+
+/* ------------------------------------------------------------ Touch targets and small fixes (UI critique 2026-11-24) */
+/* The clinic name is cut with an ellipsis instead of mid-letter. */
+.app-clinicswitch .emb-select {
+  text-overflow: ellipsis;
+}
+/* The shortcut hint is a key combination, not a sentence: it keeps its order in Hebrew. */
+.cmdpal-trigger__kbd {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+/* "Start" inside a calendar event is the primary action there, not a footnote. */
+.cal-event__start {
+  min-block-size: 32px;
+  font-size: var(--text-14);
+  font-weight: 600;
+}
+/* On touch screens every link and button a finger aims at is at least 44 px tall. */
+@media (pointer: coarse), (max-width: 767px) {
+  .nextup__name,
+  .rcase__name,
+  .rcase__sort,
+  .cal-event__start {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: var(--target-min);
+  }
+  .cal-view-btn,
+  .cmdpal-trigger {
+    min-block-size: var(--target-min);
+  }
+  .app-topbar__mobilebrand {
+    align-items: center;
+    justify-content: center;
+    min-inline-size: var(--target-min);
+    min-block-size: var(--target-min);
   }
 }
