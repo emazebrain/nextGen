@@ -1100,6 +1100,7 @@ a.gamecard:hover {
 }
 .tplcard {
   display: grid;
+  align-content: start;
   gap: var(--space-3);
   padding: var(--space-4);
   border: 1px solid var(--border-decorative);
@@ -1127,6 +1128,8 @@ a.gamecard:hover {
 .tplcard__actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-start;
+  align-self: start;
   gap: var(--space-2);
 }
 .builder {
@@ -4039,14 +4042,6 @@ a.gamecard:hover {
 }
 
 /* ------------------------------------------------------------ Parent portal: header, messages tab, spacing (UI critique 2026-11-24) */
-.app-sr-only {
-  position: absolute;
-  inline-size: 1px;
-  block-size: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
 .parent-shell__header {
   position: sticky;
   inset-block-start: 0;
@@ -4189,4 +4184,68 @@ a.gamecard:hover {
   .conversation__back {
     display: inline-flex;
   }
+}
+
+/* ------------------------------------------------------------ Filter chip (patients: "needs attention") */
+.app-filterchip {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--target-min);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-pill);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--text-14);
+  font-weight: 500;
+  cursor: pointer;
+}
+.app-filterchip:hover {
+  background: var(--bg-subtle);
+}
+.app-filterchip.is-on {
+  border-color: var(--brand-primary);
+  background: var(--brand-primary-subtle);
+  color: var(--brand-primary);
+  font-weight: 600;
+}
+.app-filterchip:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------ Template card: assign to a patient */
+.tplcard__assign {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-3);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--border-decorative);
+}
+.tplcard__assign > :first-child {
+  flex: 1 1 14rem;
+}
+
+/* ------------------------------------------------------------ Help popover: the common tasks */
+.app-help__list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  list-style: none;
+}
+.app-help__list a {
+  display: flex;
+  align-items: center;
+  min-block-size: var(--target-min);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-control);
+  color: var(--text-primary);
+  font-size: var(--text-14);
+  text-decoration: none;
+}
+.app-help__list a:hover {
+  background: var(--bg-subtle);
 }

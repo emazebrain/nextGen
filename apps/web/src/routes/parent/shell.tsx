@@ -118,7 +118,7 @@ export function ParentShell() {
             </span>
             <span>
               {t("parent.messages")}
-              {unread > 0 && <span className="app-sr-only"> {t("parent.unread", { count: unread })}</span>}
+              {unread > 0 && <span className="emb-vh"> {t("parent.unread", { count: unread })}</span>}
             </span>
           </NavLink>
         </nav>

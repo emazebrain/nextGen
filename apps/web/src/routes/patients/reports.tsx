@@ -10,7 +10,8 @@ import { FileText, Printer } from "lucide-react";
 import { Alert, Button, Card, Chip, MazeLoader, PageHeader, Segmented, TextField } from "@emb/ui";
 import { ApiError } from "../../api/http.ts";
 import { useCreateProgressReport, useProgressReport, useProgressReports, useShareProgressReport, type ProgressReportSummary, type ReportAudience } from "../../api/progress-reports.ts";
-import { locales, useT, type Locale, type MessageId } from "../../i18n/index.tsx";
+import { locales, usePrefs, useT, type Locale, type MessageId } from "../../i18n/index.tsx";
+import { usePatient } from "../../api/queries.ts";
 import { useTitle } from "../../lib/title.ts";
 import { LoadError } from "../shared.tsx";
 import { BackLink } from "../admin/common.tsx";
@@ -76,12 +77,17 @@ export function NewProgressReportPage() {
   const { id = "" } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const create = useCreateProgressReport(id);
+  const patient = usePatient(id);
+  const { locale: uiLocale } = usePrefs();
   useTitle(t("pr.ui.newTitle"));
 
   const [from, setFrom] = useState(() => ymd(new Date(Date.now() - 30 * 86_400_000)));
   const [to, setTo] = useState(() => ymd(new Date()));
   const [audience, setAudience] = useState<ReportAudience>("family");
-  const [locale, setLocale] = useState<Locale>("he");
+  // The report starts in the patient's preferred language (the family's), not a fixed one; the therapist can change it.
+  const [chosenLocale, setLocale] = useState<Locale | null>(null);
+  const preferred = patient.data?.preferred_locale;
+  const locale: Locale = chosenLocale ?? (preferred && (locales as readonly string[]).includes(preferred) ? (preferred as Locale) : uiLocale);
   const [summary, setSummary] = useState("");
   const [share, setShare] = useState(false);
   const [error, setError] = useState<MessageId | null>(null);

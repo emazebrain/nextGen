@@ -5,17 +5,17 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { useIntl } from "react-intl";
-import { ArrowLeft, Copy, FilePlus2, Pencil, Plus, Route as RouteIcon, Trash2 } from "lucide-react";
+import { ArrowLeft, Copy, FilePlus2, Pencil, Plus, Route as RouteIcon, Search, Trash2, UserPlus } from "lucide-react";
 import type { StepInput, StepItem, TemplateDetail, TemplateSummary } from "@emb/contracts";
 import { Alert, Button, Card, Chip, ConfirmDialog, EmptyState, MazeLoader, PageHeader, Segmented, SelectField, TextAreaField, TextField } from "@emb/ui";
 import { ApiError } from "../../api/http.ts";
-import { useAssign, useDeleteTemplate, useMe, usePatient, useSaveTemplate, useTemplate, useTemplates } from "../../api/queries.ts";
+import { useAssign, useDeleteTemplate, useMe, usePatient, usePatients, useSaveTemplate, useTemplate, useTemplates } from "../../api/queries.ts";
 import { useAdminOrgs, useAdminClinics, type AdminOrg, type AdminClinic } from "../../api/admin.ts";
 import { findGame, localText } from "../../games/registry.ts";
 import { useT, usePrefs, type MessageId } from "../../i18n/index.tsx";
 import { useClinic } from "../../lib/clinic.tsx";
-import { calendarDate } from "../../lib/format.ts";
-import { joinSteps } from "../../lib/steps.ts";
+import { calendarDate, matchesQuery } from "../../lib/format.ts";
+import { collapseRepeats, joinSteps } from "../../lib/steps.ts";
 import { useTitle } from "../../lib/title.ts";
 import { fullName, LoadError } from "../shared.tsx";
 import { StepList, stepProblems } from "./steps.tsx";
@@ -31,10 +31,10 @@ function useGameNames() {
 /** "Tunnel Rush → ▶ Colour shapes → Block Crasher": every step in order (ADR 0018). */
 export function stepNames(x: { games: string[]; items?: StepItem[] }, names: (ids: string[]) => string[], locale: string) {
   if (!x.items) return names([...new Set(x.games)]).join(" · ");
-  return joinSteps(x.items.map((i) => (i.kind === "video" ? `▶ ${i.title}` : names([i.game_id])[0]!)), locale);
+  return joinSteps(collapseRepeats(x.items.map((i) => (i.kind === "video" ? `▶ ${i.title}` : names([i.game_id])[0]!))), locale);
 }
 
-function TemplateCard({ t: tpl, actions }: { t: TemplateSummary; actions?: ReactNode }) {
+function TemplateCard({ t: tpl, actions, footer }: { t: TemplateSummary; actions?: ReactNode; footer?: ReactNode }) {
   const t = useT();
   const names = useGameNames();
   const { locale } = usePrefs();
@@ -52,7 +52,58 @@ function TemplateCard({ t: tpl, actions }: { t: TemplateSummary; actions?: React
         </p>
       </div>
       {actions && <div className="tplcard__actions">{actions}</div>}
+      {footer}
     </li>
+  );
+}
+
+/** A search box over templates: by name or by the name of a game in them. */
+function TemplateSearch({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const t = useT();
+  return (
+    <div className="app-toolbar" role="search">
+      <label className="app-search">
+        <Search size={20} aria-hidden="true" className="app-search__icon" />
+        <span className="emb-vh">{t("protocols.search")}</span>
+        <input type="search" className="emb-input app-search__input" placeholder={t("protocols.search")} value={value} onChange={(e) => onChange(e.target.value)} enterKeyHint="search" autoComplete="off" />
+      </label>
+    </div>
+  );
+}
+
+function useTemplateFilter(query: string) {
+  const names = useGameNames();
+  return (tpl: TemplateSummary) => matchesQuery([tpl.name, ...names(tpl.games)], query);
+}
+
+/** From a template to a patient: pick who it is for, then continue on that patient's assign page with it chosen. */
+function AssignPicker({ templateId, templateName }: { templateId: string; templateName: string }) {
+  const t = useT();
+  const { clinicId } = useClinic();
+  const patients = usePatients(clinicId);
+  const navigate = useNavigate();
+  const [patientId, setPatientId] = useState("");
+  const list = (patients.data ?? []).filter((p) => p.status !== "discharged");
+  return (
+    <form
+      className="tplcard__assign"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (patientId) navigate(`/patients/${patientId}/assign?template=${templateId}`);
+      }}
+    >
+      <SelectField label={t("protocols.assignTo.label", { name: templateName })} value={patientId} onChange={(e) => setPatientId(e.target.value)} disabled={patients.isPending}>
+        <option value="">{patients.isPending ? t("common.loading") : t("protocols.assignTo.choose")}</option>
+        {list.map((p) => (
+          <option key={p.id} value={p.id}>
+            {fullName(p)}
+          </option>
+        ))}
+      </SelectField>
+      <Button type="submit" disabled={!patientId}>
+        {t("common.continue")}
+      </Button>
+    </form>
   );
 }
 
@@ -63,16 +114,19 @@ export function ProtocolsPage() {
   const remove = useDeleteTemplate();
   const [deleting, setDeleting] = useState<TemplateSummary | null>(null);
   const flash = useFlash();
+  const [query, setQuery] = useState("");
+  const [assigning, setAssigning] = useState<string | null>(null);
+  const matches = useTemplateFilter(query);
   useTitle(t("nav.protocols"));
 
-  const groups = useMemo(() => {
-    const all = templates.data ?? [];
+  const groups = (() => {
+    const all = (templates.data ?? []).filter(matches);
     return [
       { id: "mine", title: t("protocols.mine"), items: all.filter((x) => x.visibility === "private") },
       { id: "clinic", title: t("protocols.clinic"), items: all.filter((x) => x.visibility === "clinic") },
       { id: "platform", title: t("protocols.platform"), items: all.filter((x) => x.visibility === "platform") },
     ];
-  }, [templates.data, t]);
+  })();
 
   return (
     <div className="app-page">
@@ -91,6 +145,7 @@ export function ProtocolsPage() {
           <Alert tone="success">{flash}</Alert>
         </div>
       )}
+      {(templates.data?.length ?? 0) > 5 && <TemplateSearch value={query} onChange={setQuery} />}
       {templates.isPending ? (
         <MazeLoader label={t("common.loading")} />
       ) : templates.isError ? (
@@ -102,17 +157,21 @@ export function ProtocolsPage() {
               {g.title}
             </h2>
             {g.items.length === 0 ? (
-              <p className="app-muted">{t("protocols.empty")}</p>
+              <p className="app-muted">{query ? t("protocols.noMatch") : t("protocols.empty")}</p>
             ) : (
               <ul className="tplgrid">
                 {g.items.map((tpl) => (
                   <TemplateCard
                     key={tpl.id}
                     t={tpl}
+                    footer={assigning === tpl.id ? <AssignPicker templateId={tpl.id} templateName={tpl.name} /> : null}
                     actions={
                       <>
+                        <Button variant="secondary" icon={<UserPlus size={18} aria-hidden="true" />} aria-expanded={assigning === tpl.id} aria-label={`${t("protocols.assignTo")}: ${tpl.name}`} onClick={() => setAssigning(assigning === tpl.id ? null : tpl.id)}>
+                          {t("protocols.assignTo")}
+                        </Button>
                         {tpl.can_edit && (
-                          <Link to={`/protocols/${tpl.id}/edit`} className="emb-btn emb-btn--secondary" aria-label={`${t("common.edit")}: ${tpl.name}`}>
+                          <Link to={`/protocols/${tpl.id}/edit`} className="emb-btn emb-btn--ghost" aria-label={`${t("common.edit")}: ${tpl.name}`}>
                             <Pencil size={18} aria-hidden="true" />
                             <span>{t("common.edit")}</span>
                           </Link>
@@ -432,7 +491,11 @@ export function AssignPage() {
   const patient = usePatient(id);
   const { clinicId } = useClinic();
   const templates = useTemplates(clinicId);
-  const [chosen, setChosen] = useState<string | "blank" | null>(null);
+  const [search] = useSearchParams();
+  // Coming from a template's "Assign to patient…": that template is already chosen.
+  const [chosen, setChosen] = useState<string | "blank" | null>(() => search.get("template"));
+  const [query, setQuery] = useState("");
+  const matches = useTemplateFilter(query);
   useTitle(t("assign.title"));
   if (patient.isPending || templates.isPending) return <MazeLoader label={t("common.loading")} />;
   if (patient.isError) return <LoadError error={patient.error} retry={() => void patient.refetch()} />;
@@ -450,8 +513,13 @@ export function AssignPage() {
           <h2 id="a-choose" className="app-cardtitle">
             {t("assign.choose")}
           </h2>
+          {(templates.data?.length ?? 0) > 5 && <TemplateSearch value={query} onChange={setQuery} />}
+          <Button variant="ghost" icon={<Plus size={18} aria-hidden="true" />} onClick={() => setChosen("blank")}>
+            {t("assign.blank")}
+          </Button>
+          {query && (templates.data ?? []).filter(matches).length === 0 && <p className="app-muted">{t("protocols.noMatch")}</p>}
           <ul className="tplgrid tplgrid--single">
-            {(templates.data ?? []).map((tpl) => (
+            {(templates.data ?? []).filter(matches).map((tpl) => (
               <TemplateCard
                 key={tpl.id}
                 t={tpl}
@@ -463,9 +531,6 @@ export function AssignPage() {
               />
             ))}
           </ul>
-          <Button variant="ghost" icon={<Plus size={18} aria-hidden="true" />} onClick={() => setChosen("blank")}>
-            {t("assign.blank")}
-          </Button>
         </Card>
       ) : (
         <AssignReview patientId={p.id} patientName={p.given_name} templateId={chosen === "blank" ? null : chosen} onBack={() => setChosen(null)} />

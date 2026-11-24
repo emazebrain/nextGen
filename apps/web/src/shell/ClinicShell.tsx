@@ -182,9 +182,32 @@ export function ClinicShell({ me }: { me: Me }) {
             </button>
             <SyncStatus />
             <Disclosure label={t("shell.help")} trigger={<CircleHelp size={22} aria-hidden="true" className="app-topbar__icon" />}>
-              {() => (
+              {(close) => (
                 <div className="app-help">
                   <p className="app-help__title">{t("shell.help.title")}</p>
+                  {/* The four things people ask most, each one step from here. */}
+                  <ul className="app-help__list">
+                    <li>
+                      <Link to="/today" onClick={close}>
+                        {t("shell.help.start")}
+                      </Link>
+                    </li>
+                    <li>
+                      <Link to="/protocols" onClick={close}>
+                        {t("shell.help.assign")}
+                      </Link>
+                    </li>
+                    <li>
+                      <Link to="/patients?look=1" onClick={close}>
+                        {t("shell.help.look")}
+                      </Link>
+                    </li>
+                    <li>
+                      <Link to="/settings" onClick={close}>
+                        {t("shell.help.pin")}
+                      </Link>
+                    </li>
+                  </ul>
                   <p className="app-help__body">{t("shell.help.body")}</p>
                 </div>
               )}

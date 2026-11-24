@@ -327,7 +327,7 @@ export function GamePreviewPage() {
       hemisphere,
       timer_position: timerPositionFor(hemisphere, true),
       practice: q.get("practice") === "off" ? "off" : "on",
-      lang: (q.get("lang") as PlatformParams["lang"]) || "he",
+      lang: (q.get("lang") as PlatformParams["lang"]) || locale,
       monochrome: q.get("mono") === "1",
       ...(q.get("pack") && game ? { [`${game.manifest.id.replace(/-/g, "_")}.pack`]: q.get("pack") } : {}),
       ...(q.get("glyphs") && game ? { [`${game.manifest.id.replace(/-/g, "_")}.glyph_type`]: q.get("glyphs") } : {}),

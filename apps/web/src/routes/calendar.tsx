@@ -438,10 +438,12 @@ function NewAppointmentDialog({ clinicId, date, hour, onClose }: { clinicId: str
           </div>
           <TextField label={t("calendar.notes")} value={notes} onChange={(e) => setNotes(e.target.value)} />
           <div>
-            <label className="emb-field__label">{t("calendar.color")}</label>
+            <span className="emb-field__label">
+              {t("calendar.color")}: {t("calendar.colorName", { c: color })}
+            </span>
             <div className="cal-colors">
               {APPOINTMENT_COLORS.map((c) => (
-                <button key={c} type="button" className={`cal-color-dot ${c === color ? "cal-color-dot--active" : ""}`} data-color={c} onClick={() => setColor(c)} aria-label={c} />
+                <button key={c} type="button" className={`cal-color-dot ${c === color ? "cal-color-dot--active" : ""}`} data-color={c} onClick={() => setColor(c)} aria-label={t("calendar.colorName", { c })} aria-pressed={c === color} title={t("calendar.colorName", { c })} />
               ))}
             </div>
           </div>
