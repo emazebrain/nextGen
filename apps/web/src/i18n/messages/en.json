@@ -1155,6 +1155,8 @@
   "parent.historyTitle": "Session history",
   "parent.historyCaption": "All game sessions, newest first",
   "parent.noResultsYet": "No sessions completed yet.",
+  "parent.going.improving": "{name} is doing better than in their first sessions.",
+  "parent.going.steady": "{name} is holding steady compared with their first sessions.",
   "parent.lastPlayed": "Last played {date}",
   "parent.totalSessions": "Total sessions",
   "parent.protocolProgress": "{done} of {total} sessions completed",

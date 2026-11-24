@@ -164,6 +164,7 @@ function ConversationView({ thread, myUserId, onBack }: { thread: MessageThread;
 }
 
 function MessageBubble({ msg, isMine }: { msg: Message; isMine: boolean }) {
+  const intl = useIntl();
   return (
     <div className={`msg-bubble ${isMine ? "msg-bubble--mine" : "msg-bubble--theirs"}`}>
       {!isMine && <span className="msg-bubble__sender">{msg.sender_name}</span>}
@@ -174,7 +175,7 @@ function MessageBubble({ msg, isMine }: { msg: Message; isMine: boolean }) {
         </a>
       )}
       <time className="msg-bubble__time">
-        {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+        {intl.formatTime(new Date(msg.created_at), { hour: "2-digit", minute: "2-digit" })}
       </time>
     </div>
   );

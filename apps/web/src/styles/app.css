@@ -3400,8 +3400,8 @@ a.gamecard:hover {
   filter: blur(14px);
 }
 :root[data-app-bg] {
-  --glass: color-mix(in srgb, var(--bg-surface) 74%, transparent);
-  --glass-solid: color-mix(in srgb, var(--bg-surface) 90%, transparent);
+  --glass: color-mix(in srgb, var(--bg-surface) 86%, transparent);
+  --glass-solid: color-mix(in srgb, var(--bg-surface) 94%, transparent);
   --glass-stroke: color-mix(in srgb, var(--bg-surface) 80%, transparent);
   --glass-well: color-mix(in srgb, var(--text-primary) 7%, transparent);
   --glass-veil: color-mix(in srgb, var(--bg-canvas) 42%, transparent);
@@ -3409,6 +3409,20 @@ a.gamecard:hover {
   --glass-blur: saturate(1.5) blur(14px);
   /* The theme's real surface colour, for the few things that must stay opaque. */
   --surface-solid: var(--bg-surface);
+}
+/* Dark theme: a bright patch of the picture behind a dark tile washes out light text far sooner than the reverse,
+   so the dark tiles and veil are denser (measured: 74% gave 3.2:1 for body text over a bright area). */
+:root[data-app-bg][data-theme="dark"] {
+  --glass: color-mix(in srgb, var(--bg-surface) 90%, transparent);
+  --glass-solid: color-mix(in srgb, var(--bg-surface) 96%, transparent);
+  --glass-veil: color-mix(in srgb, var(--bg-canvas) 68%, transparent);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-app-bg][data-theme="system"] {
+    --glass: color-mix(in srgb, var(--bg-surface) 90%, transparent);
+    --glass-solid: color-mix(in srgb, var(--bg-surface) 96%, transparent);
+    --glass-veil: color-mix(in srgb, var(--bg-canvas) 68%, transparent);
+  }
 }
 /* Devices that can't blur what's behind an element get nearly solid surfaces instead. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
@@ -4248,4 +4262,39 @@ a.gamecard:hover {
 }
 .app-help__list a:hover {
   background: var(--bg-subtle);
+}
+
+/* Parent results: the one sentence on how it is going. */
+.parent-going {
+  margin-block: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-control);
+  background: var(--status-success-subtle);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+/* ------------------------------------------------------------ Glass: nothing readable sits straight on the picture
+ * Text and controls outside a card (a section title, a hint line, a back link, a toolbar, the footer) would sit on
+ * the thin veil, where the picture shows through and contrast is not guaranteed. Each gets its own dense ground. */
+:root[data-app-bg] :is(.emb-main, .parent-shell__content) .app-page > :is(p, h2, h3, a):not(.emb-btn),
+:root[data-app-bg] :is(.emb-main, .parent-shell__content) .app-sectiontitle,
+:root[data-app-bg] :is(.emb-main, .parent-shell__content) .tplgroup > p,
+:root[data-app-bg] .app-footer {
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  padding: var(--space-1) var(--space-3);
+  border-radius: 12px;
+  background: var(--glass-solid);
+}
+:root[data-app-bg] .app-footer {
+  margin-inline: auto;
+  margin-block-end: var(--space-4);
+}
+:root[data-app-bg] :is(.emb-main, .parent-shell__content) :is(.app-toolbar, .cal-toolbar, .plist-view) {
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: 18px;
+  background: var(--glass-solid);
 }

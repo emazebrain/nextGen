@@ -279,7 +279,7 @@ function OrgEventCard({ event: ev }: { event: OrgCalendarEvent }) {
   return (
     <div className={`cal-event cal-event--${ev.kind}`}>
       <div className="cal-event__header">
-        <span className="cal-event__patient"><bdi>{ev.patient_family_name}, {ev.patient_given_name}</bdi></span>
+        <span className="cal-event__patient"><bdi>{ev.patient_given_name} {ev.patient_family_name}</bdi></span>
         {timeRange && <span className="cal-event__time">{timeRange}</span>}
       </div>
       <div className="cal-event__detail">

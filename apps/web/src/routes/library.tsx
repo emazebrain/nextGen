@@ -7,7 +7,7 @@ import { useState, type FormEvent } from "react";
 import { timerPositionFor } from "@emb/session-rules";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useIntl } from "react-intl";
-import { ArrowLeft, Clock, Gamepad2, Play, X } from "lucide-react";
+import { ArrowLeft, ArrowLeftRight, Blocks, Clock, Crosshair, Eye, Gamepad2, KeyboardMusic, Orbit, Play, Rocket, Route, Scan, Volume2, X, type LucideIcon } from "lucide-react";
 import type { PlatformParams, SessionMode } from "@emb/game-sdk";
 import type { ResultEnvelope } from "@emb/game-runtime/protocol";
 import { Alert, Button, Card, CheckboxField, Chip, EmptyState, PageHeader, Segmented, SelectField } from "@emb/ui";
@@ -58,12 +58,27 @@ export function LibraryPage() {
   );
 }
 
-/** A small warm/cold swatch until the game's illustrated card art arrives. */
+/** One icon per game, so a therapist can tell the cards apart at a glance; a new game falls back to the gamepad. */
+const GAME_ICON: Record<string, LucideIcon> = {
+  "beep-beep": Volume2,
+  "block-crasher": Blocks,
+  "catch-me-if-you-can": Crosshair,
+  "echo-keys": KeyboardMusic,
+  "in-my-skin": Scan,
+  "its-left-its-right": ArrowLeftRight,
+  "orbital-order": Orbit,
+  "peek-peek": Eye,
+  "picture-trail": Route,
+  "tunnel-rush": Rocket,
+};
+
+/** A small warm/cold swatch with the game's icon, until the game's illustrated card art arrives. */
 function GameArt({ id, muted = false }: { id: string; muted?: boolean }) {
+  const Icon = GAME_ICON[id] ?? Gamepad2;
   const hue = [...id].reduce((a, c) => a + c.charCodeAt(0), 0) % 2 === 0;
   return (
     <span className={`gameart ${hue ? "gameart--warm" : "gameart--cold"} ${muted ? "gameart--muted" : ""}`} aria-hidden="true">
-      <Gamepad2 size={28} />
+      <Icon size={28} />
     </span>
   );
 }

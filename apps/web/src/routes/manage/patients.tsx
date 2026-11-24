@@ -33,7 +33,7 @@ export function ManagePatientsPage() {
       primary: true,
       cell: (p) => (
         <Link to={`/patients/${p.id}`} className="app-textlink">
-          <bdi>{p.family_name}, {p.given_name}</bdi>
+          <bdi>{p.given_name} {p.family_name}</bdi>
         </Link>
       ),
     },

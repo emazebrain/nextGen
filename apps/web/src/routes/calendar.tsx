@@ -347,7 +347,7 @@ function EventCard({ event: ev, showTherapist, onEdit }: { event: CalendarEvent;
   return (
     <div className={`cal-event cal-event--${ev.kind} ${colorClass}`} onClick={(e) => { e.stopPropagation(); onEdit(); }}>
       <div className="cal-event__header">
-        <span className="cal-event__patient"><bdi>{ev.patient_family_name}, {ev.patient_given_name}</bdi></span>
+        <span className="cal-event__patient"><bdi>{ev.patient_given_name} {ev.patient_family_name}</bdi></span>
         {timeRange && <span className="cal-event__time">{timeRange}</span>}
       </div>
       <div className="cal-event__detail">
@@ -421,11 +421,11 @@ function NewAppointmentDialog({ clinicId, date, hour, onClose }: { clinicId: str
         <form onSubmit={(e) => void submit(e)} className="pform">
           {error && <Alert tone="danger">{error}</Alert>}
           <div className="cal-patient-search">
-            <TextField label={t("calendar.patient")} value={selectedPatient ? `${selectedPatient.family_name}, ${selectedPatient.given_name}` : patientSearch} onChange={(e) => onPatientSearch(e.target.value)} autoComplete="off" placeholder={t("calendar.searchPatient")} />
+            <TextField label={t("calendar.patient")} value={selectedPatient ? `${selectedPatient.given_name} ${selectedPatient.family_name}` : patientSearch} onChange={(e) => onPatientSearch(e.target.value)} autoComplete="off" placeholder={t("calendar.searchPatient")} />
             {patients.length > 0 && !selectedPatient && (
               <ul className="cal-patient-results">
                 {patients.map((p) => (
-                  <li key={p.id}><button type="button" className="cal-patient-option" onClick={() => { setSelectedPatient(p); setPatients([]); }}><bdi>{p.family_name}, {p.given_name}</bdi></button></li>
+                  <li key={p.id}><button type="button" className="cal-patient-option" onClick={() => { setSelectedPatient(p); setPatients([]); }}><bdi>{p.given_name} {p.family_name}</bdi></button></li>
                 ))}
               </ul>
             )}
@@ -492,7 +492,7 @@ function RescheduleDialog({ event, onClose }: { event: CalendarEvent; onClose: (
           <Button variant="ghost" icon={<X size={18} />} onClick={onClose} aria-label={t("common.cancel")} />
         </div>
         <p className="app-muted">
-          <bdi>{event.patient_family_name}, {event.patient_given_name}</bdi>
+          <bdi>{event.patient_given_name} {event.patient_family_name}</bdi>
           {event.kind === "session" && <> — {event.assignment_name}</>}
         </p>
         <form onSubmit={(e) => void submit(e)} className="pform">

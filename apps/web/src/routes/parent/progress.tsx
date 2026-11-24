@@ -91,7 +91,7 @@ function ProgressView({ childId, childName }: { childId: string; childName: stri
           <div className="parent-stat">
             <span className="parent-stat__value">
               {stats.last_session
-                ? new Date(stats.last_session).toLocaleDateString()
+                ? intl.formatDate(new Date(stats.last_session), { day: "numeric", month: "short", year: "numeric" })
                 : "—"}
             </span>
             <span className="parent-stat__label">{t("parent.lastSession")}</span>

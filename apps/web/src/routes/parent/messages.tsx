@@ -11,6 +11,7 @@ import {
   type Message,
 } from "../../api/messaging.ts";
 import { useT } from "../../i18n/index.tsx";
+import { useIntl } from "react-intl";
 import { useTitle } from "../../lib/title.ts";
 
 export function ParentMessagesPage() {
@@ -96,6 +97,7 @@ export function ParentMessagesPage() {
 
 function ParentConversationView({ thread, onBack }: { thread: MessageThread; onBack: () => void }) {
   const t = useT();
+  const intl = useIntl();
   const messages = useParentMessages(thread.id);
   const send = useSendParentMessage(thread.id);
   const [draft, setDraft] = useState("");
@@ -147,7 +149,7 @@ function ParentConversationView({ thread, onBack }: { thread: MessageThread; onB
                   </a>
                 )}
                 <time className="msg-bubble__time">
-                  {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  {intl.formatTime(new Date(msg.created_at), { hour: "2-digit", minute: "2-digit" })}
                 </time>
               </div>
             ))}

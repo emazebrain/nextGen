@@ -1155,6 +1155,8 @@
   "parent.historyTitle": "היסטוריית מפגשים",
   "parent.historyCaption": "כל מפגשי המשחק, מהחדש לישן",
   "parent.noResultsYet": "עדיין לא הושלמו מפגשים.",
+  "parent.going.improving": "{name} מצליח/ה יותר מאשר במפגשים הראשונים.",
+  "parent.going.steady": "{name} שומר/ת על רמה דומה למפגשים הראשונים.",
   "parent.lastPlayed": "שוחק לאחרונה {date}",
   "parent.totalSessions": "סה״כ מפגשים",
   "parent.protocolProgress": "{done} מתוך {total} מפגשים הושלמו",

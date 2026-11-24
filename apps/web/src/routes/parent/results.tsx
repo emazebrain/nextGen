@@ -8,11 +8,13 @@ import { useT, usePrefs } from "../../i18n/index.tsx";
 import { useTitle } from "../../lib/title.ts";
 import { useParentContext } from "./shell.tsx";
 import { useChildProgress, useChildHistory } from "../../api/parent.ts";
-import { findGame, localText } from "../../games/registry.ts";
+import { GAMES, findGame, localText } from "../../games/registry.ts";
+import { trend, type GameInfo } from "@emb/metrics";
 import { useChildReports } from "../../api/progress-reports.ts";
 import { ReportList } from "../patients/reports.tsx";
 
 const HISTORY_PAGE = 20;
+const GAME_INFO: GameInfo[] = GAMES.map((g) => ({ id: g.manifest.id, metrics: g.manifest.metrics }));
 
 export function ParentResultsPage() {
   const t = useT();
@@ -53,6 +55,9 @@ function ChildResults({ childId, childName }: { childId: string; childName: stri
   const stats = progress.data?.stats;
   const protocols = progress.data?.protocols ?? [];
   const sessions = history.data?.sessions ?? [];
+  // The same comparison the therapist sees: the child against their own first sessions, never against other children.
+  // A parent is told when it is going well or holding steady; anything else is for the therapist to explain in person.
+  const going = trend(sessions.filter((s) => s.counts !== false), GAME_INFO, { kind: "standard", key: "accuracy" }).summary;
   const gameName = (id: string) => (findGame(id) ? localText(findGame(id)!.manifest.name, locale) : id);
   const date = (s: string) => intl.formatDate(new Date(s), { day: "numeric", month: "short", year: "numeric" });
 
@@ -77,6 +82,8 @@ function ChildResults({ childId, childName }: { childId: string; childName: stri
           )}
         </div>
       )}
+
+      {(going === "improving" || going === "steady") && <p className="parent-going">{t(going === "improving" ? "parent.going.improving" : "parent.going.steady", { name: childName })}</p>}
 
       {protocols.length > 0 && (
         <div className="parent-protocols">
