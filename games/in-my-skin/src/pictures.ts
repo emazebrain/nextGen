@@ -4,7 +4,12 @@
  * Real-life faces and real-life photographs are not here yet: they need licensed photographs.
  */
 import type { Locale } from "@emb/game-sdk";
-import { ARROW_IDS, DIGITS, HEBREW, LATIN, OPERATIONS, SHAPE_IDS, SIGN_IDS } from "./drawn.ts";
+import { ARROW_IDS, OPERATIONS, SHAPE_IDS, SIGN_IDS } from "./drawn.ts";
+
+/** The 26 Latin letters and the 22 Hebrew letters (no final forms), as the ids of their picture files. */
+export const LATIN = "abcdefghijklmnopqrstuvwxyz".split("");
+export const HEBREW = ["alef", "bet", "gimel", "dalet", "he", "vav", "zayin", "chet", "tet", "yod", "kaf", "lamed", "mem", "nun", "samech", "ayin", "pe", "tsadi", "qof", "resh", "shin", "tav"];
+export const DIGITS = "0123456789".split("");
 
 export const CATEGORIES = ["flat_objects", "objects_3d", "cartoon_faces", "letters", "numbers", "operations", "shapes", "cartoons", "sports", "road_signs", "arrows", "everyday"] as const;
 export type Category = (typeof CATEGORIES)[number];
@@ -46,8 +51,9 @@ export const PICTURES: Picture[] = [
   ...files("objects_3d", "right", ["rocket", "airplane"]),
   ...files("objects_3d", null, ["flying-saucer", "sailboat", "bus", "speedboat"]),
   ...files("cartoon_faces", null, ["lion-face", "tiger-face", "robot-face", "alien-face", "fox-face", "dragon-face", "frog-face", "bear-face"]),
-  ...LATIN.map((ch): Picture => ({ id: `letter-${ch}`, category: "letters", faces: null, source: "drawn", script: "latin" })),
-  ...HEBREW.map((ch): Picture => ({ id: `letter-${ch}`, category: "letters", faces: null, source: "drawn", script: "hebrew" })),
+  // Supplied by the product owner (2026-11-24); see NOTICE.md.
+  ...LATIN.map((ch): Picture => ({ id: `letter-en-${ch}`, category: "letters", faces: null, source: "file", script: "latin" })),
+  ...HEBREW.map((name): Picture => ({ id: `letter-he-${name}`, category: "letters", faces: null, source: "file", script: "hebrew" })),
   // Supplied by the product owner (2026-11-24); see NOTICE.md.
   ...files("numbers", null, DIGITS.map((d) => `number-${d}`)),
   ...drawn("operations", Object.keys(OPERATIONS).map((k) => `op-${k}`)),

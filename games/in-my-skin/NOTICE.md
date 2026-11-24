@@ -12,6 +12,12 @@ holds the right to use them. Each digit was cut out on its own; the sheet's flat
 because next to the game's grey outline it reads as a second outline. The arithmetic signs on the same sheet are
 not used.
 
+## Letters
+
+The 26 English letters and the 22 Hebrew letters were supplied by the product owner on 2026-11-24 as two SVG
+sheets, who holds the right to use them. Each letter was cut out on its own and the sheets' white background
+left out; the letters are otherwise unchanged.
+
 ## Placeholders
 
 The 3D-style pictures in `assets/` and the flat pictures in `src/flat.generated.ts` are a curated subset of
@@ -20,6 +26,6 @@ The 3D-style pictures in `assets/` and the flat pictures in `src/flat.generated.
 `@lobehub/fluent-emoji-3d` 1.1.0 (3D style, 256 px) and `@iconify-json/fluent-emoji-flat` 1.2.6 (flat style).
 `scripts/build-pictures.py` rebuilds both from those packages.
 
-Letters, arithmetic signs, geometric shapes, arrows and road signs are drawn in code (`src/drawn.ts`).
+Arithmetic signs, geometric shapes, arrows and road signs are drawn in code (`src/drawn.ts`).
 
 The manifest's `credits` text shows this attribution on the game's library page.

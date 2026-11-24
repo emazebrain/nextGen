@@ -1,5 +1,5 @@
 /**
- * Pictures drawn in code: letters, arithmetic signs, geometric shapes, arrows and road signs.
+ * Pictures drawn in code: arithmetic signs, geometric shapes, arrows and road signs.
  * Each is an SVG on a 256 × 256 canvas with a transparent background. Pure strings; no DOM.
  */
 const GRADS: [string, string][] = [
@@ -97,9 +97,6 @@ const SIGNS: Record<string, string> = {
   "sign-end-limit": svg(`<circle cx="128" cy="128" r="110" fill="#fff" stroke="#1B1B1F" stroke-width="8"/><path d="M178 54L58 174M198 74L78 194M158 34L38 154" stroke="#1B1B1F" stroke-width="10" stroke-linecap="round"/>`),
 };
 
-export const LATIN = ["A", "B", "D", "E", "G", "K", "M", "N", "R", "S", "T", "Y"];
-export const HEBREW = ["א", "ב", "ג", "ד", "ה", "ל", "מ", "ס", "ע", "פ", "ק", "ש"];
-export const DIGITS = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
 export const OPERATIONS: Record<string, string> = { plus: "+", minus: "−", times: "×", divide: "÷", equals: "=" };
 export const SHAPE_IDS = Object.keys(SHAPES);
 export const ARROW_IDS = Object.keys(ARROWS);
@@ -107,11 +104,6 @@ export const SIGN_IDS = Object.keys(SIGNS);
 
 /** The SVG for a code-drawn picture id, or null when the id is not one of them. */
 export function drawnSvg(id: string): string | null {
-  if (id.startsWith("letter-")) {
-    const ch = id.slice(7);
-    const i = LATIN.indexOf(ch) >= 0 ? LATIN.indexOf(ch) : HEBREW.indexOf(ch);
-    return i >= 0 ? tile(ch, i) : null;
-  }
   if (id.startsWith("op-")) {
     const sign = OPERATIONS[id.slice(3)];
     return sign ? tile(sign, Object.keys(OPERATIONS).indexOf(id.slice(3)) + 1) : null;

@@ -48,11 +48,12 @@ describe("pictures", () => {
     const he = poolFor("left", "he", "letters");
     const en = poolFor("left", "en", "letters");
     expect(he.every((p) => p.script === "hebrew")).toBe(true);
-    expect(he.map((p) => p.id)).toContain("letter-א");
+    expect(he.map((p) => p.id)).toContain("letter-he-alef");
+    expect(en.map((p) => p.id)).toContain("letter-en-q");
     expect(en.every((p) => p.script === "latin")).toBe(true);
     expect(poolFor("left", "ru", "letters").every((p) => p.script === "latin")).toBe(true);
-    expect(he.length).toBe(12);
-    expect(en.length).toBe(12);
+    expect(he.length).toBe(22);
+    expect(en.length).toBe(26);
   });
 
   it("shows every picture once before any repeats, and never the same one twice in a row", () => {
