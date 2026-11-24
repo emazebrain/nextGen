@@ -17,3 +17,6 @@ playwright-report/
 
 # Claude session state
 .claude/
+
+# Impeccable design tool: live-preview runtime state (critique snapshots are kept)
+.impeccable/live/
