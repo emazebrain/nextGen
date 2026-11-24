@@ -397,7 +397,7 @@ function NextUp() {
               </Link>
               <p className="app-muted">
                 {start && (
-                  <strong className="nextup__time emb-tnum">
+                  <strong className="nextup__time emb-tnum" dir="ltr">
                     {clock(start)}
                     {end ? ` – ${clock(end)}` : ""}
                   </strong>

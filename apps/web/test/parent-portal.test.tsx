@@ -8,6 +8,7 @@ import { makeQueryClient, routes } from "../src/App.tsx";
 import { PrefsProvider } from "../src/i18n/index.tsx";
 
 const at = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString();
+const ymd = (d: number) => new Date(Date.now() + d * 86_400_000).toLocaleDateString("en-CA");
 /** Synthetic sessions of one game at one difficulty: accuracy rising or falling against the first two. */
 const session = (i: number, accuracy: number) => ({
   id: `s${i}`, game_id: "catch-me-if-you-can", game_version: "1.0.0", assignment_id: "a1", assignment_name: "Visual attention starter", planned_session_id: null,
@@ -33,7 +34,9 @@ function mockApi(over: { sessions?: unknown[]; unread?: number } = {}) {
     if (p === "/v1/parent/messages/threads") return ok({ threads: [{ id: "t1", patient_id: "c1", therapist_id: "th", guardian_id: "g1", status: "open", last_message_at: at(0), created_at: at(3), patient_given_name: "Ella", patient_family_name: "Navon", guardian_name: "Dan Navon", therapist_name: "Yael Bar", unread_count: over.unread ?? 2 }] });
     if (p.endsWith("/progress")) return ok({ patient: { id: "c1", given_name: "Ella", family_name: "Navon", status: "active" }, stats: { total_sessions: 6, last_session: at(1) }, protocols: [] });
     if (p.endsWith("/history")) return ok({ sessions: over.sessions ?? RISING });
-    if (p.endsWith("/sessions")) return ok({ upcoming: [], recent: [] });
+    if (p.endsWith("/sessions")) return ok({ upcoming: [{ id: "ps1", seq: 4, week: 2, status: "planned", planned_date: ymd(2), location: "home", assignment_id: "a1", assignment_name: "Visual attention starter", total: 8 }], recent: [] });
+    if (p.endsWith("/appointments"))
+      return ok({ appointments: [{ id: "ap2", date: ymd(2), start_time: "10:00", end_time: "10:45", title: "", clinic_name: "Synthetic Clinic" }, { id: "ap1", date: ymd(1), start_time: "09:00", end_time: "09:30", title: "First visit", clinic_name: "Synthetic Clinic" }] });
     if (p.endsWith("/reports")) return ok({ reports: [] });
     return ok({});
   });
@@ -78,6 +81,22 @@ describe("parent portal", () => {
     await user.click(tab);
     expect(router.state.location.pathname).toBe("/parent/messages");
     expect(await screen.findByRole("button", { name: /Yael Bar/ })).toBeInTheDocument();
+  });
+
+  it("shows the clinic's appointments on the calendar with the home sessions, in date order, to read only", async () => {
+    const calls = mockApi();
+    show("/parent/calendar");
+    const first = await screen.findByText("First visit");
+    const items = within(first.closest("ul")!).getAllByRole("listitem");
+    expect(items).toHaveLength(3);
+    expect(items[0]).toHaveTextContent(/First visit.*9:00.*9:30.*at .?Synthetic Clinic/);
+    // The same day: the appointment (it has a time) before the home session; an untitled one is called "Appointment".
+    expect(items[1]).toHaveTextContent(/Appointment.*10:00.*10:45/);
+    expect(items[2]).toHaveTextContent(/Visual attention starter.*Home session/);
+    // Nothing on the page sets or changes an appointment, and nothing was sent but reads.
+    expect(within(first.closest("section")!).queryAllByRole("button")).toHaveLength(0);
+    expect(calls.filter((c) => !c.startsWith("GET "))).toEqual([]);
+    expect(screen.getByText(/The clinic sets appointments/)).toBeInTheDocument();
   });
 
   it("shows results in a parent's words, without the clinic-side columns", async () => {

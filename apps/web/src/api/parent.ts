@@ -124,6 +124,20 @@ export interface ChildSessions {
   recent: HomePlannedSession[];
 }
 
+/** A coming appointment the clinic set for the child. Guardians only read these; the staff's notes are never sent. */
+export interface ChildAppointment {
+  id: string;
+  date: string;
+  /** "HH:MM" */
+  start_time: string;
+  end_time: string;
+  title: string;
+  clinic_name: string;
+}
+
+export const getChildAppointments = (childId: string, signal?: AbortSignal) =>
+  apiGet<{ appointments: ChildAppointment[] }>(`/v1/parent/children/${encodeURIComponent(childId)}/appointments`, signal ? { signal } : {}).then((r) => r.appointments);
+
 export const getChildSessions = (childId: string, signal?: AbortSignal) =>
   apiGet<ChildSessions>(`/v1/parent/children/${encodeURIComponent(childId)}/sessions`, signal ? { signal } : {});
 
@@ -137,6 +151,13 @@ export const useChildSessions = (childId: string) =>
   useQuery({
     queryKey: [...parentKey, "sessions", childId],
     queryFn: ({ signal }) => getChildSessions(childId, signal),
+    enabled: !!childId,
+  });
+
+export const useChildAppointments = (childId: string) =>
+  useQuery({
+    queryKey: [...parentKey, "appointments", childId],
+    queryFn: ({ signal }) => getChildAppointments(childId, signal),
     enabled: !!childId,
   });
 

@@ -4327,3 +4327,15 @@ a.gamecard:hover {
   padding-block: var(--space-1);
   border-radius: 18px;
 }
+
+/* Parent calendar: an appointment at the clinic reads apart from a home session. */
+.parent-calendar__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+.parent-calendar__title svg {
+  flex: none;
+  color: var(--brand-primary);
+}

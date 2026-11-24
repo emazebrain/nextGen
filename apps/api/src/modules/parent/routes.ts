@@ -234,6 +234,38 @@ export function parentRoutes(servicePool: pg.Pool, tickets?: TicketSigner) {
   });
 
   /**
+   * GET /v1/parent/children/:id/appointments — the coming appointments the clinic set for one child.
+   *
+   * Read-only, and only for a guardian linked to that child (checked in code, as on every parent route). A guardian
+   * gets when, how long, the title and the clinic; never the staff's notes, who booked it, or cancelled entries.
+   * There is no parent route that creates or changes an appointment.
+   */
+  app.get("/children/:id/appointments", async (c) => {
+    const childId = c.req.param("id");
+    if (!UUID.test(childId)) return c.json({ error: "not_found" }, 404);
+
+    const appointments = await withService(servicePool, async (db) => {
+      if (!(await isLinkedGuardian(db, childId, c.get("user").id))) return null;
+      const { rows } = await db.query(
+        `SELECT ap.id, to_char(ap.date, 'YYYY-MM-DD') AS date,
+                to_char(ap.start_time, 'HH24:MI') AS start_time, to_char(ap.end_time, 'HH24:MI') AS end_time,
+                ap.title, cl.name AS clinic_name
+           FROM app.appointment ap
+           JOIN app.patient p ON p.id = ap.patient_id AND p.deleted_at IS NULL
+           JOIN app.clinic cl ON cl.id = ap.clinic_id
+          WHERE ap.patient_id = $1 AND ap.status = 'scheduled' AND ap.date >= CURRENT_DATE
+          ORDER BY ap.date, ap.start_time
+          LIMIT 100`,
+        [childId],
+      );
+      return rows;
+    });
+
+    if (!appointments) return c.json({ error: "not_found" }, 404);
+    return c.json({ appointments });
+  });
+
+  /**
    * POST /v1/parent/children/:id/sessions/:sessionId/launch — launch a home session.
    */
   app.post("/children/:id/sessions/:sessionId/launch", async (c) => {
