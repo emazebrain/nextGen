@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { Alert, Avatar, Button, Card, Chip, DataList, EmptyState, MazeLoader, PageHeader, Segmented, TextField, type ChipTone, type Column } from "@emb/ui";
 import { useQueryClient } from "@tanstack/react-query";
-import { meKey, useMe, usePatients, useToday, useReviewCount, useReviewQueue, useReviewFromQueue, type ReviewQueueItem } from "../api/queries.ts";
+import { meKey, useCaseload, useMe, usePatients, useToday, useReviewCount, useReviewQueue, useReviewFromQueue, type ReviewQueueItem } from "../api/queries.ts";
 import { apiSend } from "../api/http.ts";
 import { authClient } from "../api/auth.ts";
 import { findGame, localText, GAMES } from "../games/registry.ts";
@@ -36,7 +36,8 @@ import { fullName, LoadError, StatusChip, useAge } from "./shared.tsx";
 import { useT, usePrefs, locales, type Locale, type MessageId, type Motion, type Theme } from "../i18n/index.tsx";
 import { useClinic } from "../lib/clinic.tsx";
 import { ageParts, calendarDate, dayPart, firstName, matchesQuery } from "../lib/format.ts";
-import { joinSteps } from "../lib/steps.ts";
+import { collapseRepeats, joinSteps } from "../lib/steps.ts";
+import { LookList, TREND_LABEL, progressHref } from "./reports/look.tsx";
 import { useOptionalDevice } from "../device/session.tsx";
 import { useTitle } from "../lib/title.ts";
 import { useSignOut } from "../shell/ClinicShell.tsx";
@@ -58,7 +59,19 @@ export function TodayPage() {
   // Offline, the greeting uses the therapist as last seen online (offline devices spec §7.5).
   const offlineMe = useOptionalDevice()?.offlineMe;
   const name = firstName(me.data?.user.name ?? offlineMe?.user.name ?? "");
-  const mine = (patients.data ?? []).filter((p) => p.status !== "discharged").slice(0, 6);
+  const caseload = useCaseload(clinicId);
+  // Kid-mode PIN: asked for here, at the desk, so the first Start of the day is not interrupted with a child waiting.
+  const needsPin = !offlineMe && !hasPin();
+  // The patients most worth a look come first (the server's caseload order); the rest follow as listed.
+  const rows = useMemo(() => new Map((caseload.data ?? []).map((r, i) => [r.patient_id, { row: r, rank: i }])), [caseload.data]);
+  const mine = (patients.data ?? [])
+    .filter((p) => p.status !== "discharged")
+    .map((p, i) => ({ p, at: rows.get(p.id), i }))
+    .sort((x, y) => (x.at?.rank ?? 1e6 + x.i) - (y.at?.rank ?? 1e6 + y.i))
+    .slice(0, 8);
+  const relative = useMemo(() => new Intl.RelativeTimeFormat(intl.locale, { numeric: "auto" }), [intl.locale]);
+  const lastSeen = (s: string) => relative.format(-Math.max(0, Math.floor((Date.now() - Date.parse(s)) / 86_400_000)), "day");
+  const look = (caseload.data ?? []).filter((r) => r.reasons.length > 0);
 
   return (
     <div className="app-page">
@@ -66,6 +79,16 @@ export function TodayPage() {
         eyebrow={intl.formatDate(new Date(), { weekday: "long", day: "numeric", month: "long" })}
         title={t("today.greeting", { part: dayPart(), name })}
       />
+      {needsPin && (
+        <div className="today-pin">
+          <Alert tone="info">
+            <p>
+              {t("today.pin.body")}{" "}
+              <Link to="/settings">{t("today.pin.action")}</Link>
+            </p>
+          </Alert>
+        </div>
+      )}
       {reviewCount > 0 && <ReviewQueue clinicId={clinicId} count={reviewCount} />}
       <div className="today-grid">
         <Card as="section" className="today-next" labelledBy="next-up">
@@ -77,11 +100,28 @@ export function TodayPage() {
         <Card as="section" className="today-attention" labelledBy="attention">
           <h2 id="attention" className="app-cardtitle">
             {t("today.attention.title")}
+            {look.length > 0 && <span className="reports__count emb-tnum">{look.length}</span>}
           </h2>
-          <p className="today-clear">
-            <CircleCheck size={20} aria-hidden="true" />
-            {t("today.attention.empty")}
-          </p>
+          {caseload.isPending ? (
+            <MazeLoader label={t("common.loading")} />
+          ) : caseload.isError ? (
+            <p className="app-muted">{t("today.attention.unavailable")}</p>
+          ) : look.length === 0 ? (
+            <p className="today-clear">
+              <CircleCheck size={20} aria-hidden="true" />
+              {t("today.attention.empty")}
+            </p>
+          ) : (
+            <>
+              <LookList patients={look} limit={5} compact />
+              {look.length > 5 && (
+                <Link to="/reports" className="app-textlink today-more">
+                  {t("today.attention.more", { count: look.length - 5 })}
+                  <ChevronRight size={18} aria-hidden="true" className="emb-flip-rtl" />
+                </Link>
+              )}
+            </>
+          )}
         </Card>
         <Card as="section" className="today-patients" labelledBy="your-patients" padded={false}>
           <div className="app-cardhead">
@@ -103,16 +143,27 @@ export function TodayPage() {
             <p className="app-cardpad app-muted">{t("today.patients.empty")}</p>
           ) : (
             <ul className="today-plist">
-              {mine.map((p) => (
+              {mine.map(({ p, at }) => (
                 <li key={p.id} className="today-pitem">
                   <Avatar name={fullName(p)} size={40} />
                   <span className="today-pitem__text">
-                    <Link to={`/patients/${p.id}`} className="emb-stretched">
+                    <Link to={at ? progressHref(p.id) : `/patients/${p.id}`} className="emb-stretched">
                       <bdi>{fullName(p)}</bdi>
                     </Link>
-                    <span className="app-muted">{age(p.date_of_birth)}</span>
+                    {at ? (
+                      // What a therapist decides with: how it is going, whether the plan is followed, when they last played.
+                      <span className="app-muted today-pitem__facts emb-tnum">
+                        {[
+                          at.row.last_session_at ? t(TREND_LABEL[at.row.summary]) : t("reports.reason.inactiveNever"),
+                          at.row.week.planned > 0 ? t("today.patients.week", { done: at.row.week.done, planned: at.row.week.planned }) : t("reports.caseload.weekNone"),
+                          ...(at.row.last_session_at ? [t("today.patients.last", { when: lastSeen(at.row.last_session_at) })] : []),
+                        ].join(" · ")}
+                      </span>
+                    ) : (
+                      <span className="app-muted">{age(p.date_of_birth)}</span>
+                    )}
                   </span>
-                  <StatusChip status={p.status} />
+                  {p.status !== "active" && <StatusChip status={p.status} />}
                 </li>
               ))}
             </ul>
@@ -300,7 +351,7 @@ function NextUp() {
               <p className="app-muted">
                 {age(it.patient.date_of_birth)} · {t("today.session", { week: it.week, seq: it.seq, total: it.total })}
               </p>
-              <p className="nextup__games">{joinSteps(games, locale)}</p>
+              <p className="nextup__games">{joinSteps(collapseRepeats(games), locale)}</p>
               {it.planned_date < todayIso && (
                 <p className="nextup__late">{t("today.planned", { date: intl.formatDate(calendarDate(it.planned_date), { weekday: "long", day: "numeric", month: "short" }) })}</p>
               )}

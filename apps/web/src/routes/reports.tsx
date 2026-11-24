@@ -19,6 +19,7 @@ import { iso } from "../lib/format.ts";
 import { findGame, localText } from "../games/registry.ts";
 import { LoadError } from "./shared.tsx";
 import { ArcGauge, MiniArea, PlanChart, Sparkline, WeekBars } from "./reports/charts.tsx";
+import { LookList, TREND_LABEL } from "./reports/look.tsx";
 
 const RANGES = [7, 30, 90] as const;
 type Range = (typeof RANGES)[number];
@@ -192,12 +193,6 @@ function Tiles({ o, patients }: { o: ReportsOverview; patients: CaseloadRow[] })
 
 // ---------------------------------------------------------------- worth a look
 
-function reasonText(t: ReturnType<typeof useT>, r: CaseloadReason): string {
-  if (r.kind === "inactive") return r.days === undefined ? t("reports.reason.inactiveNever") : t("reports.reason.inactive", { days: r.days });
-  if (r.kind === "declining" || r.kind === "stepped_down") return t(`reports.reason.${r.kind}`);
-  return t(`reports.reason.${r.kind}`, { count: r.count ?? 1 });
-}
-
 function WorthALook({ patients }: { patients: CaseloadRow[] }) {
   const t = useT();
   const list = patients.filter((p) => p.reasons.length > 0);
@@ -207,36 +202,7 @@ function WorthALook({ patients }: { patients: CaseloadRow[] }) {
         {t("reports.look.title")}
         {list.length > 0 && <span className="reports__count emb-tnum">{list.length}</span>}
       </h2>
-      {list.length === 0 ? (
-        <p className="app-muted">{t("reports.look.none")}</p>
-      ) : (
-        <ul className="plainlist rlook">
-          {list.map((p) => {
-            const name = iso(fullName(p));
-            const review = p.reasons.some((r) => r.kind === "review");
-            return (
-              <li key={p.patient_id} className="rlook__item">
-                <Avatar name={fullName(p)} size={38} />
-                <div className="rlook__text">
-                  <span className="rlook__name">
-                    <bdi>{fullName(p)}</bdi>
-                  </span>
-                  <span className="rlook__reasons">
-                    {p.reasons.map((r) => (
-                      <Chip key={r.kind} tone={r.kind === "review" ? "warning" : "neutral"}>
-                        {reasonText(t, r)}
-                      </Chip>
-                    ))}
-                  </span>
-                </div>
-                <Link to={progressHref(p.patient_id)} className="emb-btn emb-btn--secondary rlook__go" aria-label={t(review ? "reports.look.reviewFor" : "reports.look.openFor", { name })}>
-                  <span>{t(review ? "reports.look.review" : "reports.look.open")}</span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      {list.length === 0 ? <p className="app-muted">{t("reports.look.none")}</p> : <LookList patients={list} />}
     </section>
   );
 }
@@ -280,12 +246,6 @@ function Plan({ q }: { q: ReturnType<typeof useAdherence> }) {
 
 type SortKey = "name" | "trend" | "week" | "difficulty" | "last";
 const TREND_ORDER: Record<TrendSummary, number> = { declining: 0, steady: 1, improving: 2, not_enough: 3 };
-const TREND_LABEL: Record<TrendSummary, MessageId> = {
-  improving: "reports.trend.improving",
-  steady: "reports.trend.steady",
-  declining: "reports.trend.declining",
-  not_enough: "reports.trend.not_enough",
-};
 
 function Caseload({ patients }: { patients: CaseloadRow[] }) {
   const t = useT();

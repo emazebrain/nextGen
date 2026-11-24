@@ -361,6 +361,9 @@ function Handoff({ pkg, games, onStart, backUrl }: { pkg: LaunchPackage; games: 
             <>
               <Alert tone="info">{t("kidpin.needed")}</Alert>
               <SetPinForm onSaved={() => setPinReady(true)} />
+              <Link to={backUrl} className="emb-btn emb-btn--ghost">
+                {t("run.notNow")}
+              </Link>
             </>
           )}
         </div>

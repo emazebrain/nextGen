@@ -3999,3 +3999,41 @@ a.gamecard:hover {
     min-block-size: var(--target-min);
   }
 }
+
+/* ------------------------------------------------------------ Today: what next (UI critique 2026-11-24) */
+.today-pin {
+  margin-block-end: var(--space-4);
+}
+.today-pin p {
+  margin: 0;
+}
+.today-pitem__facts {
+  font-size: var(--text-14);
+}
+.today-more {
+  margin-block-start: var(--space-3);
+}
+/* Worth-a-look rows in Today's narrower card: the whole row is the link, and a long reason wraps instead of being cut. */
+.today-attention {
+  --r-well: var(--bg-subtle);
+  --r-solid: var(--bg-surface);
+}
+.rlook__item--compact {
+  position: relative;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+.rlook__item--compact .rlook__name {
+  color: var(--text-primary);
+  text-decoration: none;
+}
+.rlook__item--compact:hover .rlook__name {
+  text-decoration: underline;
+}
+.rlook__item--compact .emb-chip {
+  white-space: normal;
+}
+/* Start stays on the row beside the patient; it only drops below on a very narrow card. */
+.nextup__text {
+  flex: 1 1 9rem;
+  min-inline-size: 0;
+}
