@@ -153,7 +153,9 @@ export async function listTemplates(db: pg.PoolClient, clinic: string | null, la
 /** Today: each of the caller's patients' earliest open clinic session, planned up to today (and overdue 7 days). */
 export async function todayItems(db: pg.PoolClient, clinic: string | null, date: string | null, lang: string): Promise<TodayItem[]> {
   const { rows } = await db.query<TodayItem & { patient_id: string }>(
-    `SELECT ps.id AS planned_session_id, to_char(ps.planned_date, 'YYYY-MM-DD') AS planned_date, ps.seq, ps.week,
+    `SELECT ps.id AS planned_session_id, to_char(ps.planned_date, 'YYYY-MM-DD') AS planned_date,
+            -- The time of day, when the session was given one on the calendar (migration 0027).
+            to_char(ps.planned_time, 'HH24:MI') AS planned_time, ps.seq, ps.week,
             (SELECT count(*)::int FROM app.planned_session x WHERE x.assignment_id = a.id AND x.status <> 'cancelled') AS total,
             json_build_object('id', p.id, 'given_name', p.given_name, 'family_name', p.family_name,
                               'date_of_birth', to_char(p.date_of_birth, 'YYYY-MM-DD'), 'alert', p.alert,
@@ -170,7 +172,7 @@ export async function todayItems(db: pg.PoolClient, clinic: string | null, date:
         AND EXISTS (SELECT 1 FROM app.patient_care_team t WHERE t.patient_id = p.id AND t.user_id = app.current_user_id() AND t.ended_at IS NULL)
         -- one item per patient: their earliest open session
         AND ps.seq = (SELECT min(y.seq) FROM app.planned_session y WHERE y.assignment_id = a.id AND y.status IN ('planned', 'in_progress'))
-      ORDER BY ps.planned_date, p.family_name, p.given_name`,
+      ORDER BY ps.planned_date, ps.planned_time NULLS LAST, p.family_name, p.given_name`,
     [clinic, date],
   );
   if (rows.length) await db.query(`SELECT app.record_audit('list', 'planned_session', NULL)`);

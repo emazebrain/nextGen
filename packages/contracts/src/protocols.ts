@@ -163,6 +163,8 @@ export interface AssignmentView {
 export interface TodayItem {
   planned_session_id: string;
   planned_date: string;
+  /** "HH:MM" when the session has a time on the calendar; otherwise it can be done any time that day. */
+  planned_time?: string | null;
   seq: number;
   week: number;
   total: number;

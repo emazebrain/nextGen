@@ -157,7 +157,8 @@ export function ClinicShell({ me }: { me: Me }) {
               <Logo collapsed size={28} />
             </Link>
             {clinics.length > 1 ? (
-              <SelectField label={t("shell.clinic")} hideLabel value={clinicId ?? ""} onChange={(e) => setClinicId(e.target.value)} className="app-clinicswitch">
+              // The chosen name is laid out in its own script's direction, so a long one is cut at its end, not its start.
+              <SelectField label={t("shell.clinic")} hideLabel value={clinicId ?? ""} onChange={(e) => setClinicId(e.target.value)} className="app-clinicswitch" dir={/[\u0590-\u08FF]/.test(clinics.find((c) => c.id === clinicId)?.name ?? "") ? "rtl" : "ltr"}>
                 {clinics.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}

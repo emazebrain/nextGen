@@ -2,7 +2,7 @@
  * Clinic pages for this slice: Today, Patients, one patient, Settings, More,
  * and honest "coming next" pages for destinations built in the MVP.
  */
-import { useMemo, useState, type ComponentType, type FormEvent } from "react";
+import { useMemo, useState, type ComponentType, type FormEvent, type ReactNode } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { useIntl } from "react-intl";
 import {
@@ -335,13 +335,27 @@ function NextUp() {
       </EmptyState>
     );
   }
-  return (
-    <ul className="nextup">
-      {/* Protocol sessions */}
-      {sessions.map((it) => {
-        const gameName = (g: string) => (findGame(g) ? localText(findGame(g)!.manifest.name, locale) : g);
-        const games = it.items ? it.items.map((i) => (i.kind === "video" ? `▶ ${i.title}` : gameName(i.game_id))) : [...new Set(it.games)].map(gameName);
-        return (
+  // One list in the order of the day: sessions left over from earlier days first, then by time of day, with anything
+  // that has no time after the timed ones.
+  const hhmm = (s: string | null | undefined) => (s ? s.slice(0, 5) : null);
+  const clock = (s: string | null | undefined) => {
+    const v = hhmm(s);
+    if (!v) return null;
+    const [h, m] = v.split(":").map(Number) as [number, number];
+    return intl.formatTime(new Date(2000, 0, 1, h, m), { hour: "numeric", minute: "2-digit" });
+  };
+  type Entry = { key: string; overdue: boolean; time: string | null; node: ReactNode };
+  const gameName = (g: string) => (findGame(g) ? localText(findGame(g)!.manifest.name, locale) : g);
+  const entries: Entry[] = [
+    ...sessions.map((it): Entry => {
+      const games = it.items ? it.items.map((i) => (i.kind === "video" ? `▶ ${i.title}` : gameName(i.game_id))) : [...new Set(it.games)].map(gameName);
+      const overdue = it.planned_date < todayIso;
+      const time = overdue ? null : hhmm(it.planned_time);
+      return {
+        key: it.planned_session_id,
+        overdue,
+        time,
+        node: (
           <li key={it.planned_session_id} className="nextup__item">
             <Avatar name={fullName(it.patient)} size={44} />
             <div className="nextup__text">
@@ -349,12 +363,11 @@ function NextUp() {
                 <bdi>{fullName(it.patient)}</bdi>
               </Link>
               <p className="app-muted">
+                {time && <strong className="nextup__time emb-tnum">{clock(time)}</strong>}
                 {age(it.patient.date_of_birth)} · {t("today.session", { week: it.week, seq: it.seq, total: it.total })}
               </p>
               <p className="nextup__games">{joinSteps(collapseRepeats(games), locale)}</p>
-              {it.planned_date < todayIso && (
-                <p className="nextup__late">{t("today.planned", { date: intl.formatDate(calendarDate(it.planned_date), { weekday: "long", day: "numeric", month: "short" }) })}</p>
-              )}
+              {overdue && <p className="nextup__late">{t("today.planned", { date: intl.formatDate(calendarDate(it.planned_date), { weekday: "long", day: "numeric", month: "short" }) })}</p>}
               {!it.patient.can_play && <Chip tone="warning">{t("patient.pending.title")}</Chip>}
             </div>
             {it.patient.can_play && (
@@ -364,15 +377,18 @@ function NextUp() {
               </Link>
             )}
           </li>
-        );
-      })}
-      {/* Calendar appointments */}
-      {appointments.map((appt) => {
-        const name = `${appt.patient_given_name} ${appt.patient_family_name}`;
-        const time = appt.start_time && appt.end_time
-          ? `${appt.start_time} – ${appt.end_time}`
-          : appt.start_time ?? "";
-        return (
+        ),
+      };
+    }),
+    ...appointments.map((appt): Entry => {
+      const name = `${appt.patient_given_name} ${appt.patient_family_name}`;
+      const start = hhmm(appt.start_time);
+      const end = hhmm(appt.end_time);
+      return {
+        key: appt.id,
+        overdue: false,
+        time: start,
+        node: (
           <li key={appt.id} className="nextup__item">
             <Avatar name={name} size={44} />
             <div className="nextup__text">
@@ -380,7 +396,13 @@ function NextUp() {
                 <bdi>{name}</bdi>
               </Link>
               <p className="app-muted">
-                {time}{appt.title ? ` · ${appt.title}` : ""}
+                {start && (
+                  <strong className="nextup__time emb-tnum">
+                    {clock(start)}
+                    {end ? ` – ${clock(end)}` : ""}
+                  </strong>
+                )}
+                {appt.title}
               </p>
               {appt.notes && <p className="nextup__games">{appt.notes}</p>}
             </div>
@@ -388,10 +410,12 @@ function NextUp() {
               <CalendarDays size={18} aria-hidden="true" />
             </Link>
           </li>
-        );
-      })}
-    </ul>
-  );
+        ),
+      };
+    }),
+  ].sort((a, b) => Number(b.overdue) - Number(a.overdue) || (a.time ?? "99:99").localeCompare(b.time ?? "99:99"));
+
+  return <ul className="nextup">{entries.map((e) => e.node)}</ul>;
 }
 
 // ------------------------------------------------------------------ Coming next

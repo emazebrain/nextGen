@@ -103,6 +103,10 @@ describe.skipIf(!ADMIN_URL)("protocols API", () => {
       expect.objectContaining({ seq: 1, week: 1, total: 12, patient: expect.objectContaining({ given_name: "Noa", can_play: false }), games: ["catch-me-if-you-can", "catch-me-if-you-can"] }),
     ]);
     expect((await dana(`/v1/today?clinic=${ids.clinic}`)).body.items).toEqual([]);
+    // A session has no time of day until it is given one on the calendar; Today then shows it.
+    expect(today.body.items[0].planned_time).toBeNull();
+    expect((await yael(`/v1/calendar/sessions/${a.sessions[0].id}`, { method: "PATCH", body: { planned_date: start, planned_time: "09:30" } })).status).toBe(200);
+    expect((await yael(`/v1/today?clinic=${ids.clinic}`)).body.items[0].planned_time).toBe("09:30");
     expect((await yael(`/v1/patients/${ids.patient}/assignment`, { method: "POST", body: { template_id: null, name: "x", weeks: 1, sessions_per_week: 1, setting: "clinic", start_date: start, steps: [step()] } })).status).toBe(409);
   });
 

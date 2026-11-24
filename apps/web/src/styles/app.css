@@ -4298,3 +4298,32 @@ a.gamecard:hover {
   border-radius: 18px;
   background: var(--glass-solid);
 }
+
+/* Today: the time of day leads the line, in the primary text colour. */
+.nextup__time {
+  margin-inline-end: var(--space-2);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* A clinic name in another script than the screen's (an English name in a Hebrew screen) is cut at its own end:
+   the select takes the name's direction (set in ClinicShell) and stays against the screen's leading edge, with the
+   chevron's room on the side the chevron is actually on. */
+[dir="rtl"] .app-clinicswitch .emb-select[dir="ltr"],
+[dir="ltr"] .app-clinicswitch .emb-select[dir="rtl"] {
+  padding-inline: calc(var(--space-3) + 26px) var(--space-3);
+  text-align: end;
+}
+/* The patient header and any tab strip are also outside a card: they get a tile of their own. */
+:root[data-app-bg] :is(.emb-main, .parent-shell__content) :is(.phead, .emb-tabnav) {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--glass-stroke);
+  border-radius: var(--glass-radius);
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+:root[data-app-bg] :is(.emb-main, .parent-shell__content) .emb-tabnav {
+  padding-block: var(--space-1);
+  border-radius: 18px;
+}

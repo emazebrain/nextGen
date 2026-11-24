@@ -768,6 +768,10 @@ async function handle(path: string, method: string, q: URLSearchParams, body: Re
       });
     }
     items.sort((x, y) => x.planned_date.localeCompare(y.planned_date) || x.patient.family_name.localeCompare(y.patient.family_name));
+    // Demo only: today's sessions get times through the morning, as if set on the calendar; one is left without.
+    const slots = ["09:00", "09:45", "10:30", null, "11:15"];
+    let slot = 0;
+    for (const it of items) it.planned_time = it.planned_date === t ? slots[slot++ % slots.length]! : null;
     return json({ items, review_count: 0 });
   }
 
