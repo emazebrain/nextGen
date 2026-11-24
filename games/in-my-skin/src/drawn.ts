@@ -1,5 +1,5 @@
 /**
- * Pictures drawn in code: letters, numbers, arithmetic signs, geometric shapes, arrows and road signs.
+ * Pictures drawn in code: letters, arithmetic signs, geometric shapes, arrows and road signs.
  * Each is an SVG on a 256 × 256 canvas with a transparent background. Pure strings; no DOM.
  */
 const GRADS: [string, string][] = [
@@ -112,7 +112,6 @@ export function drawnSvg(id: string): string | null {
     const i = LATIN.indexOf(ch) >= 0 ? LATIN.indexOf(ch) : HEBREW.indexOf(ch);
     return i >= 0 ? tile(ch, i) : null;
   }
-  if (id.startsWith("number-")) return DIGITS.includes(id.slice(7)) ? tile(id.slice(7), Number(id.slice(7)) + 2) : null;
   if (id.startsWith("op-")) {
     const sign = OPERATIONS[id.slice(3)];
     return sign ? tile(sign, Object.keys(OPERATIONS).indexOf(id.slice(3)) + 1) : null;

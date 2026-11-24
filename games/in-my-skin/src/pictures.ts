@@ -48,7 +48,8 @@ export const PICTURES: Picture[] = [
   ...files("cartoon_faces", null, ["lion-face", "tiger-face", "robot-face", "alien-face", "fox-face", "dragon-face", "frog-face", "bear-face"]),
   ...LATIN.map((ch): Picture => ({ id: `letter-${ch}`, category: "letters", faces: null, source: "drawn", script: "latin" })),
   ...HEBREW.map((ch): Picture => ({ id: `letter-${ch}`, category: "letters", faces: null, source: "drawn", script: "hebrew" })),
-  ...drawn("numbers", DIGITS.map((d) => `number-${d}`)),
+  // Supplied by the product owner (2026-11-24); see NOTICE.md.
+  ...files("numbers", null, DIGITS.map((d) => `number-${d}`)),
   ...drawn("operations", Object.keys(OPERATIONS).map((k) => `op-${k}`)),
   ...drawn("shapes", SHAPE_IDS.map((s) => `shape-${s}`)),
   // Supplied by the product owner (2026-11-23); see NOTICE.md.

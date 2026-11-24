@@ -1,6 +1,6 @@
 # In My Skin — pictures
 
-The product owner supplies the pictures; do not add or generate more here. **Cartoons** is the owner's final set (20 pictures). Every other category still holds **placeholders**.
+The product owner supplies the pictures; do not add or generate more here. **Cartoons** (20 pictures) and **Numbers** (the ten digits) are the owner's final sets. Every other category still holds **placeholders**.
 
 ## What to supply
 
