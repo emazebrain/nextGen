@@ -522,6 +522,8 @@
   "run.between.title": "Next: {name}",
   "run.between.go": "Start now",
   "run.finished.title": "Well done, {name}!",
+  "run.finished.saving": "Saving the results…",
+  "run.finished.backNow": "Back to kids",
   "run.finished.body": "Please give the tablet back to {name}.",
   "run.finished.therapist": "I'm the therapist",
   "run.summary.title": "{name}: session results",

@@ -8,8 +8,8 @@
  * is sent from there, so nothing is lost if the connection drops. When the
  * child is done, the PIN opens the therapist's summary.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { Link, useLocation, useParams } from "react-router";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { useIntl } from "react-intl";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, CircleCheck, CloudOff, Hand, Lock, Minus, Play, RotateCw, SkipForward, Square } from "lucide-react";
@@ -183,13 +183,20 @@ function PreflightMissing({ missing, expired, onStartWithout }: { missing: Array
   );
 }
 
+/**
+ * In the clinic the adult controls (skip, end, the summary) sit behind the device PIN, because the child holds the
+ * therapist's tablet. At home the device is the family's own: a guardian is not asked for a PIN anywhere.
+ */
+const PinGate = createContext(true);
+
 function Runner({ pkg, space = null, fromParent = false }: { pkg: LaunchPackage; space?: OpenSpace | null; fromParent?: boolean }) {
   const t = useT();
   const qc = useQueryClient();
   const { locale } = usePrefs();
   const backUrl = fromParent ? "/parent" : `/patients/${pkg.patient.id}`;
   const queue = pkg.steps.filter((s) => !s.done);
-  const [phase, setPhase] = useState<Phase>(queue.length ? { k: "handoff" } : { k: "summary" });
+  // At home the guardian already pressed Start in the portal: the first step opens right away, with no hand-off screen.
+  const [phase, setPhase] = useState<Phase>(queue.length ? (fromParent ? { k: "play", i: 0 } : { k: "handoff" }) : fromParent ? { k: "finished" } : { k: "summary" });
   const [played, setPlayed] = useState<Played[]>([]);
   // A result couldn't be written to the device: it lives only on this screen until it's sent.
   const [notStored, setNotStored] = useState(false);
@@ -288,6 +295,7 @@ function Runner({ pkg, space = null, fromParent = false }: { pkg: LaunchPackage;
     const step = queue[phase.i]!;
     if (step.kind === "video") {
       return (
+        <PinGate.Provider value={!fromParent}>
         <VideoPlay
           key={step.assignment_step_id}
           step={step}
@@ -295,9 +303,11 @@ function Runner({ pkg, space = null, fromParent = false }: { pkg: LaunchPackage;
           onView={(view) => recordView(step, view)}
           onDone={(how) => (how === "end" ? setPhase({ k: "finished" }) : next(phase.i + 1))}
         />
+        </PinGate.Provider>
       );
     }
     return (
+      <PinGate.Provider value={!fromParent}>
       <PlayStep
         key={step.assignment_step_id}
         step={step}
@@ -305,10 +315,14 @@ function Runner({ pkg, space = null, fromParent = false }: { pkg: LaunchPackage;
         onResult={(env) => upload(step, env)}
         onDone={(how) => (how === "end" ? setPhase({ k: "finished" }) : next(phase.i + 1))}
       />
+      </PinGate.Provider>
     );
   }
   if (phase.k === "between") {
     return <Between name={stepName(queue[phase.i]!)} n={phase.i + 1} total={queue.length} onGo={() => setPhase({ k: "play", i: phase.i })} />;
+  }
+  if (phase.k === "finished" && fromParent) {
+    return <FinishedAtHome child={pkg.patient.given_name} sending={played.some((p) => p.send.state === "sending")} backUrl={backUrl} />;
   }
   if (phase.k === "finished") {
     return <Finished child={pkg.patient.given_name} fromParent={fromParent} onUnlock={() => setPhase({ k: "summary" })} />;
@@ -384,9 +398,10 @@ function PlayStep({ step, name, onResult, onDone }: { step: LaunchGameStep; name
   const ending = useRef<"skip" | "end" | null>(null);
   const ended = useRef(false);
 
+  const pinGate = useContext(PinGate);
   const openControls = () => {
     sendRef.current?.({ type: "pause" });
-    setControls("pin");
+    setControls(pinGate ? "pin" : "menu");
   };
   const closeControls = () => {
     setControls("closed");
@@ -486,6 +501,7 @@ function PlayStep({ step, name, onResult, onDone }: { step: LaunchGameStep; name
 /** A video between games, with the same corner controls as a game (skip records the view as not completed). */
 function VideoPlay({ step, plannedSessionId, onView, onDone }: { step: LaunchVideoStep; plannedSessionId: string; onView: (v: VideoViewInput) => void; onDone: (how: "next" | "end") => void }) {
   const t = useT();
+  const pinGate = useContext(PinGate);
   const [controls, setControls] = useState<"closed" | "pin" | "menu">("closed");
   const finishRef = useRef<(() => void) | null>(null);
   const how = useRef<"next" | "end">("next");
@@ -505,7 +521,7 @@ function VideoPlay({ step, plannedSessionId, onView, onDone }: { step: LaunchVid
           onDone(how.current);
         }}
       />
-      <LongPress label={t("run.controls")} onTrigger={() => setControls("pin")} />
+      <LongPress label={t("run.controls")} onTrigger={() => setControls(pinGate ? "pin" : "menu")} />
       {controls !== "closed" && (
         <div className="run-overlay" role="dialog" aria-modal="true" aria-labelledby="run-controls-title">
           <Card>
@@ -597,6 +613,46 @@ function Between({ name, n, total, onGo }: { name: string; n: number; total: num
           <Button size="lg" icon={<Play size={20} aria-hidden="true" />} onClick={onGo}>
             {t("run.between.go")}
           </Button>
+        </div>
+      </Card>
+    </Shell>
+  );
+}
+
+/**
+ * The end of a session played at home: a word for the child, then straight back to the list of kids. It waits for
+ * the results to be sent (a few seconds at most); anything still waiting is kept on the device and sent again from
+ * the portal.
+ */
+function FinishedAtHome({ child, sending, backUrl }: { child: string; sending: boolean; backUrl: string }) {
+  const t = useT();
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const [shown, setShown] = useState(false); // long enough to read
+  const [waited, setWaited] = useState(false); // long enough to wait for a slow connection
+  useEffect(() => {
+    const a = window.setTimeout(() => setShown(true), 2000);
+    const b = window.setTimeout(() => setWaited(true), 8000);
+    return () => {
+      window.clearTimeout(a);
+      window.clearTimeout(b);
+    };
+  }, []);
+  const leave = useCallback(() => {
+    void qc.invalidateQueries({ queryKey: ["parent"] });
+    navigate(backUrl, { replace: true });
+  }, [qc, navigate, backUrl]);
+  useEffect(() => {
+    if ((shown && !sending) || waited) leave();
+  }, [shown, sending, waited, leave]);
+  return (
+    <Shell>
+      <Card>
+        <div className="handoff__done">
+          <CircleCheck size={56} aria-hidden="true" className="handoff__doneicon" />
+          <h1 className="auth__title">{t("run.finished.title", { name: iso(child) })}</h1>
+          <p className="auth__subtitle" aria-live="polite">{t("run.finished.saving")}</p>
+          <Button variant="secondary" onClick={leave}>{t("run.finished.backNow")}</Button>
         </div>
       </Card>
     </Shell>

@@ -1,6 +1,6 @@
 /** The parent portal: who you are with, a way out, messages, and results a parent can read. */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryRouter } from "react-router";
@@ -18,7 +18,7 @@ const session = (i: number, accuracy: number) => ({
 const RISING = [0.5, 0.5, 0.62, 0.7, 0.78, 0.84].map((a, i) => session(i, a));
 const FALLING = [0.9, 0.9, 0.7, 0.6, 0.5, 0.45].map((a, i) => session(i, a));
 
-function mockApi(over: { sessions?: unknown[]; unread?: number } = {}) {
+function mockApi(over: { sessions?: unknown[]; unread?: number; nothingLeft?: boolean } = {}) {
   const calls: string[] = [];
   vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, "http://localhost");
@@ -36,7 +36,7 @@ function mockApi(over: { sessions?: unknown[]; unread?: number } = {}) {
     if (p === "/v1/parent/messages/threads") return ok({ threads: [{ id: "t1", patient_id: "c1", therapist_id: "th", guardian_id: "g1", status: "open", last_message_at: at(0), created_at: at(3), patient_given_name: "Ella", patient_family_name: "Navon", guardian_name: "Dan Navon", therapist_name: "Yael Bar", unread_count: over.unread ?? 2 }] });
     if (p.endsWith("/progress")) return ok({ patient: { id: "c1", given_name: "Ella", family_name: "Navon", status: "active" }, stats: { total_sessions: 6, last_session: at(1) }, protocols: [] });
     if (p.endsWith("/history")) return ok({ sessions: over.sessions ?? RISING });
-    if (p.endsWith("/launch")) return ok({ launch: { planned_session_id: "ps1", seq: 4, week: 2, total: 8, patient: { id: "c1", given_name: "Ella", family_name: "Navon", preferred_locale: "en", alert: null }, assignment: { id: "a1", name: "Visual attention starter" }, steps: [{ kind: "video", assignment_step_id: "st1", ordinal: 1, done: false, video: { id: "v1", version: 1, source: "youtube", youtube_id: "aaaaaaaaaaa", duration_s: 60, title: "Warm-up stretches", file_url: null, sha256: null } }] } });
+    if (p.endsWith("/launch")) return ok({ launch: { planned_session_id: "ps1", seq: 4, week: 2, total: 8, patient: { id: "c1", given_name: "Ella", family_name: "Navon", preferred_locale: "en", alert: null }, assignment: { id: "a1", name: "Visual attention starter" }, steps: [{ kind: "video", assignment_step_id: "st1", ordinal: 1, done: !!over.nothingLeft, video: { id: "v1", version: 1, source: "youtube", youtube_id: "aaaaaaaaaaa", duration_s: 60, title: "Warm-up stretches", file_url: null, sha256: null } }] } });
     if (p.endsWith("/sessions")) {
       const items = [{ kind: "video", video_id: "v1", title: "Warm-up stretches" }, { kind: "game", game_id: "catch-me-if-you-can" }];
       const base = { status: "planned", assignment_id: "a1", assignment_name: "Visual attention starter", total: 8, items };
@@ -168,10 +168,24 @@ describe("parent portal", () => {
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: "Start" }));
     expect(calls).toContain("POST /v1/parent/children/c1/sessions/ps1/launch");
-    // The player opens for the guardian on the portal's own route, with no staff sign-in involved.
-    expect(await screen.findByText(/Session 4 of 8/)).toBeInTheDocument();
-    expect(router.state.location.pathname).toBe("/parent/session/ps1");
+    // The player opens for the guardian on the portal's own route and goes straight into the first step:
+    // no hand-off screen, no PIN, and no staff sign-in involved.
+    await waitFor(() => expect(router.state.location.pathname).toBe("/parent/session/ps1"));
+    expect(await screen.findByTitle("Warm-up stretches")).toBeInTheDocument();
+    expect(screen.queryByText(/PIN/i)).toBeNull();
+    expect(screen.queryByText(/Ready for/)).toBeNull();
     expect(calls.filter((c) => !c.includes("/v1/parent/"))).toEqual([]);
+  });
+
+  it("when the session ends the guardian is taken back to the list of kids, without a PIN", async () => {
+    mockApi({ nothingLeft: true });
+    const router = show("/parent");
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Start" }));
+    expect(await screen.findByText(/Well done/)).toBeInTheDocument();
+    expect(screen.queryByText(/PIN/i)).toBeNull();
+    await waitFor(() => expect(router.state.location.pathname).toBe("/parent"), { timeout: 5000 });
+    expect(await screen.findByRole("link", { name: "Ella Navon" })).toBeInTheDocument();
   });
 
   it("a guardian who opens a session address directly goes back to the portal", async () => {

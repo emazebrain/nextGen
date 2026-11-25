@@ -522,6 +522,8 @@
   "run.between.title": "הבא בתור: {name}",
   "run.between.go": "להתחיל עכשיו",
   "run.finished.title": "כל הכבוד, {name}!",
+  "run.finished.saving": "שומרים את התוצאות…",
+  "run.finished.backNow": "חזרה לילדים",
   "run.finished.body": "עכשיו מחזירים את הטאבלט ל{name}.",
   "run.finished.therapist": "אני המטפל/ת",
   "run.summary.title": "{name}: תוצאות המפגש",
