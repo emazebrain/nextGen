@@ -13,6 +13,9 @@ import { z } from "zod";
 import { withUser, type Env } from "../../context.ts";
 import { uuidv7 } from "../../ids.ts";
 import { parseBody } from "../../validate.ts";
+import { ITEMS_SQL, toItems } from "../protocols/routes.ts";
+
+const LANGS = new Set(["en", "he", "ar", "ru", "fr", "es", "zh"]);
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -61,6 +64,7 @@ export function calendarRoutes(pool: pg.Pool) {
     const from = c.req.query("from");
     const to = c.req.query("to");
     const therapistId = c.req.query("therapist");
+    const lang = LANGS.has(c.req.query("lang") ?? "") ? c.req.query("lang")! : "en";
 
     if (!clinicId || !UUID_RE.test(clinicId)) return c.json({ error: "clinic_required" }, 400);
     if (from && !DATE_RE.test(from)) return c.json({ error: "invalid_from" }, 400);
@@ -88,7 +92,8 @@ export function calendarRoutes(pool: pg.Pool) {
                 a.id AS assignment_id, a.name AS assignment_name,
                 '' AS title, '' AS notes,
                 COALESCE(ct.user_id::text, '') AS therapist_id,
-                COALESCE(u.full_name, '') AS therapist_name
+                COALESCE(u.full_name, '') AS therapist_name,
+                ${ITEMS_SQL("assignment_step", "assignment_id", "a.id")}
            FROM app.planned_session ps
            JOIN app.patient p ON p.id = ps.patient_id AND p.deleted_at IS NULL
            JOIN app.protocol_assignment a ON a.id = ps.assignment_id
@@ -157,7 +162,8 @@ export function calendarRoutes(pool: pg.Pool) {
         return aTime.localeCompare(bTime);
       });
 
-      return all;
+      // What is in each session (its game-based activities and videos, in order), so the calendar can show and start it.
+      return all.map((e) => (e.kind === "session" ? { ...e, items: toItems(e.items ?? [], lang) } : e));
     });
 
     return c.json({ events });

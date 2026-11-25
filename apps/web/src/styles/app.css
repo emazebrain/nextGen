@@ -4339,3 +4339,161 @@ a.gamecard:hover {
   flex: none;
   color: var(--brand-primary);
 }
+
+/* ------------------------------------------------------------ What a session includes
+   The game-based activities and videos of one session, in play order. Used on the parent child page, the parent
+   calendar and the staff calendar's session dialog. */
+.session-items {
+  display: grid;
+  gap: var(--space-1);
+}
+.session-items__label {
+  margin: 0;
+  font-size: var(--text-12);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.session-items__list {
+  display: grid;
+  gap: var(--space-1);
+}
+.session-items__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-control);
+  background: var(--bg-subtle);
+  font-size: var(--text-14);
+}
+.session-items__item svg {
+  color: var(--brand-primary);
+}
+.session-items__name {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.session-items__kind {
+  font-size: var(--text-12);
+  color: var(--text-secondary);
+}
+@media (max-width: 479px) {
+  .session-items__kind { display: none; }
+}
+
+/* Parent: one coming session as a card (date, contents, Start for the one that is next in line). */
+.parent-session--card {
+  display: grid;
+  align-items: stretch;
+  justify-content: stretch;
+  gap: var(--space-3);
+}
+.parent-session--ready {
+  border-color: var(--brand-primary);
+  background: var(--brand-primary-subtle);
+}
+.parent-session--ready .session-items__item {
+  background: var(--bg-surface);
+}
+.parent-session__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.parent-session__note {
+  margin: 0;
+  font-size: var(--text-14);
+}
+.parent-session__error {
+  margin: 0;
+  color: var(--status-danger);
+  font-size: var(--text-14);
+  font-weight: 500;
+}
+.parent-kid__link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--border-control);
+  text-underline-offset: 4px;
+}
+.parent-kid__link:hover {
+  color: var(--brand-primary);
+  text-decoration-color: currentColor;
+}
+.parent-kid__link:focus-visible,
+.parent-kid__all:focus-visible,
+.parent-back:focus-visible,
+.calendar-dialog__start:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-control);
+}
+.parent-kid__all,
+.parent-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-block-size: var(--target-min);
+  justify-self: start;
+  color: var(--brand-primary);
+  font-weight: 600;
+  text-decoration: none;
+}
+.parent-kid__all:hover,
+.parent-back:hover {
+  text-decoration: underline;
+}
+/* Arrows point the way the text reads. */
+[dir="rtl"] .parent-kid__chev,
+[dir="rtl"] .parent-back__icon {
+  transform: scaleX(-1);
+}
+.parent-calendar__item--session {
+  align-items: start;
+}
+.parent-calendar__item--session .session-items {
+  margin-block-start: var(--space-1);
+}
+@media (max-width: 479px) {
+  .parent-calendar__item--session {
+    flex-wrap: wrap;
+  }
+  .parent-calendar__item--session .parent-calendar__details {
+    flex-basis: 100%;
+    order: 3;
+  }
+}
+
+/* Staff calendar: a session's contents and Start, above the date and time fields. */
+.calendar-dialog__session {
+  display: grid;
+  gap: var(--space-3);
+  margin-block: var(--space-3);
+}
+.calendar-dialog__start {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-block-size: var(--target-min);
+  padding-inline: var(--space-4);
+  justify-self: start;
+  border-radius: var(--radius-control);
+  background: var(--brand-primary);
+  color: var(--text-on-brand);
+  font-weight: 600;
+  text-decoration: none;
+}
+.calendar-dialog__start:hover {
+  filter: brightness(0.95);
+}
+.calendar-dialog__subtitle {
+  margin: 0 0 var(--space-2);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--border-decorative);
+  font-size: var(--text-14);
+  color: var(--text-secondary);
+}

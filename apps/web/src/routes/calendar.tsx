@@ -20,6 +20,7 @@ import {
   type CalendarFilters,
   type CalendarPatient,
 } from "../api/calendar.ts";
+import { SessionItems } from "./sessionItems.tsx";
 import { useT } from "../i18n/index.tsx";
 import { useClinic } from "../lib/clinic.tsx";
 import { useTitle } from "../lib/title.ts";
@@ -488,13 +489,24 @@ function RescheduleDialog({ event, onClose }: { event: CalendarEvent; onClose: (
     <div className="calendar-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <Card className="calendar-dialog">
         <div className="calendar-dialog__header">
-          <h3>{t("calendar.rescheduleTitle")}</h3>
+          <h3>{event.kind === "session" ? <bdi>{event.assignment_name}</bdi> : t("calendar.rescheduleTitle")}</h3>
           <Button variant="ghost" icon={<X size={18} />} onClick={onClose} aria-label={t("common.cancel")} />
         </div>
         <p className="app-muted">
           <bdi>{event.patient_given_name} {event.patient_family_name}</bdi>
-          {event.kind === "session" && <> — {event.assignment_name}</>}
+          {event.kind === "session" && <> — {t("calendar.sessionTitle", { seq: event.seq, week: event.week })}</>}
         </p>
+        {event.kind === "session" && (
+          <div className="calendar-dialog__session">
+            <SessionItems items={event.items ?? []} label={t("calendar.inSession")} />
+            {event.location === "home" && <p className="app-muted">{t("calendar.homeSession")}</p>}
+            <Link to={`/session/${event.id}`} className="calendar-dialog__start">
+              <Play size={18} aria-hidden="true" />
+              {t("calendar.startSession")}
+            </Link>
+          </div>
+        )}
+        {event.kind === "session" && <h4 className="calendar-dialog__subtitle">{t("calendar.changeTime")}</h4>}
         <form onSubmit={(e) => void submit(e)} className="pform">
           {error && <Alert tone="danger">{error}</Alert>}
           <div className="pform__row">

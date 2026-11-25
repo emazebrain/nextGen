@@ -20,6 +20,17 @@ import { paramsHash } from "../../tickets.ts";
 import { buildParams, type StepRow } from "../sessions/routes.ts";
 import { pick } from "../videos/routes.ts";
 import { loadRegionCatalog } from "../../regions.ts";
+import { ITEMS_SQL, toItems } from "../protocols/routes.ts";
+
+const LANGS = new Set(["en", "he", "ar", "ru", "fr", "es", "zh"]);
+
+/**
+ * The one home session a guardian may start for a protocol: the earliest open one. Sessions are done in order, so
+ * a later one opens only after the one before it is finished. Clinic sessions are never started from the portal.
+ */
+const NEXT_HOME_SQL = `(SELECT x.id FROM app.planned_session x
+                          WHERE x.assignment_id = a.id AND x.location = 'home' AND x.status IN ('planned', 'in_progress')
+                          ORDER BY x.seq LIMIT 1)`;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const HOME_TICKET_TTL_S = 7 * 24 * 3600;
@@ -198,23 +209,30 @@ export function parentRoutes(servicePool: pg.Pool, tickets?: TicketSigner) {
   app.get("/children/:id/sessions", async (c) => {
     const childId = c.req.param("id");
     if (!UUID.test(childId)) return c.json({ error: "not_found" }, 404);
+    const lang = LANGS.has(c.req.query("lang") ?? "") ? c.req.query("lang")! : "en";
 
     const data = await withService(servicePool, async (db) => {
       if (!(await isLinkedGuardian(db, childId, c.get("user").id))) return null;
 
-      const { rows: upcoming } = await db.query(
+      const { rows: upcomingRaw } = await db.query(
         `SELECT ps.id, ps.seq, ps.week, ps.status, to_char(ps.planned_date, 'YYYY-MM-DD') AS planned_date,
+                to_char(ps.planned_time, 'HH24:MI') AS planned_time,
                 ps.location, a.id AS assignment_id, a.name AS assignment_name, a.status AS assignment_status,
                 (SELECT count(*)::int FROM app.planned_session x WHERE x.assignment_id = a.id AND x.status <> 'cancelled') AS total,
-                (SELECT count(*)::int FROM app.planned_session x WHERE x.assignment_id = a.id AND x.status = 'done') AS completed
+                (SELECT count(*)::int FROM app.planned_session x WHERE x.assignment_id = a.id AND x.status = 'done') AS completed,
+                (ps.location = 'home' AND ps.id = ${NEXT_HOME_SQL}) AS startable,
+                ${ITEMS_SQL("assignment_step", "assignment_id", "a.id")}
            FROM app.planned_session ps
            JOIN app.protocol_assignment a ON a.id = ps.assignment_id
-          WHERE ps.patient_id = $1 AND ps.location = 'home'
+          WHERE ps.patient_id = $1
             AND ps.status IN ('planned', 'in_progress')
             AND a.status = 'active'
-          ORDER BY ps.planned_date, ps.seq`,
+          ORDER BY ps.planned_date, ps.planned_time NULLS LAST, ps.seq
+          LIMIT 200`,
         [childId],
       );
+      // What is in each session: the names of its game-based activities and videos, in order. No settings, no results.
+      const upcoming = upcomingRaw.map((r) => ({ ...r, items: toItems(r.items, lang) }));
 
       const { rows: recent } = await db.query(
         `SELECT ps.id, ps.seq, ps.week, ps.status, to_char(ps.planned_date, 'YYYY-MM-DD') AS planned_date,
@@ -282,6 +300,7 @@ export function parentRoutes(servicePool: pg.Pool, tickets?: TicketSigner) {
         `SELECT ps.id, ps.seq, ps.week, ps.status, ps.location, to_char(ps.planned_date, 'YYYY-MM-DD') AS planned_date,
                 a.id AS assignment_id, a.name AS assignment_name, a.status AS assignment_status,
                 (SELECT count(*)::int FROM app.planned_session x WHERE x.assignment_id = a.id AND x.status <> 'cancelled') AS total,
+                (ps.id = ${NEXT_HOME_SQL}) AS is_next,
                 p.id AS patient_id, p.given_name, p.family_name, p.preferred_locale, p.alert, p.colour_vision_deficiency,
                 to_char(p.date_of_birth, 'YYYY-MM-DD') AS date_of_birth, p.tone_age_group, p.tones_enabled
            FROM app.planned_session ps
@@ -295,6 +314,7 @@ export function parentRoutes(servicePool: pg.Pool, tickets?: TicketSigner) {
       if (row.location !== "home") return { error: "not_home_session" as const };
       if (row.assignment_status !== "active") return { error: "protocol_not_active" as const };
       if (row.status !== "planned" && row.status !== "in_progress") return { error: "session_closed" as const };
+      if (!row.is_next) return { error: "not_next_session" as const };
 
       const steps = await db.query<StepRow & { done: boolean }>(
         `SELECT s.id, s.ordinal, s.step_type, s.video_id, s.game_id, s.session_mode, s.duration_s, s.lives, s.lives_auto,

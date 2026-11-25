@@ -1,6 +1,8 @@
 /** Client for /v1/calendar (scheduling and calendar routes). */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiSend } from "./http.ts";
+import type { StepItem } from "@emb/contracts";
+import { usePrefs } from "../i18n/index.tsx";
 
 /** A unified calendar event — either a protocol session or an appointment. */
 export interface CalendarEvent {
@@ -23,6 +25,8 @@ export interface CalendarEvent {
   therapist_id: string;
   therapist_name: string;
   color: string;
+  /** Sessions only: the game-based activities and videos in the session, in order. */
+  items?: StepItem[];
 }
 
 export interface CalendarTherapist {
@@ -66,8 +70,8 @@ function buildQuery(filters: CalendarFilters): string {
   return parts.join("&");
 }
 
-export const listCalendarEvents = (filters: CalendarFilters, signal?: AbortSignal) =>
-  apiGet<{ events: CalendarEvent[] }>(`/v1/calendar/events?${buildQuery(filters)}`, signal ? { signal } : {}).then((r) => r.events);
+export const listCalendarEvents = (filters: CalendarFilters, signal?: AbortSignal, lang = "en") =>
+  apiGet<{ events: CalendarEvent[] }>(`/v1/calendar/events?${buildQuery(filters)}&lang=${enc(lang)}`, signal ? { signal } : {}).then((r) => r.events);
 
 export const listCalendarTherapists = (clinicId: string, signal?: AbortSignal) =>
   apiGet<{ therapists: CalendarTherapist[] }>(`/v1/calendar/therapists?clinic=${enc(clinicId)}`, signal ? { signal } : {}).then((r) => r.therapists);
@@ -95,12 +99,14 @@ export const getExportUrl = (clinicId: string, from?: string, to?: string) => {
 
 const calKey = ["calendar"] as const;
 
-export const useCalendarEvents = (filters: CalendarFilters) =>
-  useQuery({
-    queryKey: [...calKey, "events", filters],
-    queryFn: ({ signal }) => listCalendarEvents(filters, signal),
+export const useCalendarEvents = (filters: CalendarFilters) => {
+  const { locale } = usePrefs(); // video titles in a session come back in this language
+  return useQuery({
+    queryKey: [...calKey, "events", filters, locale],
+    queryFn: ({ signal }) => listCalendarEvents(filters, signal, locale),
     enabled: !!filters.clinic,
   });
+};
 
 export const useCalendarTherapists = (clinicId: string) =>
   useQuery({

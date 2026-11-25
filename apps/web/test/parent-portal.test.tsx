@@ -34,7 +34,19 @@ function mockApi(over: { sessions?: unknown[]; unread?: number } = {}) {
     if (p === "/v1/parent/messages/threads") return ok({ threads: [{ id: "t1", patient_id: "c1", therapist_id: "th", guardian_id: "g1", status: "open", last_message_at: at(0), created_at: at(3), patient_given_name: "Ella", patient_family_name: "Navon", guardian_name: "Dan Navon", therapist_name: "Yael Bar", unread_count: over.unread ?? 2 }] });
     if (p.endsWith("/progress")) return ok({ patient: { id: "c1", given_name: "Ella", family_name: "Navon", status: "active" }, stats: { total_sessions: 6, last_session: at(1) }, protocols: [] });
     if (p.endsWith("/history")) return ok({ sessions: over.sessions ?? RISING });
-    if (p.endsWith("/sessions")) return ok({ upcoming: [{ id: "ps1", seq: 4, week: 2, status: "planned", planned_date: ymd(2), location: "home", assignment_id: "a1", assignment_name: "Visual attention starter", total: 8 }], recent: [] });
+    if (p.endsWith("/launch")) return ok({ launch: { planned_session_id: "ps1", seq: 4, week: 2, total: 8, patient: { id: "c1", given_name: "Ella", family_name: "Navon", preferred_locale: "en", alert: null }, assignment: { id: "a1", name: "Visual attention starter" }, steps: [] } });
+    if (p.endsWith("/sessions")) {
+      const items = [{ kind: "video", video_id: "v1", title: "Warm-up stretches" }, { kind: "game", game_id: "catch-me-if-you-can" }];
+      const base = { status: "planned", assignment_id: "a1", assignment_name: "Visual attention starter", total: 8, items };
+      return ok({
+        upcoming: [
+          { ...base, id: "ps1", seq: 4, week: 2, planned_date: ymd(2), location: "home", startable: true },
+          { ...base, id: "ps2", seq: 5, week: 3, planned_date: ymd(4), location: "clinic", startable: false },
+          { ...base, id: "ps3", seq: 6, week: 3, planned_date: ymd(6), location: "home", startable: false },
+        ],
+        recent: [],
+      });
+    }
     if (p.endsWith("/appointments"))
       return ok({ appointments: [{ id: "ap2", date: ymd(2), start_time: "10:00", end_time: "10:45", title: "", clinic_name: "Synthetic Clinic" }, { id: "ap1", date: ymd(1), start_time: "09:00", end_time: "09:30", title: "First visit", clinic_name: "Synthetic Clinic" }] });
     if (p.endsWith("/reports")) return ok({ reports: [] });
@@ -87,14 +99,16 @@ describe("parent portal", () => {
     const calls = mockApi();
     show("/parent/calendar");
     const first = await screen.findByText("First visit");
-    const items = within(first.closest("ul")!).getAllByRole("listitem");
-    expect(items).toHaveLength(3);
+    const items = [...first.closest("ul")!.children] as HTMLElement[]; // the top-level rows, not the steps inside a session
+    expect(items).toHaveLength(5);
     expect(items[0]).toHaveTextContent(/First visit.*9:00.*9:30.*at .?Synthetic Clinic/);
     // The same day: the appointment (it has a time) before the home session; an untitled one is called "Appointment".
     expect(items[1]).toHaveTextContent(/Appointment.*10:00.*10:45/);
     expect(items[2]).toHaveTextContent(/Visual attention starter.*Home session/);
-    // Nothing on the page sets or changes an appointment, and nothing was sent but reads.
-    expect(within(first.closest("section")!).queryAllByRole("button")).toHaveLength(0);
+    // Nothing on the page sets or changes an appointment (the only button starts the next home session), and
+    // nothing was sent but reads.
+    expect(within(first.closest("section")!).queryAllByRole("button").map((b) => b.textContent)).toEqual(["Start"]);
+    for (const row of items.slice(0, 2)) expect(within(row).queryAllByRole("button")).toHaveLength(0);
     expect(calls.filter((c) => !c.startsWith("GET "))).toEqual([]);
     expect(screen.getByText(/The clinic sets appointments/)).toBeInTheDocument();
   });
@@ -119,5 +133,40 @@ describe("parent portal", () => {
     show("/parent/results");
     await screen.findAllByText(/Correct answers/);
     expect(screen.queryByText(/first sessions/)).toBeNull();
+  });
+
+  it("opens a child from their name and shows each session's game-based activities and videos", async () => {
+    mockApi();
+    show("/parent");
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("link", { name: "Ella Navon" }));
+    expect(await screen.findByRole("heading", { level: 1, name: "Ella Navon" })).toBeInTheDocument();
+    const sessions = (await screen.findAllByText("Visual attention starter")).map((el) => el.closest("li")!);
+    expect(sessions).toHaveLength(3);
+    for (const li of sessions) {
+      expect(within(li).getByText("Warm-up stretches")).toBeInTheDocument();
+      expect(within(li).getByText("Catch Me If You Can")).toBeInTheDocument();
+    }
+    // Only the next home session in line can be started; the clinic one and the later one say why not.
+    expect(screen.getAllByRole("button", { name: "Start" })).toHaveLength(1);
+    expect(within(sessions[0]!).getByRole("button", { name: "Start" })).toBeInTheDocument();
+    expect(within(sessions[1]!).getByText("Done with the therapist at the clinic")).toBeInTheDocument();
+    expect(within(sessions[2]!).getByText("Opens when the session before it is done")).toBeInTheDocument();
+  });
+
+  it("starts the next home session from the kids page even before its planned day", async () => {
+    const calls = mockApi();
+    const router = show("/parent");
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Start" }));
+    expect(calls).toContain("POST /v1/parent/children/c1/sessions/ps1/launch");
+    expect(router.state.location.pathname).toBe("/session/ps1");
+  });
+
+  it("shows what is in a session on the calendar, with Start for the one that is next", async () => {
+    mockApi();
+    show("/parent/calendar");
+    expect((await screen.findAllByText("Warm-up stretches")).length).toBe(3);
+    expect(screen.getAllByRole("button", { name: "Start" })).toHaveLength(1);
   });
 });

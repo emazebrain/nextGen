@@ -1,7 +1,8 @@
 /** Client for /v1/parent (parent portal routes). */
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiSend } from "./http.ts";
-import type { GameSessionView, LaunchPackage } from "@emb/contracts";
+import type { GameSessionView, LaunchPackage, StepItem } from "@emb/contracts";
+import { usePrefs } from "../i18n/index.tsx";
 
 export interface ParentChild {
   id: string;
@@ -117,6 +118,12 @@ export interface HomePlannedSession {
   total?: number;
   completed?: number;
   completed_at?: string | null;
+  /** "HH:MM" when the clinic set a time. */
+  planned_time?: string | null;
+  /** The game-based activities and videos in the session, in order (coming sessions only). */
+  items?: StepItem[];
+  /** True for the one home session that can be started now: the next in line for its protocol. */
+  startable?: boolean;
 }
 
 export interface ChildSessions {
@@ -138,8 +145,8 @@ export interface ChildAppointment {
 export const getChildAppointments = (childId: string, signal?: AbortSignal) =>
   apiGet<{ appointments: ChildAppointment[] }>(`/v1/parent/children/${encodeURIComponent(childId)}/appointments`, signal ? { signal } : {}).then((r) => r.appointments);
 
-export const getChildSessions = (childId: string, signal?: AbortSignal) =>
-  apiGet<ChildSessions>(`/v1/parent/children/${encodeURIComponent(childId)}/sessions`, signal ? { signal } : {});
+export const getChildSessions = (childId: string, signal?: AbortSignal, lang = "en") =>
+  apiGet<ChildSessions>(`/v1/parent/children/${encodeURIComponent(childId)}/sessions?lang=${encodeURIComponent(lang)}`, signal ? { signal } : {});
 
 export const getChildHistory = (childId: string, signal?: AbortSignal) =>
   apiGet<{ sessions: GameSessionView[] }>(`/v1/parent/children/${encodeURIComponent(childId)}/history`, signal ? { signal } : {});
@@ -147,12 +154,14 @@ export const getChildHistory = (childId: string, signal?: AbortSignal) =>
 export const launchHomeSession = (childId: string, sessionId: string) =>
   apiSend<{ launch: LaunchPackage }>("POST", `/v1/parent/children/${encodeURIComponent(childId)}/sessions/${encodeURIComponent(sessionId)}/launch`, {});
 
-export const useChildSessions = (childId: string) =>
-  useQuery({
-    queryKey: [...parentKey, "sessions", childId],
-    queryFn: ({ signal }) => getChildSessions(childId, signal),
+export const useChildSessions = (childId: string) => {
+  const { locale } = usePrefs(); // video titles in a session come back in this language
+  return useQuery({
+    queryKey: [...parentKey, "sessions", childId, locale],
+    queryFn: ({ signal }) => getChildSessions(childId, signal, locale),
     enabled: !!childId,
   });
+};
 
 export const useChildAppointments = (childId: string) =>
   useQuery({

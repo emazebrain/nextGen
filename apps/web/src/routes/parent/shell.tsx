@@ -1,5 +1,5 @@
 /** Parent portal shell: a header (clinic, language, sign out) and bottom tabs: Kids · Calendar · Results · Messages (§5.10, §5.11, §4.1). */
-import { NavLink, Navigate, Outlet, useNavigate } from "react-router";
+import { NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { Users, CalendarDays, BarChart3, Languages, LogOut, MessageSquare } from "lucide-react";
 import { useT, usePrefs } from "../../i18n/index.tsx";
@@ -33,6 +33,7 @@ export function ParentShell() {
   const t = useT();
   const me = useParentMe();
   const navigate = useNavigate();
+  const onChildPage = useLocation().pathname.startsWith("/parent/children/");
   const qc = useQueryClient();
   const { locale, setLocale } = usePrefs();
   const [activeChildId, setActiveChildId] = useState<string>("");
@@ -99,7 +100,8 @@ export function ParentShell() {
         </main>
 
         <nav className="parent-shell__tabs" aria-label={t("parent.nav")}>
-          <NavLink to="/parent" end className="parent-shell__tab">
+          {/* A child's own page belongs to the Kids tab. */}
+          <NavLink to="/parent" end className={({ isActive }) => `parent-shell__tab${isActive || onChildPage ? " active" : ""}`}>
             <Users size={22} aria-hidden="true" />
             <span>{t("parent.kids")}</span>
           </NavLink>

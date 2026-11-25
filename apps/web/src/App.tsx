@@ -49,6 +49,7 @@ import { ManagePatientFormPage } from "./routes/manage/patient-form.tsx";
 import { ManageCalendarPage } from "./routes/manage/calendar.tsx";
 import { ParentShell } from "./routes/parent/shell.tsx";
 import { ParentHomePage } from "./routes/parent/home.tsx";
+import { ParentChildPage } from "./routes/parent/child.tsx";
 import { ParentCalendarPage } from "./routes/parent/calendar.tsx";
 import { ParentResultsPage } from "./routes/parent/results.tsx";
 import { ParentMessagesPage } from "./routes/parent/messages.tsx";
@@ -219,6 +220,7 @@ export const routes: RouteObject[] = [
     element: <ParentShell />,
     children: [
       { index: true, element: <ParentHomePage /> },
+      { path: "children/:id", element: <ParentChildPage /> },
       { path: "calendar", element: <ParentCalendarPage /> },
       { path: "results", element: <ParentResultsPage /> },
       { path: "messages", element: <ParentMessagesPage /> },

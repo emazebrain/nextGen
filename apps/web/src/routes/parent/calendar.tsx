@@ -3,12 +3,15 @@
  * order. Read-only: a guardian sees only their own children and cannot set or change anything here.
  */
 import { useIntl } from "react-intl";
-import { Card, EmptyState, MazeLoader, PageHeader } from "@emb/ui";
-import { CalendarDays } from "lucide-react";
+import { Button, Card, EmptyState, MazeLoader, PageHeader } from "@emb/ui";
+import { CalendarDays, Play } from "lucide-react";
 import { useT } from "../../i18n/index.tsx";
 import { useTitle } from "../../lib/title.ts";
 import { useParentContext } from "./shell.tsx";
+import { Link } from "react-router";
 import { useChildAppointments, useChildSessions } from "../../api/parent.ts";
+import { SessionItems } from "../sessionItems.tsx";
+import { localToday, useStartHomeSession } from "./session.tsx";
 
 export function ParentCalendarPage() {
   const t = useT();
@@ -40,13 +43,14 @@ function ChildCalendar({ childId, childName }: { childId: string; childName: str
   const intl = useIntl();
   const sessions = useChildSessions(childId);
   const appointments = useChildAppointments(childId);
+  const { start, starting, failed } = useStartHomeSession(childId);
 
   if (sessions.isPending || appointments.isPending) return <MazeLoader label={t("common.loading")} />;
 
   const upcoming = sessions.data?.upcoming ?? [];
   const recent = sessions.data?.recent ?? [];
   const appts = appointments.data ?? [];
-  const today = new Date().toLocaleDateString("en-CA");
+  const today = localToday();
 
   const formatDate = (s: string) => intl.formatDate(new Date(s + "T00:00:00"), { weekday: "short", day: "numeric", month: "short" });
   const clock = (hhmm: string) => {
@@ -79,7 +83,7 @@ function ChildCalendar({ childId, childName }: { childId: string; childName: str
 
   return (
     <Card as="section">
-      <h3 className="app-cardtitle"><bdi>{childName}</bdi></h3>
+      <h3 className="app-cardtitle"><Link to={`/parent/children/${childId}`} className="parent-kid__link"><bdi>{childName}</bdi></Link></h3>
       {appointments.isError && <p className="app-muted">{t("parent.apptsUnavailable")}</p>}
       {coming.length > 0 && (
         <ul className="plainlist parent-calendar">
@@ -104,15 +108,25 @@ function ChildCalendar({ childId, childName }: { childId: string; childName: str
                 <span className="parent-calendar__status">{dayTag(e.a.date, false)}</span>
               </li>
             ) : (
-              <li key={e.key} className="parent-calendar__item">
-                <span className={`parent-calendar__date emb-tnum${e.s.planned_date < today ? " parent-calendar__date--overdue" : ""}`}>{formatDate(e.s.planned_date)}</span>
+              <li key={e.key} className="parent-calendar__item parent-calendar__item--session">
+                <span className={`parent-calendar__date emb-tnum${e.s.planned_date < today && e.s.location === "home" ? " parent-calendar__date--overdue" : ""}`}>{formatDate(e.s.planned_date)}</span>
                 <span className="parent-calendar__details">
                   <span><bdi>{e.s.assignment_name}</bdi></span>
                   <span className="app-muted">
-                    {t("parent.homeSession")} · {t("parent.sessionMeta", { seq: e.s.seq, total: e.s.total ?? 0, week: e.s.week })}
+                    {t(e.s.location === "home" ? "parent.homeSession" : "parent.clinicSession")} · {t("parent.sessionMeta", { seq: e.s.seq, total: e.s.total ?? 0, week: e.s.week })}
                   </span>
+                  <SessionItems items={e.s.items ?? []} label={t("parent.inSession")} />
+                  {failed === e.s.id && <span className="parent-session__error" role="alert">{t("parent.startFailed")}</span>}
                 </span>
-                <span className="parent-calendar__status">{dayTag(e.s.planned_date, true)}</span>
+                <span className="parent-calendar__status">
+                  {e.s.startable ? (
+                    <Button icon={<Play size={18} aria-hidden="true" />} onClick={() => void start(e.s.id)} loading={starting === e.s.id}>
+                      {t("parent.startSession")}
+                    </Button>
+                  ) : (
+                    dayTag(e.s.planned_date, e.s.location === "home")
+                  )}
+                </span>
               </li>
             ),
           )}
