@@ -255,7 +255,9 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
       return rows[0]!.ok;
     });
 
-  r.post("/results", async (c) => {
+  // `homeOnly` is the parent portal's door (no MFA there): it takes nothing but results of a session a guardian
+  // started at home, so a staff account cannot use it to step around two-step sign-in.
+  const postResults = (homeOnly: boolean) => async (c: Context<Env>) => {
     const me = c.get("user").id;
     const raw = await c.req.json().catch(() => null);
     const body = await parseBody(c, resultUpload);
@@ -302,15 +304,21 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
       if (paramsHash(envelope.params) !== claims.ph) return reject("params_mismatch");
     } else if (!paramsReason && !paramsWithinAllowed(claims.allowed, envelope.params)) paramsReason = "params_outside_ticket";
     if (!(await uploaderMay(c, claims))) return reject("uploader_not_allowed", 403);
+    // Home play (parent portal): the ticket was issued to a guardian. They must still be linked to the child, and the
+    // session must still be one that can be done at home.
+    const home = claims.v === 1 && claims.home === true;
+    if (homeOnly && !home) return reject("uploader_not_allowed", 403);
+    if (home && !(await run(c, (db) => db.query<{ ok: boolean }>(`SELECT app.may_play_at_home($1) AS ok`, [claims.psid]))).rows[0]!.ok) return reject("uploader_not_allowed", 403);
 
     const receipt = await run(c, (db) => ingest(db, envelope, claims, me, record, paramsReason));
     if ("conflict" in receipt) return c.json({ error: "session_id_reused" }, 409);
     return c.json(receipt, receipt.outcome === "duplicate" ? 200 : 201);
-  });
+  };
+  r.post("/results", postResults(false));
 
   // A watched video (ADR 0018). The app's UUIDv7 view id makes retries safe; the view is kept once, append-only.
   // Every attempt, accepted or not, also goes to the raw log, as results do (never dropped silently, §9.8).
-  r.post("/video-views", async (c) => {
+  const postVideoView = (homeOnly: boolean) => async (c: Context<Env>) => {
     const raw = await c.req.raw.clone().json().catch(() => null);
     const body = await parseBody(c, videoViewInput);
     const me = c.get("user").id;
@@ -330,7 +338,7 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
     const checked = v.ticket ? (tickets.verify(v.ticket) ? { claims: tickets.verify(v.ticket)!, validThen: true } : tickets.verifyPlayed(v.ticket, Date.parse(v.started_at))) : null;
     const claims = checked?.claims ?? null;
     const expiredReason: ReviewReason | null = checked && !checked.validThen ? "ticket_expired" : null;
-    if (v.ticket && (!claims || claims.v !== 2 || claims.asid !== v.assignment_step_id || claims.psid !== v.planned_session_id)) {
+    if (v.ticket && (homeOnly || !claims || claims.v !== 2 || claims.asid !== v.assignment_step_id || claims.psid !== v.planned_session_id)) {
       await run(c, (db) => log(db, "rejected", "invalid_ticket", { viewId: v.client_view_id }));
       return c.json({ error: "invalid_ticket" }, 422);
     }
@@ -338,22 +346,25 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
       await run(c, (db) => log(db, "rejected", "uploader_not_allowed", { viewId: v.client_view_id }));
       return c.json({ error: "uploader_not_allowed" }, 403);
     }
-    const therapist = claims?.sub ?? me;
+    let therapist = claims?.sub ?? me;
     const device = claims?.dev ?? null;
     const result = await run(c, async (db): Promise<{ error: string; status: 404 | 409 | 422 } | VideoViewReceipt> => {
       // Without a ticket nothing server-signed vouches for the view: the sender must be able to treat the patient
       // under their own RLS, as before offline support (invariant 3).
+      let home = false;
       if (!claims) {
-        const mine = await db.query<{ ok: boolean }>(
-          `SELECT app.can_treat_patient(ps.patient_id) AS ok FROM app.planned_session ps WHERE ps.id = $1`,
-          [v.planned_session_id],
-        );
-        if (!mine.rows[0]?.ok) {
+        const mine = homeOnly
+          ? { rows: [] as { ok: boolean }[] }
+          : await db.query<{ ok: boolean }>(`SELECT app.can_treat_patient(ps.patient_id) AS ok FROM app.planned_session ps WHERE ps.id = $1`, [v.planned_session_id]);
+        // …or be a guardian of the child watching at home (parent portal, migration 0043).
+        home = !mine.rows[0]?.ok && (await db.query<{ ok: boolean }>(`SELECT app.may_play_at_home($1) AS ok`, [v.planned_session_id])).rows[0]!.ok;
+        if (!mine.rows[0]?.ok && !home) {
           await log(db, "rejected", "not_found", { viewId: v.client_view_id });
           return { error: "not_found", status: 404 };
         }
       }
-      await db.query(`SELECT app.act_for_ticket($1, $2)`, [therapist, device]);
+      if (home) therapist = (await db.query<{ actor: string }>(`SELECT app.act_for_home_session($1) AS actor`, [v.planned_session_id])).rows[0]!.actor;
+      else await db.query(`SELECT app.act_for_ticket($1, $2)`, [therapist, device]);
       const asUploader = () => db.query(`SELECT set_config('app.user_id', $1, true)`, [me]);
       const ps = await db.query<{ status: string; assignment_id: string; patient_id: string; clinic_id: string }>(`SELECT * FROM app.ticket_session($1)`, [v.planned_session_id]);
       const session = ps.rows[0];
@@ -391,7 +402,8 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
     });
     if ("error" in result) return c.json({ error: result.error }, result.status);
     return c.json(result, result.outcome === "duplicate" ? 200 : 201);
-  });
+  };
+  r.post("/video-views", postVideoView(false));
 
   // Reviewing a flagged result or view (spec §7.4): an append-only decision; the latest one counts.
   for (const [path, column, table] of [["/results/:id/review", "game_session_id", "game_session"], ["/video-views/:id/review", "video_view_id", "video_view"]] as const) {
@@ -588,7 +600,7 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
     return c.json({ data });
   });
 
-  return r;
+  return Object.assign(r, { postResults, postVideoView });
 }
 
 async function ingest(
@@ -600,8 +612,13 @@ async function ingest(
   paramsReason: ReviewReason | null,
 ): Promise<ResultReceipt | { conflict: true }> {
   const extra = { sessionId: e.session_id, psid: claims.psid, pid: claims.pid };
-  // Act for the therapist the (verified) ticket names; the raw log is written back as the sender.
-  await db.query(`SELECT app.act_for_ticket($1, $2)`, [claims.sub, claims.dev ?? null]);
+  // Act for the therapist the (verified) ticket names; the raw log is written back as the sender. A session a
+  // guardian played at home is stored on behalf of the child's care team instead (migration 0043).
+  const home = claims.v === 1 && claims.home === true;
+  const therapist = home
+    ? (await db.query<{ actor: string }>(`SELECT app.act_for_home_session($1) AS actor`, [claims.psid])).rows[0]!.actor
+    : claims.sub;
+  if (!home) await db.query(`SELECT app.act_for_ticket($1, $2)`, [claims.sub, claims.dev ?? null]);
   const asUploader = () => db.query(`SELECT set_config('app.user_id', $1, true)`, [me]);
   const sessionStatus = async () => (await db.query<{ status: string }>(`SELECT status FROM app.ticket_session($1)`, [claims.psid])).rows[0]?.status ?? null;
 
@@ -619,7 +636,7 @@ async function ingest(
   }
 
   let reason: ReviewReason | null =
-    paramsReason ?? (await db.query<{ r: ReviewReason | null }>(`SELECT app.review_reason_for($1,$2,$3,$4) AS r`, [claims.pid, claims.sub, claims.asid, claims.psid])).rows[0]!.r;
+    paramsReason ?? (await db.query<{ r: ReviewReason | null }>(`SELECT app.review_reason_for($1,$2,$3,$4) AS r`, [claims.pid, therapist, claims.asid, claims.psid])).rows[0]!.r;
   if (!reason && claims.v === 2 && (await stepChanged(db, claims))) reason = "step_changed";
   if (!reason && (await db.query<{ p: boolean }>(`SELECT app.ticket_step_played('game', $1, $2) AS p`, [claims.psid, claims.asid])).rows[0]!.p) reason = "played_twice";
 
@@ -628,6 +645,7 @@ async function ingest(
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
   const row = {
     id: e.session_id, patient_id: claims.pid, assignment_step_id: claims.asid, planned_session_id: claims.psid, review_reason: reason,
+    ...(home ? { location: "home" } : {}),
     game_id: e.game_id, game_version: e.game_version, status: e.status, end_reason: e.end_reason, session_mode: e.mode, difficulty: p.difficulty,
     hemisphere: p.hemisphere, started_at: e.started_at, ended_at: e.ended_at, active_ms: e.active_ms, paused_ms: e.paused_ms,
     lives_start: e.lives_start, lives_lost: e.lives_lost, lives_remaining: e.lives_remaining,

@@ -50,6 +50,8 @@ import { ManageCalendarPage } from "./routes/manage/calendar.tsx";
 import { ParentShell } from "./routes/parent/shell.tsx";
 import { ParentHomePage } from "./routes/parent/home.tsx";
 import { ParentChildPage } from "./routes/parent/child.tsx";
+import { ParentSessionRoute } from "./routes/parent/play.tsx";
+import { setUploadPortal } from "./session/outbox.ts";
 import { ParentCalendarPage } from "./routes/parent/calendar.tsx";
 import { ParentResultsPage } from "./routes/parent/results.tsx";
 import { ParentMessagesPage } from "./routes/parent/messages.tsx";
@@ -148,6 +150,7 @@ export function RequireStaff({ bare = false }: { bare?: boolean }) {
 }
 
 function StaffArea({ me, bare, online = false }: { me: Me; bare: boolean; online?: boolean }) {
+  setUploadPortal("staff");
   return (
     <ClinicProvider memberships={me.memberships}>
       <OutboxFlusher />
@@ -215,6 +218,8 @@ export const routes: RouteObject[] = [
   { path: "/consent/:token", element: <PublicConsentPage /> },
   { path: "/parent/register/:token", element: <ParentRegisterPage /> },
   { path: "/parent/register/success", element: <ParentRegisterSuccessPage /> },
+  // The session player for a home session a guardian just started: full screen, outside the portal's tabs.
+  { path: "/parent/session/:plannedSessionId", element: <ParentSessionRoute /> },
   {
     path: "/parent",
     element: <ParentShell />,

@@ -2,6 +2,7 @@
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { Users, CalendarDays, BarChart3, Languages, LogOut, MessageSquare } from "lucide-react";
+import { useParentUploads } from "./play.tsx";
 import { useT, usePrefs } from "../../i18n/index.tsx";
 import { useParentMe, type ParentChild } from "../../api/parent.ts";
 import { ApiError } from "../../api/http.ts";
@@ -66,6 +67,7 @@ export function ParentShell() {
     </header>
   );
 
+  useParentUploads(!!me.data);
   if (me.isPending) return <MazeLoader label={t("common.loading")} />;
   if (me.isError && me.error instanceof ApiError && me.error.status === 401) return <Navigate to="/sign-in?next=/parent" replace />;
   if (me.isError || !me.data) {

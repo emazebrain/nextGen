@@ -158,6 +158,14 @@ export async function staffClient(env: TestEnv, email: string, name: string): Pr
   return { api, userId: up.body.user.id };
 }
 
+/** A guardian account: signed in with a password only (the parent portal asks for no two-step sign-in). */
+export async function guardianClient(env: TestEnv, email: string, name: string): Promise<{ api: Api; userId: string }> {
+  const api = client(env.app);
+  const up = await api("/api/auth/sign-up/email", { method: "POST", body: { email, password: "correct horse battery staple", name } });
+  if (up.status !== 200) throw new Error(`sign-up failed: ${up.status}`);
+  return { api, userId: up.body.user.id };
+}
+
 /** One organization, two clinics. Returns their ids. */
 export async function seedClinics(db: pg.Client) {
   const org = randomUUID();

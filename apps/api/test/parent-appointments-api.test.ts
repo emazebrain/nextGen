@@ -5,7 +5,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
-import { ADMIN_URL, addMember, seedClinics, setupApi, staffClient, type Api, type TestEnv } from "./support.ts";
+import { ADMIN_URL, addMember, guardianClient, seedClinics, setupApi, staffClient, type Api, type TestEnv } from "./support.ts";
 
 describe.skipIf(!ADMIN_URL)("parent calendar: appointments", () => {
   let env: TestEnv;
@@ -23,8 +23,8 @@ describe.skipIf(!ADMIN_URL)("parent calendar: appointments", () => {
     env = await setupApi();
     ids = await seedClinics(env.db);
     yael = await staffClient(env, "yael@synthetic.test", "Yael Bar");
-    miri = await staffClient(env, "miri@synthetic.test", "Miri Katz");
-    other = await staffClient(env, "other@synthetic.test", "Other Parent");
+    miri = await guardianClient(env, "miri@synthetic.test", "Miri Katz");
+    other = await guardianClient(env, "other@synthetic.test", "Other Parent");
     await addMember(env.db, yael.userId, ids.org, ids.clinic, "therapist");
     for (const [id, given] of [[dana, "Dana"], [eli, "Eli"]] as const) {
       await env.db.query(`INSERT INTO app.patient (id, clinic_id, given_name, family_name, date_of_birth, status) VALUES ($1,$2,$3,'Katz','2018-03-01','active')`, [id, ids.clinic, given]);

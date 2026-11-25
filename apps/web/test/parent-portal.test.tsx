@@ -25,6 +25,8 @@ function mockApi(over: { sessions?: unknown[]; unread?: number } = {}) {
     const p = url.pathname;
     calls.push(`${init?.method ?? "GET"} ${p}`);
     const ok = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    // The staff API refuses a guardian: they sign in without two-step sign-in.
+    if (!p.startsWith("/v1/parent/")) return new Response(JSON.stringify({ error: "mfa_required" }), { status: 403, headers: { "content-type": "application/json" } });
     if (p === "/v1/parent/me")
       return ok({
         user: { id: "u", email: "dan@synthetic.test", name: "Dan Navon" },
@@ -34,7 +36,7 @@ function mockApi(over: { sessions?: unknown[]; unread?: number } = {}) {
     if (p === "/v1/parent/messages/threads") return ok({ threads: [{ id: "t1", patient_id: "c1", therapist_id: "th", guardian_id: "g1", status: "open", last_message_at: at(0), created_at: at(3), patient_given_name: "Ella", patient_family_name: "Navon", guardian_name: "Dan Navon", therapist_name: "Yael Bar", unread_count: over.unread ?? 2 }] });
     if (p.endsWith("/progress")) return ok({ patient: { id: "c1", given_name: "Ella", family_name: "Navon", status: "active" }, stats: { total_sessions: 6, last_session: at(1) }, protocols: [] });
     if (p.endsWith("/history")) return ok({ sessions: over.sessions ?? RISING });
-    if (p.endsWith("/launch")) return ok({ launch: { planned_session_id: "ps1", seq: 4, week: 2, total: 8, patient: { id: "c1", given_name: "Ella", family_name: "Navon", preferred_locale: "en", alert: null }, assignment: { id: "a1", name: "Visual attention starter" }, steps: [] } });
+    if (p.endsWith("/launch")) return ok({ launch: { planned_session_id: "ps1", seq: 4, week: 2, total: 8, patient: { id: "c1", given_name: "Ella", family_name: "Navon", preferred_locale: "en", alert: null }, assignment: { id: "a1", name: "Visual attention starter" }, steps: [{ kind: "video", assignment_step_id: "st1", ordinal: 1, done: false, video: { id: "v1", version: 1, source: "youtube", youtube_id: "aaaaaaaaaaa", duration_s: 60, title: "Warm-up stretches", file_url: null, sha256: null } }] } });
     if (p.endsWith("/sessions")) {
       const items = [{ kind: "video", video_id: "v1", title: "Warm-up stretches" }, { kind: "game", game_id: "catch-me-if-you-can" }];
       const base = { status: "planned", assignment_id: "a1", assignment_name: "Visual attention starter", total: 8, items };
@@ -160,13 +162,23 @@ describe("parent portal", () => {
     expect(screen.getByRole("button", { name: "Start" })).toBeInTheDocument();
   });
 
-  it("starts the next home session from the kids page even before its planned day", async () => {
+  it("starts the next home session from the kids page even before its planned day, and stays in the player", async () => {
     const calls = mockApi();
     const router = show("/parent");
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: "Start" }));
     expect(calls).toContain("POST /v1/parent/children/c1/sessions/ps1/launch");
-    expect(router.state.location.pathname).toBe("/session/ps1");
+    // The player opens for the guardian on the portal's own route, with no staff sign-in involved.
+    expect(await screen.findByText(/Session 4 of 8/)).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/parent/session/ps1");
+    expect(calls.filter((c) => !c.includes("/v1/parent/"))).toEqual([]);
+  });
+
+  it("a guardian who opens a session address directly goes back to the portal", async () => {
+    mockApi();
+    const router = show("/parent/session/ps1");
+    expect(await screen.findByRole("link", { name: "Ella Navon" })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/parent");
   });
 
   it("shows what is in a session on the calendar, with Start for the one that is next", async () => {

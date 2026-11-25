@@ -26,7 +26,7 @@ export function useStartHomeSession(childId: string) {
     setFailed(null);
     try {
       const result = await launch.mutateAsync(sessionId);
-      navigate(`/session/${sessionId}`, { state: { launch: result.launch, fromParent: true } });
+      navigate(`/parent/session/${sessionId}`, { state: { launch: result.launch, fromParent: true } });
     } catch {
       setStarting(null);
       setFailed(sessionId);

@@ -26,6 +26,7 @@ import { noteActivity } from "../lib/idle.ts";
 import { firstName, iso } from "../lib/format.ts";
 import { useTitle } from "../lib/title.ts";
 import { ResultSummary } from "../routes/library.tsx";
+import { useParentMe } from "../api/parent.ts";
 import { checkPin, hasPin, PIN_PATTERN, setPin } from "./kidmode.ts";
 import { enqueueAndSend, enqueueViewAndSend, send, sendView, type SendResult, type ViewSendResult } from "./outbox.ts";
 import { VideoStep, viewSummary } from "./VideoStep.tsx";
@@ -310,7 +311,7 @@ function Runner({ pkg, space = null, fromParent = false }: { pkg: LaunchPackage;
     return <Between name={stepName(queue[phase.i]!)} n={phase.i + 1} total={queue.length} onGo={() => setPhase({ k: "play", i: phase.i })} />;
   }
   if (phase.k === "finished") {
-    return <Finished child={pkg.patient.given_name} onUnlock={() => setPhase({ k: "summary" })} />;
+    return <Finished child={pkg.patient.given_name} fromParent={fromParent} onUnlock={() => setPhase({ k: "summary" })} />;
   }
   return (
     <>
@@ -602,9 +603,12 @@ function Between({ name, n, total, onGo }: { name: string; n: number; total: num
   );
 }
 
-function Finished({ child, onUnlock }: { child: string; onUnlock: () => void }) {
+function Finished({ child, onUnlock, fromParent = false }: { child: string; onUnlock: () => void; fromParent?: boolean }) {
   const t = useT();
-  const me = useMe();
+  // The adult to hand the device back to: the therapist, or at home the guardian.
+  const staff = useMe(!fromParent);
+  const parent = useParentMe(fromParent);
+  const me = { data: fromParent ? parent.data : staff.data };
   const [asking, setAsking] = useState(false);
   return (
     <Shell>

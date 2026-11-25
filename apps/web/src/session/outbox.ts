@@ -189,12 +189,21 @@ async function deliver<R>(kind: Payload["kind"], id: string, post: () => Promise
   }
 }
 
+/**
+ * Where results go: staff send to /v1, a guardian playing at home to /v1/parent (the parent portal's own door, which
+ * takes home sessions only and asks for no two-step sign-in). Set by whichever part of the app is signed in.
+ */
+let base = "/v1";
+export function setUploadPortal(portal: "staff" | "parent"): void {
+  base = portal === "parent" ? "/v1/parent" : "/v1";
+}
+
 export function send(item: Pick<OutboxItem, "ticket" | "envelope">): Promise<SendResult> {
-  return deliver("result", item.envelope.session_id, () => apiSend<ResultReceipt>("POST", "/v1/results", { ticket: item.ticket, envelope: item.envelope }));
+  return deliver("result", item.envelope.session_id, () => apiSend<ResultReceipt>("POST", `${base}/results`, { ticket: item.ticket, envelope: item.envelope }));
 }
 
 export function sendView(view: VideoViewInput): Promise<ViewSendResult> {
-  return deliver("view", view.client_view_id, () => apiSend<VideoViewReceipt>("POST", "/v1/video-views", view));
+  return deliver("view", view.client_view_id, () => apiSend<VideoViewReceipt>("POST", `${base}/video-views`, view));
 }
 
 /**

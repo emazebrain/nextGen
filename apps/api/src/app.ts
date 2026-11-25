@@ -1,7 +1,7 @@
-import { Hono } from "hono";
+import { Hono, type MiddlewareHandler } from "hono";
 import type pg from "pg";
 import type { Auth } from "./auth.ts";
-import { requireActiveUser, requireParentSession, requireStaffSession, type Env } from "./context.ts";
+import { refuseDisabledUser, requireActiveUser, requireParentSession, requireStaffSession, withUser, type Env } from "./context.ts";
 import { meRoutes } from "./modules/me/routes.ts";
 import { patientRoutes } from "./modules/patients/routes.ts";
 import { clinicRoutes } from "./modules/clinics/routes.ts";
@@ -118,17 +118,22 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
     app.on(["GET", "POST"], "/api/auth/*", (c) => deps.auth.handler(c.req.raw));
 
     const v1 = new Hono<Env>();
-    v1.use("*", requireStaffSession(deps.auth));
-    v1.use("*", requireActiveUser(deps.pool));
+    // The parent portal has its own gate below (a guardian signs in without two-step sign-in, §5.10). Without this
+    // exception the staff gate answered every /v1/parent request first and refused guardians with "mfa_required".
+    const staffOnly = (mw: MiddlewareHandler<Env>): MiddlewareHandler<Env> => (c, next) => (c.req.path.startsWith("/v1/parent/") ? next() : mw(c, next));
+    v1.use("*", staffOnly(requireStaffSession(deps.auth)));
+    v1.use("*", staffOnly(requireActiveUser(deps.pool)));
     v1.route("/me", meRoutes(deps.pool, deps.auth));
     const mailer = deps.mailer ?? createMailer({});
     v1.route("/patients", patientRoutes(deps.pool, mailer, deps.publicAppUrl));
     v1.route("/clinics", clinicRoutes(deps.pool));
     v1.route("/", protocolRoutes(deps.pool));
-    v1.route("/", sessionRoutes(deps.pool, deps.tickets ?? ticketSigner()));
+    const sessions = sessionRoutes(deps.pool, deps.tickets ?? ticketSigner());
+    v1.route("/", sessions);
     v1.route("/", reportRoutes(deps.pool));
     v1.route("/", progressReportRoutes(deps.pool));
-    v1.route("/", videoRoutes(deps.pool, deps.files ?? localFileStore(process.env.FILE_STORE_DIR ?? ".data/files")));
+    const videos = videoRoutes(deps.pool, deps.files ?? localFileStore(process.env.FILE_STORE_DIR ?? ".data/files"));
+    v1.route("/", videos);
     v1.route("/", deviceRoutes(deps.pool, deps.deviceKey ?? deviceKey(undefined)));
     v1.route("/", offlineRoutes(deps.pool, deps.tickets ?? ticketSigner()));
     // Before the general admin router, so its own gate answers for these paths.
@@ -143,9 +148,20 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
     // Parent portal — authenticated but no MFA requirement (§5.10)
     const parentV1 = new Hono<Env>();
     parentV1.use("*", requireParentSession(deps.auth));
+    parentV1.use("*", refuseDisabledUser(deps.pool));
     parentV1.route("/parent", parentRoutes(deps.pool, deps.tickets ?? ticketSigner()));
     parentV1.route("/parent/messages", parentMessagingRoutes(deps.pool));
     parentV1.route("/parent", parentProgressReportRoutes(deps.pool));
+    // Playing at home: what the player sends back from a session a guardian started (home tickets and home sessions
+    // only, checked against the guardian link in the database), and the videos it shows.
+    parentV1.post("/parent/results", sessions.postResults(true));
+    parentV1.post("/parent/video-views", sessions.postVideoView(true));
+    // Videos: for guardians only (anyone else uses the staff route, behind two-step sign-in). What they may read is
+    // then decided by the video rules in the database, as on the staff route.
+    parentV1.get("/parent/videos/:id/file", async (c) => {
+      const guardian = await withUser(deps.pool, c.get("user").id, c.get("requestId"), (db) => db.query<{ ok: boolean }>(`SELECT app.is_guardian_user() AS ok`));
+      return guardian.rows[0]?.ok ? videos.getFile(c) : c.json({ error: "not_found" }, 404);
+    });
     app.route("/v1", parentV1);
 
     // Public consent endpoints — outside /v1 (no auth required).

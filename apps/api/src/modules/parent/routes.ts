@@ -364,14 +364,14 @@ export function parentRoutes(servicePool: pg.Pool, tickets?: TicketSigner) {
               video: {
                 id: v.id, version: v.version, source: v.source, youtube_id: v.youtube_id, duration_s: v.duration_s,
                 title: pick(v.titles, row.preferred_locale) ?? "",
-                file_url: v.source === "upload" && v.has_file ? `/v1/videos/${v.id}/file?v=${v.version}` : null,
+                file_url: v.source === "upload" && v.has_file ? `/v1/parent/videos/${v.id}/file?v=${v.version}` : null,
                 sha256: v.sha256 ? v.sha256.toString("hex") : null,
               },
               done: s.done,
             };
           }
           const params = buildParams(s, row, randomInt(1, 2 ** 31), regions);
-          const ticket = tickets.sign({ jti: crypto.randomUUID(), psid: sessionId, asid: s.id, pid: row.patient_id, gid: s.game_id, ph: paramsHash(params), sub: me }, HOME_TICKET_TTL_S);
+          const ticket = tickets.sign({ jti: crypto.randomUUID(), psid: sessionId, asid: s.id, pid: row.patient_id, gid: s.game_id, ph: paramsHash(params), sub: me, home: true }, HOME_TICKET_TTL_S);
           return { kind: "game", assignment_step_id: s.id, ordinal: s.ordinal, game_id: s.game_id, params, ticket, done: s.done };
         }),
         ...(sessionTones ? { tones: sessionTones } : {}),

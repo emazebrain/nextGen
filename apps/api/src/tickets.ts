@@ -27,6 +27,8 @@ export interface TicketClaims {
   exp: number;
   /** Set when launched online on a device set up for offline use: anyone who may use that device can send it. */
   dev?: string;
+  /** Set when a guardian started the session from the parent portal: `sub` is the guardian, and the result is stored as home play. */
+  home?: true;
 }
 
 /**

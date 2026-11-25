@@ -149,8 +149,8 @@ export function videoRoutes(pool: pg.Pool, files: FileStore) {
     return video ? c.json({ video }) : notFound(c);
   });
 
-  r.get("/videos/:id/file", async (c) => {
-    const id = c.req.param("id");
+  const getFile = async (c: Context<Env>) => {
+    const id = c.req.param("id") ?? "";
     if (!UUID.test(id)) return notFound(c);
     // ?v=<version> names exact bytes (a session mid-way keeps getting the file it started with); no v = the current file.
     const vParam = c.req.query("v");
@@ -192,7 +192,8 @@ export function videoRoutes(pool: pg.Pool, files: FileStore) {
       status: 206,
       headers: { ...headers, "content-length": String(range.end - range.start + 1), "content-range": `bytes ${range.start}-${range.end}/${size}` },
     });
-  });
+  };
+  r.get("/videos/:id/file", getFile);
 
   // ---- Platform admins
 
@@ -295,5 +296,5 @@ export function videoRoutes(pool: pg.Pool, files: FileStore) {
     return c.json({ video });
   });
 
-  return r;
+  return Object.assign(r, { getFile });
 }

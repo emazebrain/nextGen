@@ -51,9 +51,10 @@ export const patientKey = (id: string) => ["patient", id] as const;
 /** While the network is down, ask again every so often: the browser's "online" event can't be relied on. */
 export const ME_RETRY_OFFLINE_MS = 15_000;
 
-export function useMe() {
+export function useMe(enabled = true) {
   return useQuery({
     queryKey: meKey,
+    enabled,
     queryFn: ({ signal }) =>
       apiGet<Me>("/v1/me", { signal }).then(
         (me) => {

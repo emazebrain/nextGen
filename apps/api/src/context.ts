@@ -78,6 +78,21 @@ export function requireParentSession(auth: Auth): MiddlewareHandler<Env> {
 }
 
 /**
+ * The parent portal's account gate: a disabled account is refused there too. (A guardian never goes through the
+ * staff "replace your temporary password" step, so that part of the staff gate does not apply.)
+ */
+export function refuseDisabledUser(pool: pg.Pool): MiddlewareHandler<Env> {
+  return async (c, next) => {
+    const status = await withUser(pool, c.get("user").id, c.get("requestId"), async (db) => {
+      const { rows } = await db.query<{ status: string }>(`SELECT status FROM app.app_user WHERE id = app.current_user_id()`);
+      return rows[0]?.status;
+    });
+    if (status === "disabled") return c.json({ error: "account_disabled" }, 403);
+    await next();
+  };
+}
+
+/**
  * Account status gate (system admin spec: anti-goals). A disabled account is refused everywhere. An invited one,
  * still on its temporary password, reaches only /me (to see its status and to activate) until it is replaced.
  */
