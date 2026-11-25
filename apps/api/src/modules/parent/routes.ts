@@ -25,11 +25,13 @@ import { ITEMS_SQL, toItems } from "../protocols/routes.ts";
 const LANGS = new Set(["en", "he", "ar", "ru", "fr", "es", "zh"]);
 
 /**
- * The one home session a guardian may start for a protocol: the earliest open one. Sessions are done in order, so
- * a later one opens only after the one before it is finished. Clinic sessions are never started from the portal.
+ * The one session a guardian may start for a protocol: the earliest open one that can be done at home — a session
+ * planned for home, or any session of a protocol set to "both" (clinic or home). Sessions are done in order, so a
+ * later one opens only after the one before it is finished. Sessions of a clinic-only protocol are never started
+ * from the portal.
  */
 const NEXT_HOME_SQL = `(SELECT x.id FROM app.planned_session x
-                          WHERE x.assignment_id = a.id AND x.location = 'home' AND x.status IN ('planned', 'in_progress')
+                          WHERE x.assignment_id = a.id AND (x.location = 'home' OR a.setting = 'mixed') AND x.status IN ('planned', 'in_progress')
                           ORDER BY x.seq LIMIT 1)`;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -220,7 +222,8 @@ export function parentRoutes(servicePool: pg.Pool, tickets?: TicketSigner) {
                 ps.location, a.id AS assignment_id, a.name AS assignment_name, a.status AS assignment_status,
                 (SELECT count(*)::int FROM app.planned_session x WHERE x.assignment_id = a.id AND x.status <> 'cancelled') AS total,
                 (SELECT count(*)::int FROM app.planned_session x WHERE x.assignment_id = a.id AND x.status = 'done') AS completed,
-                (ps.location = 'home' AND ps.id = ${NEXT_HOME_SQL}) AS startable,
+                a.setting,
+                COALESCE(ps.id = ${NEXT_HOME_SQL}, false) AS startable,
                 ${ITEMS_SQL("assignment_step", "assignment_id", "a.id")}
            FROM app.planned_session ps
            JOIN app.protocol_assignment a ON a.id = ps.assignment_id
@@ -298,9 +301,9 @@ export function parentRoutes(servicePool: pg.Pool, tickets?: TicketSigner) {
 
       const { rows } = await db.query(
         `SELECT ps.id, ps.seq, ps.week, ps.status, ps.location, to_char(ps.planned_date, 'YYYY-MM-DD') AS planned_date,
-                a.id AS assignment_id, a.name AS assignment_name, a.status AS assignment_status,
+                a.id AS assignment_id, a.name AS assignment_name, a.status AS assignment_status, a.setting,
                 (SELECT count(*)::int FROM app.planned_session x WHERE x.assignment_id = a.id AND x.status <> 'cancelled') AS total,
-                (ps.id = ${NEXT_HOME_SQL}) AS is_next,
+                COALESCE(ps.id = ${NEXT_HOME_SQL}, false) AS is_next,
                 p.id AS patient_id, p.given_name, p.family_name, p.preferred_locale, p.alert, p.colour_vision_deficiency,
                 to_char(p.date_of_birth, 'YYYY-MM-DD') AS date_of_birth, p.tone_age_group, p.tones_enabled
            FROM app.planned_session ps
@@ -311,7 +314,7 @@ export function parentRoutes(servicePool: pg.Pool, tickets?: TicketSigner) {
       );
       const row = rows[0];
       if (!row) return { error: "not_found" as const };
-      if (row.location !== "home") return { error: "not_home_session" as const };
+      if (row.location !== "home" && row.setting !== "mixed") return { error: "not_home_session" as const };
       if (row.assignment_status !== "active") return { error: "protocol_not_active" as const };
       if (row.status !== "planned" && row.status !== "in_progress") return { error: "session_closed" as const };
       if (!row.is_next) return { error: "not_next_session" as const };

@@ -272,11 +272,12 @@ export function useAssign(patientId: string) {
 export function useUpdateAssignment(patientId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, status }: { id: string; status: "active" | "paused" | "cancelled" }) =>
-      apiSend<{ assignment: AssignmentView | null }>("PATCH", `/v1/assignments/${id}`, { status }).then((r) => r.assignment),
+    mutationFn: ({ id, ...change }: { id: string } & ({ status: "active" | "paused" | "cancelled" } | { setting: "clinic" | "home" | "mixed" })) =>
+      apiSend<{ assignment: AssignmentView | null }>("PATCH", `/v1/assignments/${id}`, change).then((r) => r.assignment),
     onSuccess: (a) => {
       qc.setQueryData(assignmentKey(patientId), a);
       void qc.invalidateQueries({ queryKey: ["today"] });
+      void qc.invalidateQueries({ queryKey: ["calendar"] });
     },
   });
 }

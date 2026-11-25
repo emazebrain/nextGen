@@ -890,6 +890,10 @@ async function handle(path: string, method: string, q: URLSearchParams, body: Re
   if (r0 === "assignments" && r1 && method === "PATCH") {
     const asg = db.assignments.find((x) => x.id === r1 && (x.status === "active" || x.status === "paused"));
     if (!asg) return notFound();
+    if (body.setting) {
+      asg.setting = body.setting as Assignment["setting"];
+      return done(json({ patient_id: asg.patient_id, assignment: assignmentView(running(db, asg.patient_id)) }));
+    }
     asg.status = body.status as Assignment["status"];
     if (asg.status === "cancelled") asg.sessions.forEach((s) => s.status === "planned" && (s.status = "cancelled"));
     return done(json({ patient_id: asg.patient_id, assignment: assignmentView(running(db, asg.patient_id)) }));

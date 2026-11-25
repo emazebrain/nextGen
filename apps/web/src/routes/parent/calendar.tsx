@@ -2,6 +2,7 @@
  * Parent calendar (§5.10): for each child, the appointments the clinic set and the home sessions to do, in date
  * order. Read-only: a guardian sees only their own children and cannot set or change anything here.
  */
+import { useState } from "react";
 import { useIntl } from "react-intl";
 import { Button, Card, EmptyState, MazeLoader, PageHeader } from "@emb/ui";
 import { CalendarDays, Play } from "lucide-react";
@@ -10,8 +11,14 @@ import { useTitle } from "../../lib/title.ts";
 import { useParentContext } from "./shell.tsx";
 import { Link } from "react-router";
 import { useChildAppointments, useChildSessions } from "../../api/parent.ts";
-import { SessionItems } from "../sessionItems.tsx";
+import type { StepItem } from "@emb/contracts";
+import { findGame, localText } from "../../games/registry.ts";
+import { usePrefs } from "../../i18n/index.tsx";
+import { collapseRepeats, joinSteps } from "../../lib/steps.ts";
 import { localToday, useStartHomeSession } from "./session.tsx";
+
+/** A protocol can run for months: the calendar opens on what is next, and the rest is one tap away. */
+const SHOWN = 6;
 
 export function ParentCalendarPage() {
   const t = useT();
@@ -44,6 +51,11 @@ function ChildCalendar({ childId, childName }: { childId: string; childName: str
   const sessions = useChildSessions(childId);
   const appointments = useChildAppointments(childId);
   const { start, starting, failed } = useStartHomeSession(childId);
+  const { locale } = usePrefs();
+  const [all, setAll] = useState(false);
+  /** "▶ Warm-up → Catch Me If You Can ×2": what the session includes, on one line. */
+  const stepLine = (items: StepItem[]) =>
+    joinSteps(collapseRepeats(items.map((i) => (i.kind === "video" ? `▶ ${i.title}` : findGame(i.game_id) ? localText(findGame(i.game_id)!.manifest.name, locale) : i.game_id))), locale);
 
   if (sessions.isPending || appointments.isPending) return <MazeLoader label={t("common.loading")} />;
 
@@ -87,7 +99,7 @@ function ChildCalendar({ childId, childName }: { childId: string; childName: str
       {appointments.isError && <p className="app-muted">{t("parent.apptsUnavailable")}</p>}
       {coming.length > 0 && (
         <ul className="plainlist parent-calendar">
-          {coming.map((e) =>
+          {(all ? coming : coming.slice(0, SHOWN)).map((e) =>
             e.kind === "appointment" ? (
               <li key={e.key} className="parent-calendar__item parent-calendar__item--appt">
                 <span className="parent-calendar__date emb-tnum">{formatDate(e.a.date)}</span>
@@ -113,9 +125,9 @@ function ChildCalendar({ childId, childName }: { childId: string; childName: str
                 <span className="parent-calendar__details">
                   <span><bdi>{e.s.assignment_name}</bdi></span>
                   <span className="app-muted">
-                    {t(e.s.location === "home" ? "parent.homeSession" : "parent.clinicSession")} · {t("parent.sessionMeta", { seq: e.s.seq, total: e.s.total ?? 0, week: e.s.week })}
+                    {t(e.s.setting === "mixed" ? "parent.eitherSession" : e.s.location === "home" ? "parent.homeSession" : "parent.clinicSession")} · {t("parent.sessionMeta", { seq: e.s.seq, total: e.s.total ?? 0, week: e.s.week })}
                   </span>
-                  <SessionItems items={e.s.items ?? []} label={t("parent.inSession")} />
+                  {(e.s.items ?? []).length > 0 && <span className="parent-calendar__steps">{stepLine(e.s.items ?? [])}</span>}
                   {failed === e.s.id && <span className="parent-session__error" role="alert">{t("parent.startFailed")}</span>}
                 </span>
                 <span className="parent-calendar__status">
@@ -131,6 +143,9 @@ function ChildCalendar({ childId, childName }: { childId: string; childName: str
             ),
           )}
         </ul>
+      )}
+      {coming.length > SHOWN && (
+        <Button variant="ghost" onClick={() => setAll(!all)}>{all ? t("parent.showFewer") : t("parent.showAll", { n: coming.length })}</Button>
       )}
       {recent.length > 0 && (
         <>

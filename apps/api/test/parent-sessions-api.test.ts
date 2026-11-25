@@ -97,4 +97,32 @@ describe.skipIf(!ADMIN_URL)("parent portal: session contents and starting in ord
     expect(mine.length).toBeGreaterThan(0);
     for (const e of mine) expect(e.items).toEqual([{ kind: "game", game_id: "catch-me-if-you-can" }, { kind: "game", game_id: "catch-me-if-you-can" }]);
   });
+
+  it("a clinic-only protocol cannot be started at home until the therapist sets it to home or both", async () => {
+    const start = new Date().toISOString().slice(0, 10);
+    const res = await yael.api(`/v1/patients/${eli}/assignment`, {
+      method: "POST",
+      body: { template_id: null, name: "Clinic work", description: null, weeks: 1, sessions_per_week: 2, setting: "clinic", start_date: start, steps: [step] },
+    });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    const a = res.body.assignment as { id: string; sessions: { id: string }[] };
+    const list = async () => (await other.api(`/v1/parent/children/${eli}/sessions`)).body.upcoming as { location: string; setting: string; startable: boolean }[];
+    expect((await list()).map((s) => s.startable)).toEqual([false, false]);
+    expect((await other.api(`/v1/parent/children/${eli}/sessions/${a.sessions[0]!.id}/launch`, { method: "POST" })).status).toBe(403);
+
+    // A guardian cannot change it; the therapist can.
+    expect((await other.api(`/v1/assignments/${a.id}`, { method: "PATCH", body: { setting: "home" } })).status).not.toBe(200);
+    expect((await yael.api(`/v1/assignments/${a.id}`, { method: "PATCH", body: { setting: "nowhere" } })).status).toBe(400);
+    const mixed = await yael.api(`/v1/assignments/${a.id}`, { method: "PATCH", body: { setting: "mixed" } });
+    expect(mixed.status).toBe(200);
+    expect(mixed.body.assignment.setting).toBe("mixed");
+    // "Both": the sessions stay on the clinic's list, and the next one can also be started at home.
+    expect((await list()).map((s) => [s.location, s.startable])).toEqual([["clinic", true], ["clinic", false]]);
+    expect((await other.api(`/v1/parent/children/${eli}/sessions/${a.sessions[1]!.id}/launch`, { method: "POST" })).body.error).toBe("not_next_session");
+    expect((await other.api(`/v1/parent/children/${eli}/sessions/${a.sessions[0]!.id}/launch`, { method: "POST" })).status).toBe(200);
+
+    // "At home": the open sessions move home.
+    expect((await yael.api(`/v1/assignments/${a.id}`, { method: "PATCH", body: { setting: "home" } })).status).toBe(200);
+    expect((await list()).map((s) => [s.location, s.startable])).toEqual([["home", true], ["home", false]]);
+  });
 });

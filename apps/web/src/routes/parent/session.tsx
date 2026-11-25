@@ -7,7 +7,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useIntl } from "react-intl";
 import { Button, Chip } from "@emb/ui";
-import { Play } from "lucide-react";
+import { ChevronLeft, ChevronRight, Play } from "lucide-react";
 import { useT } from "../../i18n/index.tsx";
 import { useLaunchHomeSession, type HomePlannedSession } from "../../api/parent.ts";
 import { SessionItems } from "../sessionItems.tsx";
@@ -40,7 +40,8 @@ export function ParentSessionCard({ childId, session: s, showItems = true }: { c
   const intl = useIntl();
   const { start, starting, failed } = useStartHomeSession(childId);
   const today = localToday();
-  const atClinic = s.location !== "home";
+  const either = s.setting === "mixed";
+  const atClinic = s.location !== "home" && !either;
   const date = intl.formatDate(new Date(s.planned_date + "T00:00:00"), { weekday: "short", day: "numeric", month: "short" });
 
   return (
@@ -49,7 +50,7 @@ export function ParentSessionCard({ childId, session: s, showItems = true }: { c
         <div className="parent-session__info">
           <span className="parent-session__name"><bdi>{s.assignment_name}</bdi></span>
           <span className="parent-session__meta app-muted">
-            {t(atClinic ? "parent.clinicSession" : "parent.homeSession")} · {t("parent.sessionMeta", { seq: s.seq, total: s.total ?? 0, week: s.week })}
+            {t(either ? "parent.eitherSession" : atClinic ? "parent.clinicSession" : "parent.homeSession")} · {t("parent.sessionMeta", { seq: s.seq, total: s.total ?? 0, week: s.week })}
           </span>
           <span className="parent-session__meta">
             <span className="emb-tnum">{t("parent.plannedFor", { date })}</span>
@@ -65,7 +66,36 @@ export function ParentSessionCard({ childId, session: s, showItems = true }: { c
       </div>
       {failed === s.id && <p className="parent-session__error" role="alert">{t("parent.startFailed")}</p>}
       {showItems && <SessionItems items={s.items ?? []} label={t("parent.inSession")} />}
-      {!s.startable && <p className="parent-session__note app-muted">{t(atClinic ? "parent.clinicSessionHint" : "parent.opensAfter")}</p>}
+      {!s.startable && <p className="parent-session__note app-muted">{t(atClinic ? "parent.clinicOnlyHint" : "parent.opensAfter")}</p>}
+    </div>
+  );
+}
+
+/**
+ * One session at a time, with arrows to look ahead: a protocol can have dozens of sessions, and only one matters
+ * today. Opens on the session that can be started (or the first coming one when none can).
+ */
+export function ParentSessionPager({ childId, sessions }: { childId: string; sessions: HomePlannedSession[] }) {
+  const t = useT();
+  const home = Math.max(0, sessions.findIndex((s) => s.startable));
+  const [picked, setPicked] = useState<string | null>(null);
+  const found = picked ? sessions.findIndex((s) => s.id === picked) : -1;
+  const i = found >= 0 ? found : home;
+  const s = sessions[i];
+  if (!s) return null;
+  return (
+    <div className="session-pager">
+      <ParentSessionCard childId={childId} session={s} />
+      {sessions.length > 1 && (
+        <div className="session-pager__nav">
+          <Button variant="secondary" icon={<ChevronLeft size={18} aria-hidden="true" className="session-pager__arrow" />} aria-label={t("parent.prevSession")} disabled={i === 0} onClick={() => setPicked(sessions[i - 1]!.id)} />
+          <span className="session-pager__count emb-tnum" aria-live="polite">{t("parent.sessionOf", { n: i + 1, total: sessions.length })}</span>
+          <Button variant="secondary" icon={<ChevronRight size={18} aria-hidden="true" className="session-pager__arrow" />} aria-label={t("parent.nextSession")} disabled={i === sessions.length - 1} onClick={() => setPicked(sessions[i + 1]!.id)} />
+          {i !== home && (
+            <Button variant="ghost" onClick={() => setPicked(null)}>{t("parent.backToNext")}</Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

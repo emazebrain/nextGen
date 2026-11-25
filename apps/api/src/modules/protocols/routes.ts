@@ -408,12 +408,29 @@ export function protocolRoutes(pool: pg.Pool) {
     return c.json({ assignment: result }, 201);
   });
 
-  // Pause, resume or stop a running protocol. Stopping cancels the sessions that haven't happened.
+  // Pause, resume or stop a running protocol, or change where its remaining sessions happen.
+  // Stopping cancels the sessions that haven't happened.
   r.patch("/assignments/:id", async (c) => {
     const id = c.req.param("id");
     if (!UUID.test(id)) return notFound(c);
-    const body = (await c.req.json().catch(() => null)) as { status?: string } | null;
+    const body = (await c.req.json().catch(() => null)) as { status?: string; setting?: string } | null;
     const status = body?.status;
+    const setting = body?.setting;
+    if (setting !== undefined) {
+      if (setting !== "clinic" && setting !== "home" && setting !== "mixed") return c.json({ error: "invalid", issues: [{ path: "setting", code: "invalid_value" }] }, 400);
+      const moved = await run(c, async (db) => {
+        const res = await db.query<{ patient_id: string }>(
+          `UPDATE app.protocol_assignment SET setting = $2 WHERE id = $1 AND status IN ('active', 'paused') RETURNING patient_id`,
+          [id, setting],
+        );
+        const row = res.rows[0];
+        if (!row) return null;
+        // Sessions still open move with the protocol; finished ones keep where they happened.
+        await db.query(`UPDATE app.planned_session SET location = $2 WHERE assignment_id = $1 AND status IN ('planned', 'in_progress')`, [id, setting === "home" ? "home" : "clinic"]);
+        return { patient_id: row.patient_id, assignment: await loadAssignment(db, row.patient_id) };
+      });
+      return moved ? c.json(moved) : notFound(c);
+    }
     if (status !== "active" && status !== "paused" && status !== "cancelled") return c.json({ error: "invalid", issues: [{ path: "status", code: "invalid_value" }] }, 400);
     const result = await run(c, async (db) => {
       const res = await db.query<{ patient_id: string }>(

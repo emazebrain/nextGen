@@ -11,7 +11,7 @@ import { useT } from "../../i18n/index.tsx";
 import { useTitle } from "../../lib/title.ts";
 import { useParentContext } from "./shell.tsx";
 import { useChildAppointments, useChildSessions } from "../../api/parent.ts";
-import { ParentSessionCard } from "./session.tsx";
+import { ParentSessionPager } from "./session.tsx";
 
 export function ParentChildPage() {
   const t = useT();
@@ -58,13 +58,7 @@ export function ParentChildPage() {
         {sessions.isPending && <MazeLoader label={t("common.loading")} />}
         {sessions.isError && <p className="app-muted" role="alert">{t("parent.sessionsFailed")}</p>}
         {sessions.isSuccess && upcoming.length === 0 && <p className="app-muted">{t("parent.noSessions")}</p>}
-        {upcoming.length > 0 && (
-          <ul className="plainlist parent-sessions">
-            {upcoming.map((s) => (
-              <li key={s.id}><ParentSessionCard childId={id} session={s} /></li>
-            ))}
-          </ul>
-        )}
+        {upcoming.length > 0 && <ParentSessionPager childId={id} sessions={upcoming} />}
       </Card>
 
       {appts.length > 0 && (

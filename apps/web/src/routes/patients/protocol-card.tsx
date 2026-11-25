@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { useIntl } from "react-intl";
 import { Pause, Play, Square } from "lucide-react";
-import { Button, Card, Chip, ConfirmDialog, MazeLoader } from "@emb/ui";
+import { Button, Card, Chip, ConfirmDialog, MazeLoader, SelectField } from "@emb/ui";
 import { useAssignment, useUpdateAssignment, useVideo } from "../../api/queries.ts";
 import { isVideoStep } from "@emb/contracts";
 import { formatDuration } from "../admin/videos.tsx";
@@ -65,6 +65,16 @@ export function ProtocolCard({ patientId, archived, canPlay }: { patientId: stri
           </li>
         ))}
       </ol>
+      {!archived && (
+        <div className="protocol-where">
+          <SelectField label={t("protocol.where")} value={a.setting} disabled={update.isPending} onChange={(e) => update.mutate({ id: a.id, setting: e.target.value as "clinic" | "home" | "mixed" })}>
+            {(["clinic", "home", "mixed"] as const).map((s) => (
+              <option key={s} value={s}>{t("builder.settingValue", { s })}</option>
+            ))}
+          </SelectField>
+          <p className="app-muted protocol-where__hint">{t("protocol.whereHint")}</p>
+        </div>
+      )}
       {!archived && (
         <div className="pform__actions">
           {a.status === "active" && next && canPlay && (

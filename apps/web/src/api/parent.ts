@@ -122,7 +122,9 @@ export interface HomePlannedSession {
   planned_time?: string | null;
   /** The game-based activities and videos in the session, in order (coming sessions only). */
   items?: StepItem[];
-  /** True for the one home session that can be started now: the next in line for its protocol. */
+  /** Where the protocol's sessions happen; "mixed" sessions can be done at the clinic or started at home. */
+  setting?: "clinic" | "home" | "mixed";
+  /** True for the one session that can be started from the portal now: the next in line for its protocol. */
   startable?: boolean;
 }
 

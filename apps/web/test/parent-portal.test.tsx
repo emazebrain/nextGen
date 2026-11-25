@@ -41,7 +41,7 @@ function mockApi(over: { sessions?: unknown[]; unread?: number } = {}) {
       return ok({
         upcoming: [
           { ...base, id: "ps1", seq: 4, week: 2, planned_date: ymd(2), location: "home", startable: true },
-          { ...base, id: "ps2", seq: 5, week: 3, planned_date: ymd(4), location: "clinic", startable: false },
+          { ...base, id: "ps2", seq: 5, week: 3, planned_date: ymd(4), location: "clinic", setting: "clinic", startable: false },
           { ...base, id: "ps3", seq: 6, week: 3, planned_date: ymd(6), location: "home", startable: false },
         ],
         recent: [],
@@ -141,17 +141,23 @@ describe("parent portal", () => {
     const user = userEvent.setup();
     await user.click(await screen.findByRole("link", { name: "Ella Navon" }));
     expect(await screen.findByRole("heading", { level: 1, name: "Ella Navon" })).toBeInTheDocument();
-    const sessions = (await screen.findAllByText("Visual attention starter")).map((el) => el.closest("li")!);
-    expect(sessions).toHaveLength(3);
-    for (const li of sessions) {
-      expect(within(li).getByText("Warm-up stretches")).toBeInTheDocument();
-      expect(within(li).getByText("Catch Me If You Can")).toBeInTheDocument();
-    }
-    // Only the next home session in line can be started; the clinic one and the later one say why not.
-    expect(screen.getAllByRole("button", { name: "Start" })).toHaveLength(1);
-    expect(within(sessions[0]!).getByRole("button", { name: "Start" })).toBeInTheDocument();
-    expect(within(sessions[1]!).getByText("Done with the therapist at the clinic")).toBeInTheDocument();
-    expect(within(sessions[2]!).getByText("Opens when the session before it is done")).toBeInTheDocument();
+    // One session at a time, opening on the one to start: its contents and the only Start button.
+    expect(await screen.findByText("Warm-up stretches")).toBeInTheDocument();
+    expect(screen.getByText("Catch Me If You Can")).toBeInTheDocument();
+    expect(screen.getAllByText("Visual attention starter")).toHaveLength(1);
+    expect(screen.getByText("1 of 3")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Previous session" })).toBeDisabled();
+    // The arrows look ahead: the clinic session and the later one have no Start, and say why.
+    await user.click(screen.getByRole("button", { name: "Next session" }));
+    expect(screen.getByText("2 of 3")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Start" })).toBeNull();
+    expect(screen.getByText(/set for the clinic/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Next session" }));
+    expect(screen.getByText("Opens when the session before it is done")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next session" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Back to the one to start" }));
+    expect(screen.getByRole("button", { name: "Start" })).toBeInTheDocument();
   });
 
   it("starts the next home session from the kids page even before its planned day", async () => {
@@ -166,7 +172,7 @@ describe("parent portal", () => {
   it("shows what is in a session on the calendar, with Start for the one that is next", async () => {
     mockApi();
     show("/parent/calendar");
-    expect((await screen.findAllByText("Warm-up stretches")).length).toBe(3);
+    expect((await screen.findAllByText(/Warm-up stretches → Catch Me If You Can/)).length).toBe(3);
     expect(screen.getAllByRole("button", { name: "Start" })).toHaveLength(1);
   });
 });
