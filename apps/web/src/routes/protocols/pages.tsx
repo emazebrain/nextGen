@@ -241,6 +241,7 @@ function PlanFields({ plan, onChange, visibility }: { plan: Plan; onChange: (p: 
         onChange={(v) => onChange({ ...plan, setting: v })}
         options={(["clinic", "home", "mixed"] as const).map((s) => ({ value: s, label: t("builder.settingValue", { s }) }))}
       />
+      <p className="app-muted protocol-where__hint">{t("builder.settingHint")}</p>
       {visibility && (
         <Segmented
           legend={t("builder.visibility")}

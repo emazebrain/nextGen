@@ -2,11 +2,11 @@
 import { Link } from "react-router";
 import { useIntl } from "react-intl";
 import { Card, EmptyState, MazeLoader, PageHeader } from "@emb/ui";
-import { ChevronRight, Users } from "lucide-react";
+import { CalendarDays, ChevronRight, Users } from "lucide-react";
 import { useT } from "../../i18n/index.tsx";
 import { useTitle } from "../../lib/title.ts";
 import { useParentContext } from "./shell.tsx";
-import { useChildSessions } from "../../api/parent.ts";
+import { useChildAppointments, useChildSessions } from "../../api/parent.ts";
 import { ParentSessionCard } from "./session.tsx";
 
 export function ParentHomePage() {
@@ -39,12 +39,18 @@ function ChildCard({ childId, name, givenName, clinicName }: { childId: string; 
   const t = useT();
   const intl = useIntl();
   const sessions = useChildSessions(childId);
+  const appointments = useChildAppointments(childId);
 
   const upcoming = sessions.data?.upcoming ?? [];
   // What can be started now: the next home session in line for each protocol, whatever day it was planned for.
   const ready = upcoming.filter((s) => s.startable);
   const next = upcoming[0];
-  const date = (s: string) => intl.formatDate(new Date(s + "T00:00:00"), { day: "numeric", month: "short" });
+  const date = (s: string) => intl.formatDate(new Date(s + "T00:00:00"), { weekday: "short", day: "numeric", month: "short" });
+  const appt = appointments.data?.[0];
+  const clock = (hhmm: string) => {
+    const [h, m] = hhmm.split(":").map(Number) as [number, number];
+    return intl.formatTime(new Date(2000, 0, 1, h, m), { hour: "numeric", minute: "2-digit" });
+  };
 
   return (
     <Card as="section">
@@ -67,8 +73,10 @@ function ChildCard({ childId, name, givenName, clinicName }: { childId: string; 
           </ul>
         )}
 
-        {ready.length === 0 && next && <p className="app-muted">{t("parent.nextSessionOn", { date: date(next.planned_date) })}</p>}
-        {ready.length === 0 && !next && sessions.isSuccess && <p className="app-muted">{t("parent.noSessionHint")}</p>}
+        {/* Nothing to start right now: the next session is still shown, with the reason it has no Start. */}
+        {ready.length === 0 && next && <ParentSessionCard childId={childId} session={next} />}
+        {ready.length === 0 && !next && sessions.isSuccess && <p className="app-muted">{t("parent.noProgram")}</p>}
+        {appt && <p className="parent-kid__appt"><CalendarDays size={16} aria-hidden="true" /> {t("parent.nextAppointment", { date: date(appt.date), time: clock(appt.start_time) })}</p>}
 
         <Link to={`/parent/children/${childId}`} className="parent-kid__all">
           {t("parent.seeAll", { name: givenName })}

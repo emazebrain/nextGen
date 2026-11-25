@@ -57,13 +57,14 @@ export function ParentChildPage() {
         <h2 className="app-cardtitle">{t("parent.sessionsTitle")}</h2>
         {sessions.isPending && <MazeLoader label={t("common.loading")} />}
         {sessions.isError && <p className="app-muted" role="alert">{t("parent.sessionsFailed")}</p>}
-        {sessions.isSuccess && upcoming.length === 0 && <p className="app-muted">{t("parent.noSessions")}</p>}
+        {sessions.isSuccess && upcoming.length === 0 && <p className="app-muted">{t("parent.noProgram")}</p>}
         {upcoming.length > 0 && <ParentSessionPager childId={id} sessions={upcoming} />}
       </Card>
 
       {appts.length > 0 && (
         <Card as="section">
           <h2 className="app-cardtitle">{t("parent.appointmentsTitle")}</h2>
+          <p className="app-muted">{t("parent.apptNotPractice")}</p>
           <ul className="plainlist parent-calendar">
             {appts.map((a) => (
               <li key={a.id} className="parent-calendar__item parent-calendar__item--appt">
