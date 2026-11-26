@@ -127,3 +127,32 @@ export function locationBias(direction: RegionDirection, location: RegionCompass
   const dot = d.x * c.x + d.y * c.y;
   return dot > 0 ? 1 : dot < 0 ? -1 : 0;
 }
+
+export const REVERSE: Record<RegionDirection, RegionDirection> = { ltr: "rtl", rtl: "ltr", ttb: "btt", btt: "ttb", tldbr: "brdtl", brdtl: "tldbr", trdbl: "bldtr", bldtr: "trdbl" };
+
+export interface MotionPair {
+  movement_types: number[];
+  directions: RegionDirection[];
+}
+
+/**
+ * The directions a round may start in for a given movement type, so the pairing always obeys the eye-movement rule
+ * (product owner, 2026-11-26): a continuous leg heads toward the hemisphere being worked, a leg in intervals away
+ * from it. The brain region's table already pairs them that way, so:
+ *   1. the directions the table lists with this very type;
+ *   2. else the directions it lists with a type that starts the same way (gliding or jumping);
+ *   3. else its other directions, reversed (the same line, travelled the other way);
+ *   4. with no region: left–right, toward the hemisphere when the round starts gliding and away when it starts jumping.
+ */
+export function directionsForType(type: number, motion: readonly MotionPair[] | undefined, hemisphere: "left" | "right"): RegionDirection[] {
+  const pairs = (motion ?? []).filter((m) => m.directions.length > 0);
+  const starts = (t: number) => legsFor(t)[0]!.kind;
+  const exact = pairs.filter((m) => m.movement_types.includes(type)).flatMap((m) => m.directions);
+  if (exact.length) return exact;
+  const alike = pairs.filter((m) => m.movement_types.some((t) => starts(t) === starts(type))).flatMap((m) => m.directions);
+  if (alike.length) return alike;
+  const others = pairs.flatMap((m) => m.directions).map((d) => REVERSE[d]);
+  if (others.length) return others;
+  const toward: RegionDirection = hemisphere === "right" ? "ltr" : "rtl";
+  return [starts(type) === "glide" ? toward : REVERSE[toward]];
+}

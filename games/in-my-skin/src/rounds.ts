@@ -2,7 +2,7 @@
 import type { RegionCompass, RegionDirection, RegionParam } from "@emb/game-sdk";
 import { glideSpeed, levelSettings } from "./config.ts";
 import type { RoundPlan } from "./engine.ts";
-import { DIRECTION_LIST, legsFor, locationBias, pathFor, pointAt, type Field, type Path, type Point } from "./motion.ts";
+import { DIRECTION_LIST, directionsForType, legsFor, locationBias, pathFor, pointAt, type Field, type Path, type Point } from "./motion.ts";
 import type { Picture } from "./pictures.ts";
 
 export interface RoundContext {
@@ -13,6 +13,8 @@ export interface RoundContext {
   /** The brain-region row's motion pairs; absent when the step has no region filter. */
   motion?: RegionParam["motion"] | undefined;
   targetLocations?: RegionCompass[] | undefined;
+  /** The hemisphere the step runs as; decides the direction when there is no brain region (default right). */
+  hemisphere?: "left" | "right";
   /** The therapist's fixed movement type (0–5), or null to follow the region. */
   movementType?: number | null;
   speedScale?: number;
@@ -37,11 +39,15 @@ const validType = (n: unknown): n is number => typeof n === "number" && Number.i
 
 export function planRound(ctx: RoundContext): RoundSpec {
   const { rng, field } = ctx;
+  // The movement type first, then a direction that goes with it: continuous toward the hemisphere, intervals away
+  // (see `directionsForType`). A fixed type (the therapist's choice, or the practice round) never borrows a
+  // direction the table lists for another kind of movement.
   const pairs = (ctx.motion ?? []).filter((m) => m.directions.length > 0);
   const pair = pairs.length ? pick(pairs, rng) : null;
-  const direction = pair ? pick(pair.directions, rng) : pick(["ltr", "rtl"] as RegionDirection[], rng);
   const types = (pair?.movement_types ?? []).filter(validType);
-  const movementType = validType(ctx.movementType) ? ctx.movementType : types.length ? pick(types, rng) : 0;
+  const fixed = validType(ctx.movementType);
+  const movementType = fixed ? (ctx.movementType as number) : types.length ? pick(types, rng) : 0;
+  const direction = pair && !fixed ? pick(pair.directions, rng) : pick(directionsForType(movementType, pairs, ctx.hemisphere ?? "right"), rng);
 
   const settings = levelSettings(ctx.level);
   const size = settings.size * Math.min(field.w, field.h);

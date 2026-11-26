@@ -288,8 +288,10 @@ class ItsLeftItsRight implements GameModule {
 
     // Fly-in animation
     const region = this.ctx.params.region;
-    const dirs = region?.motion?.[0]?.directions ?? ["ltr"];
-    const dir = dirs[0] ?? "ltr";
+    // The fly-in is a continuous movement, so it heads toward the hemisphere being worked: the direction the
+    // region lists for continuous movement, else left→right for the right hemisphere and right→left for the left.
+    const glide = region?.motion?.find((m) => m.movement_types.includes(0)) ?? region?.motion?.[0];
+    const dir = glide?.directions[0] ?? (this.ctx.params.hemisphere === "left" ? "rtl" : "ltr");
     const from = flyInOrigin(dir, w, h, centre);
     this.flyFrom = from;
     this.flyTo = centre;
@@ -608,6 +610,11 @@ function flyInOrigin(
     case "rtl": return { x: w + 100, y: centre.y };
     case "ttb": return { x: centre.x, y: -100 };
     case "btt": return { x: centre.x, y: h + 100 };
+    // Diagonals start in the corner they are named after (TLDBR: top-left, heading to bottom-right).
+    case "tldbr": return { x: -100, y: -100 };
+    case "trdbl": return { x: w + 100, y: -100 };
+    case "bldtr": return { x: -100, y: h + 100 };
+    case "brdtl": return { x: w + 100, y: h + 100 };
     default:    return { x: -100, y: centre.y }; // ltr
   }
 }

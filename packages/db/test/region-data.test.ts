@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { AREAS, AREA_SUBLOBE, LOBES, SUBCORTICAL, SUBLOBES } from "../src/brain-regions.ts";
 import { parseSettingsCsv, REGION_SETTINGS } from "../src/region-settings.ts";
-import { tableConsistencyErrors } from "../../contracts/src/regions.ts";
+import { motionRuleErrors, tableConsistencyErrors } from "../../contracts/src/regions.ts";
 
 const csvPath = fileURLToPath(new URL("../src/region-settings.csv", import.meta.url));
 
@@ -38,6 +38,31 @@ describe("region settings sheet", () => {
 
   it("the table keeps the cold/warm pattern", () => {
     expect(tableConsistencyErrors(REGION_SETTINGS.map((r) => ({ ...r, path: `${r.side}.${r.lobe}.${r.sublobe}` })))).toEqual([]);
+  });
+
+  it("follows the eye-movement rule: continuous movement heads toward the hemisphere, intervals away from it", () => {
+    const rows = REGION_SETTINGS.map((r) => ({ ...r, path: `${r.side}.${r.lobe}.${r.sublobe}` }));
+    expect(motionRuleErrors(rows)).toEqual([]);
+    // The owner's example: the left cerebellum runs as the right hemisphere — tracking goes top-left to bottom-right,
+    // and bottom-right to top-left appears only with intervals.
+    const cb = rows.find((r) => r.path === "left.subcortical.cerebellum")!;
+    expect(cb.bg_temperature).toBe("cold");
+    expect(cb.motion).toEqual([{ movement_types: [0, 3], directions: ["tldbr"] }, { movement_types: [1], directions: ["brdtl"] }]);
+    // No row pairs one movement type with both a direction and its reverse.
+    const reverse = { ltr: "rtl", rtl: "ltr", ttb: "btt", btt: "ttb", tldbr: "brdtl", brdtl: "tldbr", trdbl: "bldtr", bldtr: "trdbl" } as const;
+    for (const r of rows) {
+      const seen = new Set(r.motion.flatMap((m) => m.movement_types.flatMap((t) => m.directions.map((d) => `${t}:${d}`))));
+      for (const key of seen) {
+        const [t, d] = key.split(":") as [string, keyof typeof reverse];
+        expect(seen.has(`${t}:${reverse[d]}`), `${r.path} ${key}`).toBe(false);
+      }
+    }
+  });
+
+  it("the rule checker catches a row that breaks it", () => {
+    expect(motionRuleErrors([{ path: "x", bg_temperature: "cold", motion: [{ movement_types: [0], directions: ["brdtl"] }] }])).toHaveLength(1);
+    expect(motionRuleErrors([{ path: "x", bg_temperature: "warm", motion: [{ movement_types: [2], directions: ["rtl"] }] }])).toHaveLength(1); // continuous both ways
+    expect(motionRuleErrors([{ path: "x", bg_temperature: "warm", motion: [{ movement_types: [4], directions: ["ltr"] }, { movement_types: [0, 1], directions: ["btt"] }] }])).toEqual([]);
   });
 });
 

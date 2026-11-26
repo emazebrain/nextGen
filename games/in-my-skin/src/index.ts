@@ -212,6 +212,7 @@ class InMySkin implements GameModule {
       field: this.field(),
       rng: this.rng,
       motion: region?.motion,
+      hemisphere: this.ctx.params.hemisphere === "left" ? "left" : "right",
       targetLocations: region?.target_locations,
       movementType: this.practicing ? 0 : this.movementOverride,
       speedScale: this.ctx.params.speed_scale,

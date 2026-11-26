@@ -143,3 +143,39 @@ export function tableConsistencyErrors(rows: Array<{ path: string } & Pick<Regio
   }
   return out;
 }
+
+/** Where a direction heads on the left–right axis: +1 to the right, −1 to the left, 0 for straight up or down. */
+const HEADS: Record<Direction, -1 | 0 | 1> = { ltr: 1, rtl: -1, ttb: 0, btt: 0, tldbr: 1, bldtr: 1, trdbl: -1, brdtl: -1 };
+export const REVERSE_DIRECTION: Record<Direction, Direction> = { ltr: "rtl", rtl: "ltr", ttb: "btt", btt: "ttb", tldbr: "brdtl", brdtl: "tldbr", trdbl: "bldtr", bldtr: "trdbl" };
+
+/**
+ * The eye-movement rule behind the table (product owner, 2026-11-26). Following a moving target, the brain pulls
+ * the eyes toward its own side: continuous movement works the side the target moves toward. Jumping from target
+ * to target, the brain pushes the eyes away: movement in intervals works the side opposite the direction of travel.
+ * So for the hemisphere a row runs as, every continuous leg heads toward that side and every interval leg away from
+ * it; a two-word type goes out by its first word and comes back by its second. Straight up/down is not covered.
+ * It follows that no row pairs one movement type with a direction and with its reverse.
+ * Returns one message per (row, direction, movement type) that breaks the rule.
+ */
+export function motionRuleErrors(rows: Array<{ path: string } & Pick<RegionSettingView, "bg_temperature" | "motion">>): string[] {
+  const out: string[] = [];
+  for (const r of rows) {
+    const side = hemisphereForSetting(r) === "right" ? 1 : -1;
+    for (const m of r.motion) {
+      for (const d of m.directions) {
+        for (const n of m.movement_types) {
+          const name = movementTypeName(n);
+          if (!name) continue;
+          const [out1, back] = name.split("-") as [string, string | undefined];
+          const legs: Array<[string, number]> = [[out1, HEADS[d]], ...(back ? ([[back, -HEADS[d]]] as Array<[string, number]>) : [])];
+          for (const [kind, heads] of legs) {
+            if (heads === 0) continue;
+            const want = kind === "continuous" ? side : -side;
+            if (heads !== want) out.push(`${r.path}: ${d} with ${name} — the ${kind} leg heads ${heads > 0 ? "right" : "left"}, but a ${hemisphereForSetting(r)}-hemisphere row needs it to head ${want > 0 ? "right" : "left"}`);
+          }
+        }
+      }
+    }
+  }
+  return out;
+}

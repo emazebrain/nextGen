@@ -42,15 +42,39 @@ describe("planRound", () => {
     expect([...seen].sort()).toEqual(["1:ttb", "3:ttb", "5:brdtl", "5:rtl"]);
   });
 
-  it("glides left or right when the step has no brain region", () => {
+  it("with no brain region, continuous movement heads toward the hemisphere and intervals away from it", () => {
     const rng = seeded(5);
-    const seen = new Set<string>();
-    for (let i = 0; i < 50; i++) {
-      const s = planRound(base({ rng }));
-      seen.add(s.direction);
-      expect(s.movementType).toBe(0);
+    for (let i = 0; i < 30; i++) {
+      expect(planRound(base({ rng, hemisphere: "right" }))).toMatchObject({ direction: "ltr", movementType: 0 });
+      expect(planRound(base({ rng, hemisphere: "left" }))).toMatchObject({ direction: "rtl", movementType: 0 });
+      expect(planRound(base({ rng, hemisphere: "right", movementType: 1 })).direction).toBe("rtl");
+      expect(planRound(base({ rng, hemisphere: "left", movementType: 1 })).direction).toBe("ltr");
+      // Two-word types go out by the first word.
+      expect(planRound(base({ rng, hemisphere: "right", movementType: 3 })).direction).toBe("ltr");
+      expect(planRound(base({ rng, hemisphere: "right", movementType: 4 })).direction).toBe("rtl");
     }
-    expect([...seen].sort()).toEqual(["ltr", "rtl"]);
+  });
+
+  it("a fixed movement type only uses a direction the region pairs with it (left cerebellum)", () => {
+    // Runs as the right hemisphere: tracking top-left → bottom-right; the reverse only with intervals.
+    const motion = [{ movement_types: [0, 3], directions: ["tldbr" as const] }, { movement_types: [1], directions: ["brdtl" as const] }];
+    const rng = seeded(9);
+    const seen = new Set<string>();
+    for (let i = 0; i < 200; i++) {
+      for (const movementType of [0, 1, 2, 3, 4, 5, null]) {
+        const s = planRound(base({ rng, motion, hemisphere: "right", movementType }));
+        seen.add(`${s.movementType}:${s.direction}`);
+      }
+    }
+    expect([...seen].sort()).toEqual(["0:tldbr", "1:brdtl", "2:tldbr", "3:tldbr", "4:brdtl", "5:brdtl"]);
+  });
+
+  it("when the region lists only continuous movement, intervals travel the same line the other way", () => {
+    const motion = [{ movement_types: [0], directions: ["rtl" as const, "trdbl" as const] }]; // left parietal
+    const rng = seeded(2);
+    const seen = new Set<string>();
+    for (let i = 0; i < 100; i++) seen.add(planRound(base({ rng, motion, hemisphere: "left", movementType: 1 })).direction);
+    expect([...seen].sort()).toEqual(["bldtr", "ltr"]);
   });
 
   it("lets the therapist fix the movement type", () => {
