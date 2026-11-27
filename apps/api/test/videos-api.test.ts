@@ -1,4 +1,5 @@
 /** The video library through the API (ADR 0018): regions, adding and finding videos, uploads and byte ranges. */
+import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ADMIN_URL, addMember, platformAdmin, seedClinics, setupApi, staffClient, type Api, type TestEnv } from "./support.ts";
 
@@ -95,6 +96,38 @@ describe.skipIf(!ADMIN_URL)("videos API", () => {
 
     const bad = await yael.raw(`/v1/videos/${id}/file?v=2`, { headers: { range: "bytes=5000-6000" } });
     expect(bad.status).toBe(416);
+  });
+
+  it("takes a file in parts and puts them together, in order", async () => {
+    const made = await admin("/v1/admin/videos", { method: "POST", body: video({ source: "upload", youtube_url: undefined, titles: { en: "In parts" }, status: "draft" }) });
+    const id = made.body.video.id as string;
+    const upload = randomUUID();
+    const parts = [new Uint8Array(1000).fill(1), new Uint8Array(1000).fill(2), new Uint8Array(300).fill(3)];
+    const put = (who: typeof admin, i: number, body: Uint8Array, up = upload) => who.raw(`/v1/admin/videos/${id}/file/parts/${up}/${i}`, { method: "PUT", headers: { "content-type": "application/octet-stream" }, body });
+    const finish = (n: number, mime = "video/mp4", up = upload) => admin(`/v1/admin/videos/${id}/file/complete`, { method: "POST", body: { upload_id: up, parts: n, mime } });
+
+    // Out of order, and the middle part sent twice (a retry): the last copy counts.
+    expect((await put(admin, 2, parts[2]!)).status).toBe(200);
+    expect((await put(admin, 0, parts[0]!)).status).toBe(200);
+    // A part is missing: nothing is put together.
+    expect((await finish(3)).body).toMatchObject({ error: "missing_part", part: 1 });
+    expect((await put(admin, 1, new Uint8Array(1000).fill(9))).status).toBe(200);
+    expect((await put(admin, 1, parts[1]!)).status).toBe(200);
+    // Only a platform admin may send parts; the address must be well formed; the kind of file is checked at the end.
+    expect((await put(yael, 0, parts[0]!)).status).toBe(403);
+    expect((await put(admin, 0, parts[0]!, "not-an-id")).status).toBe(400);
+    expect((await finish(3, "application/pdf")).status).toBe(415);
+
+    const done = await finish(3);
+    expect(done.status, JSON.stringify(done.body)).toBe(200);
+    expect(done.body.video).toMatchObject({ id, version: 2 });
+    const file = await admin.raw(`/v1/videos/${id}/file?v=2`);
+    expect(file.status).toBe(200);
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    expect(bytes.length).toBe(2300);
+    expect([bytes[0], bytes[999], bytes[1000], bytes[1999], bytes[2000], bytes[2299]]).toEqual([1, 1, 2, 2, 3, 3]);
+    // The parts are gone once the file is in: asking again finds nothing to put together.
+    expect((await finish(3)).body.error).toBe("missing_part");
   });
 
   it("rejects a file that is not a video, or too large", async () => {

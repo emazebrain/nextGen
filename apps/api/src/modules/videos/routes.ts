@@ -87,6 +87,10 @@ export function parseRange(header: string | undefined, size: number): { start: n
   return { start, end };
 }
 
+/** One part of a video sent in parts: small enough to pass any proxy in seconds. */
+export const VIDEO_PART_MAX_BYTES = 8 * 1024 * 1024;
+const VIDEO_MAX_PARTS = 2048;
+
 export function videoRoutes(pool: pg.Pool, files: FileStore) {
   const r = new Hono<Env>();
   const run = <T>(c: Context<Env>, fn: (db: pg.PoolClient) => Promise<T>) => withUser(pool, c.get("user").id, c.get("requestId"), fn);
@@ -250,9 +254,9 @@ export function videoRoutes(pool: pg.Pool, files: FileStore) {
     return c.json({ video: result });
   });
 
-  r.put("/admin/videos/:id/file", async (c) => {
-    const id = c.req.param("id");
-    if (!UUID.test(id)) return notFound(c);
+  /** The upload may go ahead: the user is a platform admin and the video takes an uploaded file. */
+  const uploadTarget = async (c: Context<Env>, id: string) => {
+    if (!UUID.test(id)) return { fail: notFound(c) } as const;
     const check = await run(c, async (db) => {
       if (!(await isAdmin(db))) return "forbidden" as const;
       const { rows } = await db.query<{ source: string; version: number }>(`SELECT source, version FROM app.video WHERE id = $1`, [id]);
@@ -260,17 +264,38 @@ export function videoRoutes(pool: pg.Pool, files: FileStore) {
       if (rows[0].source !== "upload") return "not_upload" as const;
       return rows[0];
     });
-    if (check === "forbidden") return c.json({ error: "forbidden" }, 403);
-    if (check === "not_found") return notFound(c);
-    if (check === "not_upload") return c.json({ error: "not_an_upload" }, 409);
+    if (check === "forbidden") return { fail: c.json({ error: "forbidden" }, 403) } as const;
+    if (check === "not_found") return { fail: notFound(c) } as const;
+    if (check === "not_upload") return { fail: c.json({ error: "not_an_upload" }, 409) } as const;
+    return { version: check.version } as const;
+  };
+  const fileKey = (id: string, version: number, mime: string) => `videos/${id}/${version}-${randomUUID().slice(0, 8)}.${mime === "video/webm" ? "webm" : "mp4"}`;
+
+  /** Records a stored file as the video's next version; the previous one stays reachable at its own ?v= (a session may be playing it). */
+  const saveVersion = (c: Context<Env>, id: string, key: string, stored: { bytes: number; sha256: Buffer }, mime: string) =>
+    run(c, async (db) => {
+      const next = await db.query<{ version: number }>(`UPDATE app.video SET version = version + 1 WHERE id = $1 RETURNING version`, [id]);
+      const f = await db.query<{ id: string }>(
+        `INSERT INTO app.file_object (storage_key, sha256, bytes, mime, created_by, video_id, video_version) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+        [key, stored.sha256, stored.bytes, mime, c.get("user").id, id, next.rows[0]!.version],
+      );
+      await db.query(`UPDATE app.video SET file_id = $2 WHERE id = $1`, [id, f.rows[0]!.id]);
+      return loadVideo(db, id, langOf(c));
+    });
+
+  // The whole file in one request. Fine on a direct connection; behind a proxy that limits how long or how large one
+  // request may be, the app sends the file in parts instead (below).
+  r.put("/admin/videos/:id/file", async (c) => {
+    const id = c.req.param("id");
+    const target = await uploadTarget(c, id);
+    if ("fail" in target) return target.fail;
     const mime = (c.req.header("content-type") ?? "").split(";")[0]!.trim().toLowerCase();
     if (!(VIDEO_MIME as readonly string[]).includes(mime)) return c.json({ error: "unsupported_type" }, 415);
     const declared = Number(c.req.header("content-length") ?? "0");
     if (declared > VIDEO_MAX_BYTES) return c.json({ error: "file_too_large" }, 413);
     const body = c.req.raw.body;
     if (!body) return c.json({ error: "empty_file" }, 400);
-    const version = check.version + 1;
-    const key = `videos/${id}/${version}-${randomUUID().slice(0, 8)}.${mime === "video/webm" ? "webm" : "mp4"}`;
+    const key = fileKey(id, target.version + 1, mime);
     let stored: { bytes: number; sha256: Buffer };
     try {
       stored = await files.put(key, body, VIDEO_MAX_BYTES);
@@ -282,18 +307,89 @@ export function videoRoutes(pool: pg.Pool, files: FileStore) {
       await files.remove(key);
       return c.json({ error: "empty_file" }, 400);
     }
-    const me = c.get("user").id;
-    const video = await run(c, async (db) => {
-      // The new file is the next version; the previous one stays reachable at its own ?v= (a session may be playing it).
-      const next = await db.query<{ version: number }>(`UPDATE app.video SET version = version + 1 WHERE id = $1 RETURNING version`, [id]);
-      const f = await db.query<{ id: string }>(
-        `INSERT INTO app.file_object (storage_key, sha256, bytes, mime, created_by, video_id, video_version) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-        [key, stored.sha256, stored.bytes, mime, me, id, next.rows[0]!.version],
-      );
-      await db.query(`UPDATE app.video SET file_id = $2 WHERE id = $1`, [id, f.rows[0]!.id]);
-      return loadVideo(db, id, langOf(c));
+    return c.json({ video: await saveVersion(c, id, key, stored, mime) });
+  });
+
+  // ---- Upload in parts.
+  // The hosted app reaches this API through a proxy that drops a single long upload (a 70 MB video over five minutes
+  // came back 502 after the last byte). So the app cuts the file into parts of a few megabytes, sends each as its own
+  // short request (and can send one again if it fails), then asks for them to be put together.
+  const partKey = (id: string, upload: string, index: number) => `uploads/videos/${id}/${upload}/${String(index).padStart(5, "0")}`;
+
+  r.put("/admin/videos/:id/file/parts/:upload/:index", async (c) => {
+    const id = c.req.param("id");
+    const upload = c.req.param("upload");
+    const index = Number(c.req.param("index"));
+    const target = await uploadTarget(c, id);
+    if ("fail" in target) return target.fail;
+    if (!UUID.test(upload) || !Number.isInteger(index) || index < 0 || index >= VIDEO_MAX_PARTS) return c.json({ error: "invalid_part" }, 400);
+    const body = c.req.raw.body;
+    if (!body) return c.json({ error: "empty_file" }, 400);
+    try {
+      const stored = await files.put(partKey(id, upload, index), body, VIDEO_PART_MAX_BYTES); // sending a part again replaces it
+      return c.json({ ok: true, bytes: stored.bytes });
+    } catch (err) {
+      if (err instanceof FileTooLarge) return c.json({ error: "part_too_large" }, 413);
+      throw err;
+    }
+  });
+
+  r.post("/admin/videos/:id/file/complete", async (c) => {
+    const id = c.req.param("id");
+    const target = await uploadTarget(c, id);
+    if ("fail" in target) return target.fail;
+    const body = (await c.req.json().catch(() => null)) as { upload_id?: unknown; parts?: unknown; mime?: unknown } | null;
+    const upload = typeof body?.upload_id === "string" ? body.upload_id : "";
+    const parts = typeof body?.parts === "number" ? body.parts : 0;
+    const mime = typeof body?.mime === "string" ? body.mime.split(";")[0]!.trim().toLowerCase() : "";
+    if (!UUID.test(upload) || !Number.isInteger(parts) || parts < 1 || parts > VIDEO_MAX_PARTS) return c.json({ error: "invalid_part" }, 400);
+    if (!(VIDEO_MIME as readonly string[]).includes(mime)) return c.json({ error: "unsupported_type" }, 415);
+
+    const cleanUp = async () => {
+      for (let i = 0; i < parts; i++) await files.remove(partKey(id, upload, i)).catch(() => undefined);
+    };
+    // Every part must be there before anything is put together.
+    for (let i = 0; i < parts; i++) {
+      const part = await files.open(partKey(id, upload, i));
+      if (!part) return c.json({ error: "missing_part", part: i }, 409);
+      await part.stream.cancel();
+    }
+    // One stream that reads the parts in order.
+    let at = 0;
+    let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+    const whole = new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        for (;;) {
+          if (!reader) {
+            if (at >= parts) return controller.close();
+            const part = await files.open(partKey(id, upload, at++));
+            if (!part) return controller.error(new Error("missing_part"));
+            reader = part.stream.getReader();
+          }
+          const { done, value } = await reader.read();
+          if (done) {
+            reader = null;
+            continue;
+          }
+          return controller.enqueue(value);
+        }
+      },
     });
-    return c.json({ video });
+    const key = fileKey(id, target.version + 1, mime);
+    let stored: { bytes: number; sha256: Buffer };
+    try {
+      stored = await files.put(key, whole, VIDEO_MAX_BYTES);
+    } catch (err) {
+      await cleanUp();
+      if (err instanceof FileTooLarge) return c.json({ error: "file_too_large" }, 413);
+      throw err;
+    }
+    await cleanUp();
+    if (stored.bytes === 0) {
+      await files.remove(key);
+      return c.json({ error: "empty_file" }, 400);
+    }
+    return c.json({ video: await saveVersion(c, id, key, stored, mime) });
   });
 
   return Object.assign(r, { getFile });
