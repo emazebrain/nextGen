@@ -139,6 +139,8 @@ export interface LaunchPackage {
   steps: LaunchStep[];
   /** Session-level tone params (when patient has tones enabled). Plays throughout the entire session. */
   tones?: StepToneParams | undefined;
+  /** The patient has background music switched on: the player picks a tune for the hemisphere of each game. */
+  music?: boolean | undefined;
 }
 
 export interface ResultReceipt {

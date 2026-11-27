@@ -169,7 +169,15 @@ describe.skipIf(!ADMIN_URL)("parent portal: session contents and starting in ord
     expect(a.status, JSON.stringify(a.body)).toBe(201);
     const sid = a.body.assignment.sessions[0].id as string;
 
+    // Background music is the child's setting, switched on by the therapist; the launch carries it to the player.
+    const before = (await miri.api(`/v1/parent/children/${noam}/sessions/${sid}/launch`, { method: "POST" })).body.launch;
+    expect(before.music).toBeUndefined();
+    const saved = await yael.api(`/v1/patients/${noam}`, { method: "PATCH", body: { music_enabled: true } });
+    expect(saved.status).toBe(200);
+    expect(saved.body.patient.music_enabled).toBe(true);
+    expect((await yael.api(`/v1/planned-sessions/${sid}/launch`, { method: "POST", body: {} })).body.launch.music).toBe(true);
     const launch = (await miri.api(`/v1/parent/children/${noam}/sessions/${sid}/launch`, { method: "POST" })).body.launch;
+    expect(launch.music).toBe(true);
     const [v, g] = launch.steps;
     expect(v).toMatchObject({ kind: "video", video: { id: video, title: "Warm-up" } });
     // The guardian's device can load the file.

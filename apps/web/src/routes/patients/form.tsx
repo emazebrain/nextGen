@@ -28,6 +28,7 @@ type Draft = {
   colour_vision_deficiency: boolean;
   therapist_id: string;
   tones_enabled: boolean;
+  music_enabled: boolean;
   tone_age_group: string;
 };
 type Errors = Partial<Record<keyof Draft | "form", MessageId>>;
@@ -80,6 +81,7 @@ function PatientFormPage({ existing }: { existing?: PatientDetail }) {
     colour_vision_deficiency: existing?.colour_vision_deficiency ?? false,
     therapist_id: "",
     tones_enabled: (existing as unknown as { tones_enabled?: boolean })?.tones_enabled ?? false,
+    music_enabled: (existing as unknown as { music_enabled?: boolean })?.music_enabled ?? false,
     tone_age_group: String((existing as unknown as { tone_age_group?: number | null })?.tone_age_group ?? ""),
   }));
   const title = existing ? t("patientForm.editTitle") : t("patientForm.newTitle");
@@ -126,6 +128,7 @@ function PatientFormPage({ existing }: { existing?: PatientDetail }) {
         const tonesPatch = {
           ...patch,
           tones_enabled: draft.tones_enabled,
+          music_enabled: draft.music_enabled,
           tone_age_group: draft.tone_age_group ? Number(draft.tone_age_group) : null,
         };
         await update.mutateAsync(tonesPatch);
@@ -222,6 +225,7 @@ function PatientFormPage({ existing }: { existing?: PatientDetail }) {
               </div>
               <TextAreaField label={t("patientForm.alert")} hint={t("patientForm.alertHint")} name="alert" maxLength={500} rows={2} value={draft.alert} onChange={(e) => set("alert", e.target.value)} />
               <CheckboxField label={t("patientForm.cvd")} hint={t("patientForm.cvdHint")} checked={draft.colour_vision_deficiency} onChange={(e) => set("colour_vision_deficiency", e.target.checked)} />
+              <CheckboxField label={t("patientForm.music")} hint={t("patientForm.musicHint")} checked={draft.music_enabled} onChange={(e) => set("music_enabled", e.target.checked)} />
               <CheckboxField label={t("patientForm.tones")} hint={t("patientForm.tonesHint")} checked={draft.tones_enabled} onChange={(e) => set("tones_enabled", e.target.checked)} />
               {draft.tones_enabled && (
                 <SelectField label={t("patientForm.toneAgeGroup")} name="tone_age_group" value={draft.tone_age_group} onChange={(e) => set("tone_age_group", e.target.value)}>

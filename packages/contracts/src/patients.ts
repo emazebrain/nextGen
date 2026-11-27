@@ -63,6 +63,8 @@ export const updatePatient = z
     tone_age_group: z.number().int().min(1).max(20).nullable(),
     /** Enable pulsed background tones during all sessions for this patient. */
     tones_enabled: z.boolean(),
+    /** Play background music during all sessions for this patient; the tune follows the game's hemisphere. */
+    music_enabled: z.boolean(),
   })
   .partial();
 export type UpdatePatient = z.infer<typeof updatePatient>;

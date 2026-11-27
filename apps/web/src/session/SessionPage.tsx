@@ -33,6 +33,8 @@ import { VideoStep, viewSummary } from "./VideoStep.tsx";
 import { launchFromPackage, type SessionPoint } from "./package.ts";
 import { preflight, type Preflight } from "./preflight.ts";
 import { TonePlayer } from "./TonePlayer.ts";
+import { MusicPlayer } from "./music/MusicPlayer.ts";
+import { pickTune, type Side } from "./music/tunes.ts";
 import { useOptionalDevice } from "../device/session.tsx";
 import { hasVideo } from "../device/content.ts";
 import { markSessionDone } from "../device/bundle.ts";
@@ -183,6 +185,8 @@ function PreflightMissing({ missing, expired, onStartWithout }: { missing: Array
   );
 }
 
+const sideOf = (h: unknown): Side | null => (h === "left" || h === "right" ? h : null);
+
 /**
  * In the clinic the adult controls (skip, end, the summary) sit behind the device PIN, because the child holds the
  * therapist's tablet. At home the device is the family's own: a guardian is not asked for a PIN anywhere.
@@ -221,6 +225,30 @@ function Runner({ pkg, space = null, fromParent = false }: { pkg: LaunchPackage;
   }, [phase.k, pkg.tones]);
   // Cleanup on unmount
   useEffect(() => () => { tonePlayerRef.current?.stop(); tonePlayerRef.current = null; }, []);
+
+  // Background music (the child's setting): plays for the whole session — games, the screens between them and
+  // videos — and follows the hemisphere of the game being played. A video keeps the tune of the game before it
+  // (or of the first game), turned down so the video can be heard. Each session takes the next of the side's tunes.
+  const musicRef = useRef<MusicPlayer | null>(null);
+  const musicSide = useRef<Side | null>(null);
+  const current = phase.k === "play" ? queue[phase.i] : undefined;
+  const stepSide = current?.kind === "game" ? sideOf(current.params.hemisphere) : null;
+  const firstSide = sideOf(queue.find((s) => s.kind === "game")?.params.hemisphere) ?? "right";
+  const onVideo = current?.kind === "video";
+  useEffect(() => {
+    if (!pkg.music) return;
+    if (phase.k === "play" || phase.k === "between") {
+      const side = stepSide ?? musicSide.current ?? firstSide;
+      musicSide.current = side;
+      musicRef.current ??= new MusicPlayer();
+      musicRef.current.play(pickTune(side, pkg.seq));
+      musicRef.current.setLevel(onVideo ? 0.35 : 1);
+    } else if (phase.k === "finished" || phase.k === "summary") {
+      musicRef.current?.stop();
+      musicRef.current = null;
+    }
+  }, [phase.k, pkg.music, pkg.seq, stepSide, firstSide, onVideo]);
+  useEffect(() => () => { musicRef.current?.stop(); musicRef.current = null; }, []);
   const gameName = (id: string) => (findGame(id) ? localText(findGame(id)!.manifest.name, locale) : id);
   const stepName = (s: LaunchStep) => (s.kind === "video" ? s.video.title : gameName(s.game_id));
 

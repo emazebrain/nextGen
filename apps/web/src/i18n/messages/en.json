@@ -1328,6 +1328,8 @@
   "run.headphonesRequired": "This session uses background tones. Please connect headphones before starting.",
   "patientForm.tones": "Background tones",
   "patientForm.tonesHint": "Play pulsed audio tones during all sessions. Requires headphones.",
+  "patientForm.music": "Background music",
+  "patientForm.musicHint": "Play music during all sessions. The tune follows the side of the brain each game works: low, changing tunes with natural sounds for the right; brighter, steady pop-style tunes for the left.",
   "patientForm.toneAgeGroup": "Tone age group",
   "patientForm.toneAgeGroupAuto": "Automatic (from date of birth)",
   "pr.title": "Progress report",

@@ -305,7 +305,7 @@ export function parentRoutes(servicePool: pg.Pool, tickets?: TicketSigner) {
                 (SELECT count(*)::int FROM app.planned_session x WHERE x.assignment_id = a.id AND x.status <> 'cancelled') AS total,
                 COALESCE(ps.id = ${NEXT_HOME_SQL}, false) AS is_next,
                 p.id AS patient_id, p.given_name, p.family_name, p.preferred_locale, p.alert, p.colour_vision_deficiency,
-                to_char(p.date_of_birth, 'YYYY-MM-DD') AS date_of_birth, p.tone_age_group, p.tones_enabled
+                to_char(p.date_of_birth, 'YYYY-MM-DD') AS date_of_birth, p.tone_age_group, p.tones_enabled, p.music_enabled
            FROM app.planned_session ps
            JOIN app.protocol_assignment a ON a.id = ps.assignment_id
            JOIN app.patient p ON p.id = ps.patient_id
@@ -375,6 +375,7 @@ export function parentRoutes(servicePool: pg.Pool, tickets?: TicketSigner) {
           return { kind: "game", assignment_step_id: s.id, ordinal: s.ordinal, game_id: s.game_id, params, ticket, done: s.done };
         }),
         ...(sessionTones ? { tones: sessionTones } : {}),
+        ...(row.music_enabled ? { music: true } : {}),
       };
       return pkg;
     });
