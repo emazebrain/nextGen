@@ -34,6 +34,6 @@ Left,Subcortical,Bainstem - Pons,warm,"textured, solid",LTR,"1, 4","E, SE, NE",C
 Left,Subcortical,Basal Ganglia - Direct,warm,"textured, solid","LTR, BLDTR","1, 4","E, SE, NE, N, S",CCW
 Left,Subcortical,Basal Ganglia - Direct,warm,"textured, solid","RTL, TRDBL","0, 3","E, SE, NE, N, S",CCW
 Left,Subcortical,Basal Ganglia - Direct,warm,"textured, solid",BTT,"0, 1","E, SE, NE, N, S",CCW
-Left,Subcortical,Basal Ganglia - Indirect,warm,"textured, solid","LTR, TLDBR",1,"E, SE, NE, N, S",CCW
+Left,Subcortical,Basal Ganglia - Indirect,warm,"textured, solid","LTR, BLDTR",1,"E, SE, NE, N, S",CCW
 Left,Subcortical,Basal Ganglia - Indirect,warm,"textured, solid",BTT,1,"E, SE, NE, N, S",CCW
 Left,Subcortical,Brainstem - Mesencephalon,warm,"textured, solid",BTT,"0, 1","E, N, S",CCW
