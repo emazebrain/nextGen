@@ -1,0 +1,29 @@
+Side,Lobe,Sub Lobe,Brodmann areas,BG color,BG type,Movement Direction,Movment type,Target location,rotation
+Left,Subcortical,Cerebelum,none (subcortical),Cold,"textured, solid",TLDBR,"0, 3","W, SW, NW, N, S",CW
+Left,Subcortical,Cerebelum,none (subcortical),Cold,"textured, solid",BRDTL,1,"W, SW, NW, N, S",CW
+Right,Frontal,DLPFC,"BA9, BA46",Cold,Textured,"LTR, TLDBR","0, 3","W, SW, S",CW
+Right,Frontal,DLPFC,"BA9, BA46",Cold,Textured,"RTL, BRDTL",1,"W, SW, S",CW
+Right,Frontal,Orbital frontal,"BA11, BA12, BA47",Cold,Solid,"LTR, LTR","0, 3","W, NW, N",CW
+Right,Frontal,Orbital frontal,"BA11, BA12, BA47",Cold,Solid,"RTL, BRDTL",1,"W, NW, N",CW
+Right,Parietal,Parietal,"BA1, BA2, BA3, BA39, BA40, BA43",Cold,Textured,"LTR, TLDBR",0,"W, SW, S",CW
+Right,Parietal,Superior Parietal,"BA5, BA7",Cold,Textured,"LTR, TLDBR",0,"W, SW, S",CW
+Right,Temporal,Superior Temporal,"BA22, BA41, BA42",Cold,Solid,"LTR, TLDBR",0,"W, NW, N",CW
+Right,Temporal,Middle Temporal,BA21,Cold,Solid,"LTR, TLDBR",0,"W, NW, N",CW
+Right,Temporal,inferior Temporal,"BA20, BA37",Cold,Solid,"LTR, TLDBR",0,"W, NW, N",CW
+Right,Subcortical,Pons,none (subcortical),Cold,"textured, solid",LTR,"0, 3","W, SW, NW",CW
+Right,Subcortical,Pons,none (subcortical),Cold,"textured, solid",RTL,1,"W, SW, NW",CW
+Right,Subcortical,Mesencephalon,none (subcortical),Cold,"textured, solid",TTB,"0, 1","W, N, S",CW
+Right,Subcortical,Cerebelum,none (subcortical),warm,"textured, solid",TRDBL,"0, 3","E, SE, NE, N, S",CCW
+Right,Subcortical,Cerebelum,none (subcortical),warm,"textured, solid",BLDTR,1,"E, SE, NE, N, S",CCW
+Left,Frontal,DLPFC,"BA9, BA46",warm,Textured,RTL,"0, 3","E, SE, S",CCW
+Left,Frontal,DLPFC,"BA9, BA46",warm,Textured,LTR,1,"E, SE, S",CCW
+Left,Frontal,Orbital frontal,"BA11, BA12, BA47",warm,Solid,RTL,"0, 3","E, NE, N",CCW
+Left,Frontal,Orbital frontal,"BA11, BA12, BA47",warm,Solid,LTR,1,"E, NE, N",CCW
+Left,Parietal,Parietal,"BA1, BA2, BA3, BA39, BA40, BA43",warm,Textured,"RTL, TRDBL",0,"E, SE, S",CCW
+Left,Parietal,Superior Parietal,"BA5, BA7",warm,Textured,"RTL, TRDBL",0,"E, SE, S",CCW
+Left,Temporal,Superior Temporal,"BA22, BA41, BA42",warm,Solid,"RTL, TRDBL",0,"E, NE, N",CCW
+Left,Temporal,Middle Temporal,BA21,warm,Solid,"RTL, TRDBL",0,"E, NE, N",CCW
+Left,Temporal,inferior Temporal,"BA20, BA37",warm,Solid,"RTL, TRDBL",0,"E, NE, N",CCW
+Left,Subcortical,Pons,none (subcortical),warm,"textured, solid",RTL,"0, 3","E, SE, NE",CCW
+Left,Subcortical,Pons,none (subcortical),warm,"textured, solid",LTR,1,"E, SE, NE",CCW
+Left,Subcortical,Mesencephalon,none (subcortical),warm,"textured, solid",BTT,"0, 1","E, N, S",CCW

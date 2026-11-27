@@ -68,8 +68,8 @@ export function regionSeedSql(): string {
 /** The product owner's table groups pons, mesencephalon and cerebellum under a "Subcortical" lobe. */
 export const SUBCORTICAL: Named = { code: "subcortical", en: "Subcortical", he: "תת-קליפתי" };
 
-/** Sub-lobes from the product owner's table (Hebrew labels are a draft for clinical review). */
-export const SUBLOBES: Array<Named & { lobe: string }> = [
+/** The sub-lobes as migration 0018 seeded them (the owner's first table). */
+export const SUBLOBES_0018: Array<Named & { lobe: string }> = [
   { code: "dlpfc", lobe: "frontal", en: "DLPFC (dorsolateral prefrontal)", he: "DLPFC (קדם-מצחי גבי-צדי)" },
   { code: "orbitofrontal", lobe: "frontal", en: "Orbitofrontal", he: "אורביטו-פרונטלי" },
   { code: "parietal_main", lobe: "parietal", en: "Parietal", he: "קודקודי" },
@@ -81,6 +81,43 @@ export const SUBLOBES: Array<Named & { lobe: string }> = [
   { code: "mesencephalon", lobe: "subcortical", en: "Mesencephalon (midbrain)", he: "המוח התיכון" },
   { code: "cerebellum", lobe: "subcortical", en: "Cerebellum", he: "המוח הקטן" },
 ];
+
+/**
+ * Sub-lobes from the product owner's table, as it stands (Hebrew labels are a draft for clinical review).
+ * The table of 2026-11-27 (migration 0044) added the two basal-ganglia pathways and files the pons and the
+ * mesencephalon under "Brainstem". New entries go at the end: a sub-lobe's place in this list is its sort order.
+ */
+export const SUBLOBES: Array<Named & { lobe: string }> = [
+  ...SUBLOBES_0018.map((s) =>
+    s.code === "pons"
+      ? { ...s, en: "Brainstem – Pons", he: "גזע המוח – גשר (פונס)" }
+      : s.code === "mesencephalon"
+        ? { ...s, en: "Brainstem – Mesencephalon (midbrain)", he: "גזע המוח – המוח התיכון" }
+        : s,
+  ),
+  { code: "basal_ganglia_direct", lobe: "subcortical", en: "Basal ganglia – direct pathway", he: "גרעיני הבסיס – המסלול הישיר" },
+  { code: "basal_ganglia_indirect", lobe: "subcortical", en: "Basal ganglia – indirect pathway", he: "גרעיני הבסיס – המסלול העקיף" },
+];
+
+/** The statements migration 0044 runs to bring the tree from 0018's sub-lobes to today's: new nodes and new labels. */
+export function sublobeRevisionSql(): string {
+  const out: string[] = [];
+  for (const h of HEMISPHERES) {
+    SUBLOBES.forEach((s, i) => {
+      const path = `${h.code}.${s.lobe}.${s.code}`;
+      const before = SUBLOBES_0018.find((o) => o.code === s.code);
+      if (!before) {
+        out.push(
+          `INSERT INTO app.brain_region (kind, code, path, parent_id, labels, sort) SELECT 'sublobe', ${q(s.code)}, ${q(path)}, id, ${labels(s)}, ${100 + i} FROM app.brain_region WHERE path = ${q(`${h.code}.${s.lobe}`)};`,
+        );
+      } else if (before.en !== s.en || before.he !== s.he) {
+        out.push(`UPDATE app.brain_region SET labels = ${labels(s)} WHERE path = ${q(path)};`);
+      }
+    });
+  }
+  return out.join("\n");
+}
+
 
 /** Each Brodmann area's sub-lobe (draft, pending the clinical advisor). Areas not listed have none. */
 export const AREA_SUBLOBE: Record<string, string> = {
@@ -100,7 +137,7 @@ export function regionExpandSql(): string {
     out.push(
       `INSERT INTO app.brain_region (kind, code, path, parent_id, labels, sort) SELECT 'lobe', 'subcortical', ${q(`${h.code}.subcortical`)}, id, ${labels(SUBCORTICAL)}, ${LOBES.length + 1} FROM app.brain_region WHERE path = ${q(h.code)};`,
     );
-    SUBLOBES.forEach((s, i) => {
+    SUBLOBES_0018.forEach((s, i) => {
       const lp = `${h.code}.${s.lobe}`;
       out.push(
         `INSERT INTO app.brain_region (kind, code, path, parent_id, labels, sort) SELECT 'sublobe', ${q(s.code)}, ${q(`${lp}.${s.code}`)}, id, ${labels(s)}, ${100 + i} FROM app.brain_region WHERE path = ${q(lp)};`,

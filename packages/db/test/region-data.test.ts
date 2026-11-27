@@ -2,21 +2,24 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { AREAS, AREA_SUBLOBE, LOBES, SUBCORTICAL, SUBLOBES } from "../src/brain-regions.ts";
-import { parseSettingsCsv, REGION_SETTINGS } from "../src/region-settings.ts";
+import { AREAS, AREA_SUBLOBE, LOBES, SUBCORTICAL, SUBLOBES, SUBLOBES_0018 } from "../src/brain-regions.ts";
+import { parseSettingsCsv, REGION_SETTINGS, REGION_SETTINGS_0018 } from "../src/region-settings.ts";
 import { motionRuleErrors, tableConsistencyErrors } from "../../contracts/src/regions.ts";
 
 const csvPath = fileURLToPath(new URL("../src/region-settings.csv", import.meta.url));
+const firstCsvPath = fileURLToPath(new URL("../src/region-settings.0018.csv", import.meta.url));
 
 describe("region settings sheet", () => {
   it("REGION_SETTINGS matches the committed CSV", () => {
     expect(REGION_SETTINGS).toEqual(parseSettingsCsv(readFileSync(csvPath, "utf8")));
+    expect(REGION_SETTINGS_0018).toEqual(parseSettingsCsv(readFileSync(firstCsvPath, "utf8")));
+    expect(REGION_SETTINGS_0018).toHaveLength(20);
   });
 
-  it("has 20 rows, one per side × sub-lobe, each under its own lobe", () => {
-    expect(REGION_SETTINGS).toHaveLength(20);
+  it("has 24 rows, one per side × sub-lobe, each under its own lobe", () => {
+    expect(REGION_SETTINGS).toHaveLength(24);
     const keys = new Set(REGION_SETTINGS.map((r) => `${r.side}.${r.lobe}.${r.sublobe}`));
-    expect(keys.size).toBe(20);
+    expect(keys.size).toBe(24);
     for (const r of REGION_SETTINGS) expect(SUBLOBES.find((s) => s.code === r.sublobe)?.lobe, r.sublobe).toBe(r.lobe);
   });
 
@@ -24,16 +27,32 @@ describe("region settings sheet", () => {
     const dlpfc = REGION_SETTINGS.find((r) => r.side === "right" && r.sublobe === "dlpfc")!;
     expect(dlpfc.motion).toEqual([
       { movement_types: [0, 3], directions: ["ltr", "tldbr"] },
-      { movement_types: [1], directions: ["rtl", "brdtl"] },
+      { movement_types: [1, 4], directions: ["rtl", "brdtl"] },
     ]);
     expect(dlpfc.bg_types).toEqual(["textured"]);
     const cb = REGION_SETTINGS.find((r) => r.side === "left" && r.sublobe === "cerebellum")!;
     expect(cb).toMatchObject({ lobe: "subcortical", bg_temperature: "cold", rotation: "cw", bg_types: ["textured", "solid"], target_locations: ["W", "SW", "NW", "N", "S"] });
   });
 
-  it("keeps values as given, duplicates included", () => {
-    const of = REGION_SETTINGS.find((r) => r.side === "right" && r.sublobe === "orbitofrontal")!;
-    expect(of.motion[0]!.directions).toEqual(["ltr", "ltr"]);
+  it("keeps values as given, duplicates included; the 2026-11-27 table corrected right orbitofrontal", () => {
+    const first = REGION_SETTINGS_0018.find((r) => r.side === "right" && r.sublobe === "orbitofrontal")!;
+    expect(first.motion[0]!.directions).toEqual(["ltr", "ltr"]);
+    const now = REGION_SETTINGS.find((r) => r.side === "right" && r.sublobe === "orbitofrontal")!;
+    expect(now.motion).toEqual([{ movement_types: [0, 3], directions: ["ltr", "tldbr"] }, { movement_types: [1, 4], directions: ["rtl", "brdtl"] }]);
+  });
+
+  it("the 2026-11-27 table: basal ganglia on both sides, and no row uses movement types 2 or 5", () => {
+    const bg = (side: string, code: string) => REGION_SETTINGS.find((r) => r.side === side && r.sublobe === code)!;
+    expect(bg("right", "basal_ganglia_direct").motion).toEqual([
+      { movement_types: [1, 4], directions: ["rtl", "brdtl"] },
+      { movement_types: [0, 3], directions: ["ltr", "tldbr"] },
+      { movement_types: [0, 1], directions: ["ttb"] },
+    ]);
+    expect(bg("left", "basal_ganglia_indirect")).toMatchObject({ bg_temperature: "warm", rotation: "ccw", motion: [{ movement_types: [1], directions: ["ltr", "tldbr"] }, { movement_types: [1], directions: ["btt"] }] });
+    const used = new Set(REGION_SETTINGS.flatMap((r) => r.motion.flatMap((m) => m.movement_types)));
+    expect([...used].sort()).toEqual([0, 1, 3, 4]);
+    // The first table obeys the rule too.
+    expect(motionRuleErrors(REGION_SETTINGS_0018.map((r) => ({ ...r, path: `${r.side}.${r.lobe}.${r.sublobe}` })))).toEqual([]);
   });
 
   it("the table keeps the cold/warm pattern", () => {
@@ -47,7 +66,7 @@ describe("region settings sheet", () => {
     // and bottom-right to top-left appears only with intervals.
     const cb = rows.find((r) => r.path === "left.subcortical.cerebellum")!;
     expect(cb.bg_temperature).toBe("cold");
-    expect(cb.motion).toEqual([{ movement_types: [0, 3], directions: ["tldbr"] }, { movement_types: [1], directions: ["brdtl"] }]);
+    expect(cb.motion).toEqual([{ movement_types: [0, 3], directions: ["tldbr"] }, { movement_types: [1, 4], directions: ["brdtl"] }]);
     // No row pairs one movement type with both a direction and its reverse.
     const reverse = { ltr: "rtl", rtl: "ltr", ttb: "btt", btt: "ttb", tldbr: "brdtl", brdtl: "tldbr", trdbl: "bldtr", bldtr: "trdbl" } as const;
     for (const r of rows) {
@@ -77,7 +96,9 @@ describe("sub-lobes and Brodmann links", () => {
   });
 
   it("every sub-lobe has English and Hebrew labels, and the subcortical lobe is new", () => {
-    expect(SUBLOBES).toHaveLength(10);
+    expect(SUBLOBES_0018).toHaveLength(10);
+    expect(SUBLOBES).toHaveLength(12);
+    expect(SUBLOBES.slice(0, 10).map((x) => x.code)).toEqual(SUBLOBES_0018.map((x) => x.code)); // sort order is stable
     for (const s of SUBLOBES) {
       expect(s.en.trim(), s.code).not.toBe("");
       expect(s.he, s.code).toMatch(/[֐-׿]/);

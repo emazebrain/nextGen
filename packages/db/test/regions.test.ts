@@ -8,8 +8,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ADMIN_URL, asUser, freshDatabase } from "./helpers.ts";
 import { migrate } from "../src/migrate.ts";
-import { regionExpandSql } from "../src/brain-regions.ts";
-import { REGION_SETTINGS, settingSeedSql } from "../src/region-settings.ts";
+import { regionExpandSql, sublobeRevisionSql } from "../src/brain-regions.ts";
+import { REGION_SETTINGS, REGION_SETTINGS_0018, settingRevisionSql, settingSeedSql } from "../src/region-settings.ts";
 
 const MIGRATIONS = fileURLToPath(new URL("../migrations/", import.meta.url));
 const MIGRATION = join(MIGRATIONS, "0018_brain_region_filters.sql");
@@ -35,17 +35,36 @@ describe.skipIf(!ADMIN_URL)("brain-region filters (0018)", () => {
   it("the migration seeds what the data module generates", async () => {
     const sql = await readFile(MIGRATION, "utf8");
     expect(sql).toContain(regionExpandSql());
-    expect(sql).toContain(settingSeedSql(REGION_SETTINGS));
+    expect(sql).toContain(settingSeedSql(REGION_SETTINGS_0018));
     const count = async (where: string) => (await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM app.brain_region WHERE ${where}`)).rows[0]!.n;
-    expect(await count(`kind = 'sublobe'`)).toBe(20);
     expect(await count(`kind = 'area' AND sublobe_id IS NOT NULL`)).toBe(38);
     expect(await count(`kind = 'lobe' AND code = 'subcortical'`)).toBe(2);
-    const settings = await db.query<{ n: number; drafts: number }>(`SELECT count(*)::int AS n, count(*) FILTER (WHERE clinical_status = 'draft' AND revision = 1)::int AS drafts FROM app.region_setting`);
-    expect(settings.rows[0]).toEqual({ n: 20, drafts: 20 });
+  });
+
+  it("migration 0044 brings the tree and the table to the owner's sheet of 2026-11-27", async () => {
+    const sql = await readFile(new URL("../migrations/0044_region_table_2026_11_27.sql", import.meta.url), "utf8");
+    expect(sql).toContain(sublobeRevisionSql());
+    expect(sql).toContain(settingRevisionSql());
+    const subs = await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM app.brain_region WHERE kind = 'sublobe'`);
+    expect(subs.rows[0]!.n).toBe(24);
+    // The database now holds exactly the current table.
+    const rows = await db.query(`SELECT b.path, s.bg_temperature, s.bg_types, s.motion, s.target_locations, s.rotation, s.clinical_status, s.revision FROM app.region_setting s JOIN app.brain_region b ON b.id = s.sublobe_id ORDER BY b.path`);
+    const want = REGION_SETTINGS.map((r) => ({ path: `${r.side}.${r.lobe}.${r.sublobe}`, bg_temperature: r.bg_temperature, bg_types: r.bg_types, motion: r.motion, target_locations: r.target_locations, rotation: r.rotation }))
+      .sort((a, b) => a.path.localeCompare(b.path));
+    expect(rows.rows.map(({ clinical_status: _c, revision: _r, ...rest }) => rest)).toEqual(want);
+    // Changed rows carry revision 2; untouched and new rows revision 1. All are drafts.
+    const changed = new Set(REGION_SETTINGS.filter((r) => {
+      const old = REGION_SETTINGS_0018.find((o) => o.side === r.side && o.sublobe === r.sublobe);
+      return old && JSON.stringify(old) !== JSON.stringify(r);
+    }).map((r) => `${r.side}.${r.lobe}.${r.sublobe}`));
+    expect(changed.size).toBe(8);
+    for (const r of rows.rows) expect([r.path, r.revision, r.clinical_status]).toEqual([r.path, changed.has(r.path) ? 2 : 1, "draft"]);
+    const labels = await db.query(`SELECT labels->>'en' AS en FROM app.brain_region WHERE path IN ('left.subcortical.pons', 'right.subcortical.basal_ganglia_direct') ORDER BY path`);
+    expect(labels.rows.map((l) => l.en)).toEqual(["Brainstem – Pons", "Basal ganglia – direct pathway"]);
     const st = await db.query(`SELECT s.bg_temperature, s.bg_types, s.target_locations, s.rotation, s.motion FROM app.region_setting s JOIN app.brain_region b ON b.id = s.sublobe_id WHERE b.path = 'right.frontal.dlpfc'`);
     expect(st.rows[0]).toEqual({
       bg_temperature: "cold", bg_types: ["textured"], target_locations: ["W", "SW", "S"], rotation: "cw",
-      motion: [{ movement_types: [0, 3], directions: ["ltr", "tldbr"] }, { movement_types: [1], directions: ["rtl", "brdtl"] }],
+      motion: [{ movement_types: [0, 3], directions: ["ltr", "tldbr"] }, { movement_types: [1, 4], directions: ["rtl", "brdtl"] }],
     });
   });
 
@@ -64,9 +83,9 @@ describe.skipIf(!ADMIN_URL)("brain-region filters (0018)", () => {
   });
 
   it("region_setting is read-only for therapists", async () => {
-    expect(await asUser(db, ids.yael, async (c) => (await c.query(`SELECT 1 FROM app.region_setting`)).rowCount, { rollback: true })).toBe(20);
+    expect(await asUser(db, ids.yael, async (c) => (await c.query(`SELECT 1 FROM app.region_setting`)).rowCount, { rollback: true })).toBe(24);
     expect(await asUser(db, ids.yael, async (c) => (await c.query(`UPDATE app.region_setting SET rotation = 'ccw'`)).rowCount, { rollback: true })).toBe(0);
-    expect(await asUser(db, ids.admin, async (c) => (await c.query(`UPDATE app.region_setting SET revision = revision`)).rowCount, { rollback: true })).toBe(20);
+    expect(await asUser(db, ids.admin, async (c) => (await c.query(`UPDATE app.region_setting SET revision = revision`)).rowCount, { rollback: true })).toBe(24);
   });
 
   const insertStep = async (ordinal: number, regionPath: string | null, hemisphere: "left" | "right", stepType: "game" | "video" = "game") =>

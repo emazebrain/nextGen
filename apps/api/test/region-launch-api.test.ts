@@ -142,12 +142,13 @@ describe.skipIf(!ADMIN_URL)("brain-region filters at launch", () => {
   it("a table correction (revision bump) is not a step change", async () => {
     const p = await patientWith({ hemisphere: "right", region_id: rid("right.subcortical.pons") });
     const params = await launch(p.sessions[0]!);
+    const before = (params.region as { revision: number }).revision; // 2 since the owner's table of 2026-11-27
     await env.db.query(`UPDATE app.region_setting SET revision = revision + 1, bg_types = ARRAY['solid'], clinical_status = 'approved' WHERE sublobe_id = $1`, [rid("right.subcortical.pons")]);
     try {
       expect((await send(p, p.sessions[1]!, params)).body.outcome).toBe("accepted");
-      expect((await launch(p.sessions[2]!)).region).toMatchObject({ revision: 2, bg_types: ["solid"], clinical_status: "approved" });
+      expect((await launch(p.sessions[2]!)).region).toMatchObject({ revision: before + 1, bg_types: ["solid"], clinical_status: "approved" });
     } finally {
-      await env.db.query(`UPDATE app.region_setting SET revision = 1, bg_types = ARRAY['textured','solid'], clinical_status = 'draft' WHERE sublobe_id = $1`, [rid("right.subcortical.pons")]);
+      await env.db.query(`UPDATE app.region_setting SET revision = $2, bg_types = ARRAY['textured','solid'], clinical_status = 'draft' WHERE sublobe_id = $1`, [rid("right.subcortical.pons"), before]);
     }
   });
 
