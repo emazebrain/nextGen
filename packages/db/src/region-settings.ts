@@ -397,14 +397,9 @@ export const REGION_SETTINGS_0018: SettingRow[] = [
 ];
 
 /**
- * The table as it stands: the product owner's spreadsheet brain_region_new_platform_1.xlsx of 2026-11-27
- * (region-settings.csv), reached through migrations 0044 to 0047. Generated from the CSV with parseSettingsCsv; kept
- * in step by test/region-data.test.ts.
- *
- * One deviation from the spreadsheet as typed, pending the owner's confirmation: for the left basal ganglia (direct
- * and indirect pathway) it gives the intervals "LTR, TRDBL". TRDBL heads left, which breaks the owner's own rule for
- * a left-hemisphere row (intervals head right). The diagonal stored for those interval lines is BLDTR — the one the
- * spreadsheet's own left DLPFC, left orbitofrontal and right cerebellum rows pair with intervals.
+ * The table as it stands: the product owner's spreadsheet brain_region_new_platform_4.xlsx of 2026-11-27
+ * (region-settings.csv), reached through migrations 0044 to 0049. Generated from the CSV with parseSettingsCsv; kept
+ * in step by test/region-data.test.ts. It equals the spreadsheet cell for cell.
  */
 export const REGION_SETTINGS: SettingRow[] = [
   {
@@ -541,7 +536,7 @@ export const REGION_SETTINGS: SettingRow[] = [
     bg_types: ["textured", "solid"],
     motion: [
       { movement_types: [1], directions: ["rtl", "brdtl"] },
-      { movement_types: [1], directions: ["ttb"] },
+      { movement_types: [0, 1], directions: ["ttb"] },
     ],
     target_locations: ["W", "SW", "NW", "N", "S"],
     rotation: "cw",
@@ -692,7 +687,7 @@ export const REGION_SETTINGS: SettingRow[] = [
     bg_types: ["textured", "solid"],
     motion: [
       { movement_types: [1], directions: ["ltr", "bldtr"] },
-      { movement_types: [1], directions: ["btt"] },
+      { movement_types: [0, 1], directions: ["btt"] },
     ],
     target_locations: ["E", "SE", "NE", "N", "S"],
     rotation: "ccw",
@@ -711,8 +706,13 @@ export const REGION_SETTINGS: SettingRow[] = [
   },
 ];
 
+/** The table as migration 0047 left it: before the indirect pathway's vertical lines allowed continuous movement too. */
+export const REGION_SETTINGS_0047: SettingRow[] = REGION_SETTINGS.map((r) =>
+  r.sublobe === "basal_ganglia_indirect" ? { ...r, motion: r.motion.map((m) => (m.directions.every((d) => d === "ttb" || d === "btt") ? { ...m, movement_types: [1] } : m)) } : r,
+);
+
 /** The table as migration 0046 left it: before the left basal ganglia's indirect pathway took the left-side diagonal. */
-export const REGION_SETTINGS_0046: SettingRow[] = REGION_SETTINGS.map((r) =>
+export const REGION_SETTINGS_0046: SettingRow[] = REGION_SETTINGS_0047.map((r) =>
   r.side === "left" && r.sublobe === "basal_ganglia_indirect"
     ? { ...r, motion: [{ movement_types: [1], directions: ["ltr", "tldbr"] }, { movement_types: [1], directions: ["btt"] }] }
     : r,

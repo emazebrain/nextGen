@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { ADMIN_URL, asUser, freshDatabase } from "./helpers.ts";
 import { migrate } from "../src/migrate.ts";
 import { areaUnlinkSql, regionExpandSql, sublobeRevisionSql, SUBLOBES, SUBLOBES_0018, SUBLOBES_0044 } from "../src/brain-regions.ts";
-import { REGION_SETTINGS, REGION_SETTINGS_0018, REGION_SETTINGS_0044, REGION_SETTINGS_0045, REGION_SETTINGS_0046, settingRevisionSql, settingSeedSql } from "../src/region-settings.ts";
+import { REGION_SETTINGS, REGION_SETTINGS_0018, REGION_SETTINGS_0044, REGION_SETTINGS_0045, REGION_SETTINGS_0046, REGION_SETTINGS_0047, settingRevisionSql, settingSeedSql } from "../src/region-settings.ts";
 
 const MIGRATIONS = fileURLToPath(new URL("../migrations/", import.meta.url));
 const MIGRATION = join(MIGRATIONS, "0018_brain_region_filters.sql");
@@ -51,7 +51,9 @@ describe.skipIf(!ADMIN_URL)("brain-region filters (0018)", () => {
     const xlsx = await readFile(new URL("../migrations/0046_region_table_xlsx.sql", import.meta.url), "utf8");
     expect(xlsx).toContain(settingRevisionSql(REGION_SETTINGS_0045, REGION_SETTINGS_0046));
     const last = await readFile(new URL("../migrations/0047_left_basal_ganglia_indirect.sql", import.meta.url), "utf8");
-    expect(last).toContain(settingRevisionSql(REGION_SETTINGS_0046, REGION_SETTINGS));
+    expect(last).toContain(settingRevisionSql(REGION_SETTINGS_0046, REGION_SETTINGS_0047));
+    const vertical = await readFile(new URL("../migrations/0049_basal_ganglia_indirect_vertical.sql", import.meta.url), "utf8");
+    expect(vertical).toContain(settingRevisionSql(REGION_SETTINGS_0047, REGION_SETTINGS));
     expect(xlsx).toContain(areaUnlinkSql());
     const linked = await db.query(`SELECT a.code FROM app.brain_region a JOIN app.brain_region s ON s.id = a.sublobe_id WHERE s.path IN ('right.parietal.parietal_main', 'right.parietal.superior_parietal') ORDER BY a.code`);
     expect(linked.rows.map((r) => r.code)).toEqual(["ba39", "ba40", "ba7"]);
@@ -68,7 +70,8 @@ describe.skipIf(!ADMIN_URL)("brain-region filters (0018)", () => {
       return old && JSON.stringify(old) !== JSON.stringify(r);
     }).map((r) => `${r.side}.${r.lobe}.${r.sublobe}`));
     expect(changed.size).toBe(8);
-    const twice = new Set(["left.frontal.dlpfc", "left.frontal.orbitofrontal"]); // changed by 0044 and again by 0046
+    const twice = new Set(["left.frontal.dlpfc", "left.frontal.orbitofrontal", "left.subcortical.basal_ganglia_indirect"]); // changed by two of the later migrations
+    changed.add("right.subcortical.basal_ganglia_indirect"); // inserted by 0044, changed by 0049
     changed.add("left.subcortical.basal_ganglia_direct"); // inserted by 0044, corrected by 0045
     changed.add("left.subcortical.basal_ganglia_indirect"); // inserted by 0044, corrected by 0047
     for (const r of rows.rows) expect([r.path, r.revision, r.clinical_status]).toEqual([r.path, twice.has(r.path) ? 3 : changed.has(r.path) ? 2 : 1, "draft"]);
