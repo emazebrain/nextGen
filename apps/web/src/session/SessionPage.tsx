@@ -241,13 +241,17 @@ function Runner({ pkg, space = null, fromParent = false }: { pkg: LaunchPackage;
       const side = stepSide ?? musicSide.current ?? firstSide;
       musicSide.current = side;
       musicRef.current ??= new MusicPlayer();
-      musicRef.current.play(pickTune(side, pkg.seq));
+      // Uploaded music for this side (the closest level that has any) replaces the built-in tune.
+      const uploaded = (pkg.music_tracks ?? []).filter((x) => x.hemisphere === side);
+      const tune = pickTune(side, pkg.seq);
+      if (uploaded.length) musicRef.current.playFile(uploaded[pkg.seq % uploaded.length]!, tune);
+      else musicRef.current.play(tune);
       musicRef.current.setLevel(onVideo ? 0.35 : 1);
     } else if (phase.k === "finished" || phase.k === "summary") {
       musicRef.current?.stop();
       musicRef.current = null;
     }
-  }, [phase.k, pkg.music, pkg.seq, stepSide, firstSide, onVideo]);
+  }, [phase.k, pkg.music, pkg.music_tracks, pkg.seq, stepSide, firstSide, onVideo]);
   useEffect(() => () => { musicRef.current?.stop(); musicRef.current = null; }, []);
   const gameName = (id: string) => (findGame(id) ? localText(findGame(id)!.manifest.name, locale) : id);
   const stepName = (s: LaunchStep) => (s.kind === "video" ? s.video.title : gameName(s.game_id));

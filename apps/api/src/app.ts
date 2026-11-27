@@ -8,6 +8,7 @@ import { clinicRoutes } from "./modules/clinics/routes.ts";
 import { protocolRoutes } from "./modules/protocols/routes.ts";
 import { sessionRoutes } from "./modules/sessions/routes.ts";
 import { videoRoutes } from "./modules/videos/routes.ts";
+import { musicRoutes } from "./modules/music/routes.ts";
 import { deviceRoutes } from "./modules/devices/routes.ts";
 import { offlineRoutes } from "./modules/offline/routes.ts";
 import { parentProgressReportRoutes, progressReportRoutes } from "./modules/patients/progress-reports.ts";
@@ -132,8 +133,11 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
     v1.route("/", sessions);
     v1.route("/", reportRoutes(deps.pool));
     v1.route("/", progressReportRoutes(deps.pool));
-    const videos = videoRoutes(deps.pool, deps.files ?? localFileStore(process.env.FILE_STORE_DIR ?? ".data/files"));
+    const fileStore = deps.files ?? localFileStore(process.env.FILE_STORE_DIR ?? ".data/files");
+    const videos = videoRoutes(deps.pool, fileStore);
     v1.route("/", videos);
+    const music = musicRoutes(deps.pool, fileStore);
+    v1.route("/", music);
     v1.route("/", deviceRoutes(deps.pool, deps.deviceKey ?? deviceKey(undefined)));
     v1.route("/", offlineRoutes(deps.pool, deps.tickets ?? ticketSigner()));
     // Before the general admin router, so its own gate answers for these paths.
@@ -158,6 +162,8 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
     parentV1.post("/parent/video-views", sessions.postVideoView(true));
     // Videos: for guardians only (anyone else uses the staff route, behind two-step sign-in). What they may read is
     // then decided by the video rules in the database, as on the staff route.
+    // Uploaded session music: the database decides (a guardian hears only what their child's sessions may play).
+    parentV1.get("/parent/music/:id/file", music.getFile);
     parentV1.get("/parent/videos/:id/file", async (c) => {
       const guardian = await withUser(deps.pool, c.get("user").id, c.get("requestId"), (db) => db.query<{ ok: boolean }>(`SELECT app.is_guardian_user() AS ok`));
       return guardian.rows[0]?.ok ? videos.getFile(c) : c.json({ error: "not_found" }, 404);

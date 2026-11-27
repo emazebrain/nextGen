@@ -11,6 +11,8 @@ import { midiHz, type Note, type TextureKind, type Tune } from "./tunes.ts";
 
 /** Master volume: quiet enough to sit under the pulsed tones and a game's own sounds. */
 const VOLUME = 0.2;
+/** Recordings are mastered far louder than the generated tunes; this puts them at about the same level. */
+const FILE_VOLUME = 0.3;
 const FADE_S = 0.6;
 
 interface Running {
@@ -28,12 +30,54 @@ export class MusicPlayer {
   private current: Running | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private level = 1;
+  /** An uploaded recording, when one is playing instead of a generated tune. */
+  private file: { id: string; audio: HTMLAudioElement } | null = null;
 
   get playing(): string | null {
-    return this.current?.tune.id ?? null;
+    return this.file?.id ?? this.current?.tune.id ?? null;
+  }
+
+  /**
+   * Plays an uploaded recording on a loop. If it cannot be loaded or played (offline, a format this device lacks),
+   * the generated tune plays instead, so a session is never left silent.
+   */
+  playFile(track: { id: string; url: string }, fallback: Tune): void {
+    if (this.file?.id === track.id) return;
+    this.silenceGenerated();
+    this.stopFile();
+    if (typeof Audio === "undefined") return this.play(fallback);
+    const audio = new Audio();
+    audio.loop = true;
+    audio.preload = "auto";
+    audio.volume = FILE_VOLUME * this.level;
+    const entry = { id: track.id, audio };
+    this.file = entry;
+    const giveUp = () => {
+      if (this.file !== entry) return; // something else is playing by now
+      this.stopFile();
+      this.play(fallback);
+    };
+    audio.addEventListener("error", giveUp, { once: true });
+    audio.src = track.url;
+    void audio.play().catch(giveUp);
+  }
+
+  private stopFile(): void {
+    const f = this.file;
+    this.file = null;
+    if (!f) return;
+    f.audio.pause();
+    f.audio.removeAttribute("src");
+    f.audio.load();
+  }
+
+  private silenceGenerated(): void {
+    if (this.ctx && this.current) this.fadeOut(this.current, this.ctx.currentTime);
+    this.current = null;
   }
 
   play(tune: Tune): void {
+    this.stopFile();
     if (this.current?.tune.id === tune.id) return;
     const ctx = this.ensure();
     if (!ctx || !this.master) return;
@@ -53,10 +97,12 @@ export class MusicPlayer {
 
   setLevel(level: number): void {
     this.level = Math.max(0, Math.min(1, level));
+    if (this.file) this.file.audio.volume = FILE_VOLUME * this.level;
     if (this.ctx && this.master) this.master.gain.linearRampToValueAtTime(VOLUME * this.level, this.ctx.currentTime + 0.4);
   }
 
   stop(): void {
+    this.stopFile();
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
     const ctx = this.ctx;

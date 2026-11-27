@@ -51,6 +51,7 @@ import { ParentShell } from "./routes/parent/shell.tsx";
 import { ParentHomePage } from "./routes/parent/home.tsx";
 import { ParentChildPage } from "./routes/parent/child.tsx";
 import { ParentSessionRoute } from "./routes/parent/play.tsx";
+import { MusicSettingsPage } from "./routes/music.tsx";
 import { setUploadPortal } from "./session/outbox.ts";
 import { ParentCalendarPage } from "./routes/parent/calendar.tsx";
 import { ParentResultsPage } from "./routes/parent/results.tsx";
@@ -301,6 +302,7 @@ export const routes: RouteObject[] = [
       },
       { path: "/settings", element: <SettingsPage /> },
       { path: "/settings/device", element: <DevicePage /> },
+      { path: "/settings/music", element: <MusicSettingsPage /> },
       { path: "/more", element: <MorePage /> },
       { path: "*", element: <NotFoundPage /> },
     ],

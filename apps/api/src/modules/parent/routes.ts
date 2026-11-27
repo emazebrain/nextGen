@@ -13,6 +13,8 @@ import type pg from "pg";
 import { randomInt } from "node:crypto";
 import type { GameSessionView, LaunchPackage, LaunchStep } from "../../../../../packages/contracts/src/index.ts";
 import { toneParamsForPatient } from "@emb/tones";
+import { sessionTracks } from "../music/routes.ts";
+import { withUser } from "../../context.ts";
 import { ageBand, resolveRegion, seededIndex } from "../../../../../packages/contracts/src/index.ts";
 import type { Env } from "../../context.ts";
 import type { TicketSigner } from "../../tickets.ts";
@@ -346,6 +348,10 @@ export function parentRoutes(servicePool: pg.Pool, tickets?: TicketSigner) {
 
       await db.query(`UPDATE app.planned_session SET status = 'in_progress' WHERE id = $1 AND status = 'planned'`, [sessionId]);
 
+      // Uploaded music for this child, looked up as the guardian (the database checks the link once more).
+      const musicTracks = row.music_enabled
+        ? (await withUser(servicePool, me, c.get("requestId"), (asMe) => sessionTracks(asMe, childId))).map((t) => ({ ...t, url: `/v1/parent/music/${t.id}/file` }))
+        : [];
       const firstGameStep = steps.rows.find((s) => s.step_type !== "video");
       const sessionTones = row.tones_enabled && row.date_of_birth && firstGameStep
         ? toneParamsForPatient(row.date_of_birth, firstGameStep.hemisphere as "left" | "right", row.tone_age_group) ?? undefined
@@ -375,7 +381,7 @@ export function parentRoutes(servicePool: pg.Pool, tickets?: TicketSigner) {
           return { kind: "game", assignment_step_id: s.id, ordinal: s.ordinal, game_id: s.game_id, params, ticket, done: s.done };
         }),
         ...(sessionTones ? { tones: sessionTones } : {}),
-        ...(row.music_enabled ? { music: true } : {}),
+        ...(row.music_enabled ? { music: true, music_tracks: musicTracks } : {}),
       };
       return pkg;
     });

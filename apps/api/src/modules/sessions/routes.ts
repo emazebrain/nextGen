@@ -33,6 +33,7 @@ import { parseBody } from "../../validate.ts";
 import { UUID } from "../patients/routes.ts";
 import { pick } from "../videos/routes.ts";
 import { toneParamsForPatient } from "@emb/tones";
+import { sessionTracks } from "../music/routes.ts";
 import { timerPositionFor, timerShown } from "@emb/session-rules";
 import { ageBand, resolveRegion, seededIndex, type RegionCatalog } from "../../../../../packages/contracts/src/index.ts";
 import { loadRegionCatalog } from "../../regions.ts";
@@ -234,7 +235,7 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
           return { kind: "game", assignment_step_id: s.id, ordinal: s.ordinal, game_id: s.game_id, params, ticket, done: s.done };
         }),
         ...(sessionTones ? { tones: sessionTones } : {}),
-        ...(row.music_enabled ? { music: true } : {}),
+        ...(row.music_enabled ? { music: true, music_tracks: (await sessionTracks(db, row.patient_id)).map((t) => ({ ...t, url: `/v1/music/${t.id}/file` })) } : {}),
       };
       return pkg;
     });

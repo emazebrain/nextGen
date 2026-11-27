@@ -4541,3 +4541,85 @@ a.gamecard:hover {
   font-size: var(--text-14);
   color: var(--text-secondary);
 }
+
+/* ------------------------------------------------------------ Settings → Session music */
+.music-note {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-14);
+}
+.music-form {
+  display: grid;
+  gap: var(--space-4);
+}
+.music-form__label {
+  display: block;
+  margin-block-end: var(--space-1);
+  font-size: var(--text-14);
+  font-weight: 600;
+}
+.music-form__file input[type="file"] {
+  inline-size: 100%;
+  min-block-size: var(--target-min);
+  padding: var(--space-2);
+  border: 1px dashed var(--border-control);
+  border-radius: var(--radius-control);
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+  font: inherit;
+}
+.music-form__file input[type="file"]:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+.music-form__only {
+  margin: 0;
+}
+.music-form__only .music-form__label {
+  display: inline;
+  margin-inline-end: var(--space-2);
+}
+.music-side {
+  display: grid;
+  gap: var(--space-2);
+  padding-block: var(--space-4);
+  border-block-start: 1px solid var(--border-decorative);
+}
+.music-side__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-16);
+}
+.music-list {
+  display: grid;
+  gap: var(--space-3);
+}
+.music-track {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border-decorative);
+  border-radius: var(--radius-card);
+  background: var(--bg-surface);
+}
+.music-track__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.music-track__title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.music-track__player {
+  inline-size: 100%;
+  min-block-size: var(--target-min);
+}
+.music-track__actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}

@@ -141,6 +141,11 @@ export interface LaunchPackage {
   tones?: StepToneParams | undefined;
   /** The patient has background music switched on: the player picks a tune for the hemisphere of each game. */
   music?: boolean | undefined;
+  /**
+   * Uploaded tracks to play instead of the generated tunes, for the hemispheres that have any (only when `music`
+   * is on). `url` is the audio file's address for whoever launched the session.
+   */
+  music_tracks?: { id: string; hemisphere: "left" | "right"; title: string; url: string }[] | undefined;
 }
 
 export interface ResultReceipt {

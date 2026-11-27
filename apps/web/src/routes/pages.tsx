@@ -548,6 +548,14 @@ export function SettingsPage() {
             {t("device.settingsLink")}
           </Link>
         </Card>
+        <Card as="section" labelledBy="music-link">
+          <h2 id="music-link" className="app-cardtitle">
+            {t("music.title")}
+          </h2>
+          <Link to="/settings/music" className="emb-btn emb-btn--secondary">
+            {t("music.settingsLink")}
+          </Link>
+        </Card>
         <SecurityCard />
         <Card as="section" labelledBy="account">
           <h2 id="account" className="app-cardtitle">
