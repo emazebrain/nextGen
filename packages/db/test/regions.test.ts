@@ -8,8 +8,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ADMIN_URL, asUser, freshDatabase } from "./helpers.ts";
 import { migrate } from "../src/migrate.ts";
-import { regionExpandSql, sublobeRevisionSql, SUBLOBES, SUBLOBES_0018, SUBLOBES_0044 } from "../src/brain-regions.ts";
-import { REGION_SETTINGS, REGION_SETTINGS_0018, REGION_SETTINGS_0044, settingRevisionSql, settingSeedSql } from "../src/region-settings.ts";
+import { areaUnlinkSql, regionExpandSql, sublobeRevisionSql, SUBLOBES, SUBLOBES_0018, SUBLOBES_0044 } from "../src/brain-regions.ts";
+import { REGION_SETTINGS, REGION_SETTINGS_0018, REGION_SETTINGS_0044, REGION_SETTINGS_0045, settingRevisionSql, settingSeedSql } from "../src/region-settings.ts";
 
 const MIGRATIONS = fileURLToPath(new URL("../migrations/", import.meta.url));
 const MIGRATION = join(MIGRATIONS, "0018_brain_region_filters.sql");
@@ -37,17 +37,22 @@ describe.skipIf(!ADMIN_URL)("brain-region filters (0018)", () => {
     expect(sql).toContain(regionExpandSql());
     expect(sql).toContain(settingSeedSql(REGION_SETTINGS_0018));
     const count = async (where: string) => (await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM app.brain_region WHERE ${where}`)).rows[0]!.n;
-    expect(await count(`kind = 'area' AND sublobe_id IS NOT NULL`)).toBe(38);
+    expect(await count(`kind = 'area' AND sublobe_id IS NOT NULL`)).toBe(28); // 38 after 0018; 0046 unlinked five areas per side
     expect(await count(`kind = 'lobe' AND code = 'subcortical'`)).toBe(2);
   });
 
-  it("migrations 0044 and 0045 bring the tree and the table to the owner's sheet of 2026-11-27", async () => {
+  it("migrations 0044 to 0046 bring the tree and the table to the owner's sheet of 2026-11-27", async () => {
     const sql = await readFile(new URL("../migrations/0044_region_table_2026_11_27.sql", import.meta.url), "utf8");
     expect(sql).toContain(sublobeRevisionSql(SUBLOBES_0018, SUBLOBES_0044));
     expect(sql).toContain(settingRevisionSql(REGION_SETTINGS_0018, REGION_SETTINGS_0044));
     const fix = await readFile(new URL("../migrations/0045_region_table_correction.sql", import.meta.url), "utf8");
     expect(fix).toContain(sublobeRevisionSql(SUBLOBES_0044, SUBLOBES));
-    expect(fix).toContain(settingRevisionSql(REGION_SETTINGS_0044, REGION_SETTINGS));
+    expect(fix).toContain(settingRevisionSql(REGION_SETTINGS_0044, REGION_SETTINGS_0045));
+    const xlsx = await readFile(new URL("../migrations/0046_region_table_xlsx.sql", import.meta.url), "utf8");
+    expect(xlsx).toContain(settingRevisionSql(REGION_SETTINGS_0045, REGION_SETTINGS));
+    expect(xlsx).toContain(areaUnlinkSql());
+    const linked = await db.query(`SELECT a.code FROM app.brain_region a JOIN app.brain_region s ON s.id = a.sublobe_id WHERE s.path IN ('right.parietal.parietal_main', 'right.parietal.superior_parietal') ORDER BY a.code`);
+    expect(linked.rows.map((r) => r.code)).toEqual(["ba39", "ba40", "ba7"]);
     const subs = await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM app.brain_region WHERE kind = 'sublobe'`);
     expect(subs.rows[0]!.n).toBe(24);
     // The database now holds exactly the current table.
@@ -61,8 +66,9 @@ describe.skipIf(!ADMIN_URL)("brain-region filters (0018)", () => {
       return old && JSON.stringify(old) !== JSON.stringify(r);
     }).map((r) => `${r.side}.${r.lobe}.${r.sublobe}`));
     expect(changed.size).toBe(8);
+    const twice = new Set(["left.frontal.dlpfc", "left.frontal.orbitofrontal"]); // changed by 0044 and again by 0046
     changed.add("left.subcortical.basal_ganglia_direct"); // inserted by 0044, corrected by 0045
-    for (const r of rows.rows) expect([r.path, r.revision, r.clinical_status]).toEqual([r.path, changed.has(r.path) ? 2 : 1, "draft"]);
+    for (const r of rows.rows) expect([r.path, r.revision, r.clinical_status]).toEqual([r.path, twice.has(r.path) ? 3 : changed.has(r.path) ? 2 : 1, "draft"]);
     const labels = await db.query(`SELECT labels->>'en' AS en FROM app.brain_region WHERE path IN ('left.subcortical.pons', 'right.subcortical.basal_ganglia_direct', 'right.parietal.superior_parietal') ORDER BY path`);
     expect(labels.rows.map((l) => l.en)).toEqual(["Brainstem – Pons", "Inferior parietal", "Basal ganglia – direct pathway"]);
     const st = await db.query(`SELECT s.bg_temperature, s.bg_types, s.target_locations, s.rotation, s.motion FROM app.region_setting s JOIN app.brain_region b ON b.id = s.sublobe_id WHERE b.path = 'right.frontal.dlpfc'`);

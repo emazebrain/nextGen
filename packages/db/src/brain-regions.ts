@@ -125,8 +125,8 @@ export function sublobeRevisionSql(before: Array<Named & { lobe: string }>, afte
 }
 
 
-/** Each Brodmann area's sub-lobe (draft, pending the clinical advisor). Areas not listed have none. */
-export const AREA_SUBLOBE: Record<string, string> = {
+/** Each Brodmann area's sub-lobe as migration 0018 linked them (the first table). */
+export const AREA_SUBLOBE_0018: Record<string, string> = {
   ba9: "dlpfc", ba46: "dlpfc",
   ba11: "orbitofrontal", ba12: "orbitofrontal", ba47: "orbitofrontal",
   ba1: "parietal_main", ba2: "parietal_main", ba3: "parietal_main", ba39: "parietal_main", ba40: "parietal_main", ba43: "parietal_main",
@@ -135,6 +135,34 @@ export const AREA_SUBLOBE: Record<string, string> = {
   ba21: "middle_temporal",
   ba20: "inferior_temporal", ba37: "inferior_temporal",
 };
+
+/**
+ * The areas the owner's sheet of 2026-11-27 (brain_region_new_platform.xlsx) no longer lists under a sub-lobe:
+ * Parietal is BA39 and BA40 only, Inferior parietal is BA7 only.
+ */
+export const AREAS_UNLINKED_0046 = ["ba1", "ba2", "ba3", "ba43", "ba5"];
+
+/** Each Brodmann area's sub-lobe, as it stands. Areas not listed have none (they remain tags for videos). */
+export const AREA_SUBLOBE: Record<string, string> = Object.fromEntries(Object.entries(AREA_SUBLOBE_0018).filter(([ba]) => !AREAS_UNLINKED_0046.includes(ba)));
+
+/**
+ * The statements migration 0046 runs for the unlinked areas. A game step filtered by one of them keeps running
+ * exactly as it did: it is re-pointed at the sub-lobe the area resolved to, then the area's link is removed.
+ */
+export function areaUnlinkSql(): string {
+  const out: string[] = [];
+  for (const h of HEMISPHERES) {
+    for (const ba of AREAS_UNLINKED_0046) {
+      const lobe = AREAS.find((a) => a.code === ba)!.lobe;
+      const path = q(`${h.code}.${lobe}.${ba}`);
+      for (const table of ["template_step", "assignment_step"])
+        out.push(`UPDATE app.${table} t SET region_id = a.sublobe_id FROM app.brain_region a WHERE a.path = ${path} AND a.sublobe_id IS NOT NULL AND t.region_id = a.id;`);
+      out.push(`UPDATE app.brain_region SET sublobe_id = NULL WHERE path = ${path};`);
+    }
+  }
+  return out.join("\n");
+}
+
 
 /** The statements migration 0018 runs to add the subcortical lobe, the sub-lobes and the area links. */
 export function regionExpandSql(): string {
@@ -149,7 +177,7 @@ export function regionExpandSql(): string {
         `INSERT INTO app.brain_region (kind, code, path, parent_id, labels, sort) SELECT 'sublobe', ${q(s.code)}, ${q(`${lp}.${s.code}`)}, id, ${labels(s)}, ${100 + i} FROM app.brain_region WHERE path = ${q(lp)};`,
       );
     });
-    for (const [ba, sub] of Object.entries(AREA_SUBLOBE)) {
+    for (const [ba, sub] of Object.entries(AREA_SUBLOBE_0018)) {
       const lobe = AREAS.find((a) => a.code === ba)!.lobe;
       out.push(
         `UPDATE app.brain_region a SET sublobe_id = s.id FROM app.brain_region s WHERE a.path = ${q(`${h.code}.${lobe}.${ba}`)} AND s.path = ${q(`${h.code}.${lobe}.${sub}`)};`,

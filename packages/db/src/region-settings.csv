@@ -20,10 +20,10 @@ Right,Subcortical,Basal Ganglia - Indirect,Cold,"textured, solid",TTB,1,"W, SW, 
 Right,Subcortical,Brainstem - Mesencephalon,Cold,"textured, solid",TTB,"0, 1","W, N, S",CW
 Right,Subcortical,Cerebelum,warm,"textured, solid",TRDBL,"0, 3","E, SE, NE, N, S",CCW
 Right,Subcortical,Cerebelum,warm,"textured, solid",BLDTR,"1, 4","E, SE, NE, N, S",CCW
-Left,Frontal,DLPFC,warm,Textured,RTL,"0, 3","E, SE, S",CCW
-Left,Frontal,DLPFC,warm,Textured,LTR,"1, 4","E, SE, S",CCW
-Left,Frontal,Orbital frontal,warm,Solid,RTL,"0, 3","E, NE, N",CCW
-Left,Frontal,Orbital frontal,warm,Solid,LTR,"1, 4","E, NE, N",CCW
+Left,Frontal,DLPFC,warm,Textured,"RTL, TRDBL","0, 3","E, SE, S",CCW
+Left,Frontal,DLPFC,warm,Textured,"LTR, BLDTR","1, 4","E, SE, S",CCW
+Left,Frontal,Orbital frontal,warm,Solid,"RTL, TRDBL","0, 3","E, NE, N",CCW
+Left,Frontal,Orbital frontal,warm,Solid,"LTR, BLDTR","1, 4","E, NE, N",CCW
 Left,Parietal,Parietal,warm,Textured,"RTL, TRDBL",0,"E, SE, S",CCW
 Left,Parietal,Inferior Parietal,warm,Textured,"RTL, TRDBL",0,"E, SE, S",CCW
 Left,Temporal,Superior Temporal,warm,Solid,"RTL, TRDBL",0,"E, NE, N",CCW

@@ -398,13 +398,15 @@ export const REGION_SETTINGS_0018: SettingRow[] = [
 
 /**
  * The table as it stands: the product owner's sheet of 2026-11-27 with the same day's correction to the left
- * basal ganglia (region-settings.csv), applied by migrations 0044 and 0045.
+ * basal ganglia and the spreadsheet sent later that day, brain_region_new_platform.xlsx (region-settings.csv),
+ * applied by migrations 0044, 0045 and 0046. In the spreadsheet Excel shows the movement type "1, 4" as a date
+ * (4 January); it is read as 1, 4.
  *
- * One deviation from the sheet as typed, pending the owner's confirmation: the correction gave the left direct
+ * One deviation from the sheet as typed, pending the owner's confirmation: it gives the left direct
  * pathway "LTR, TRDBL" for intervals and "RTL, BLDTR" for continuous movement. TRDBL heads left and BLDTR heads
  * right, so as typed both diagonals break the owner's own rule for a left-hemisphere row (continuous heads left,
  * intervals head right). The two diagonals are stored the other way round — intervals LTR, BLDTR; continuous RTL,
- * TRDBL — which is also what the right cerebellum row has.
+ * TRDBL — which is what the sheet's own left DLPFC, left orbitofrontal and right cerebellum rows have.
  *
  * Generated from the CSV with parseSettingsCsv; kept in step by test/region-data.test.ts. The sheet has no
  * background-type column: each sub-lobe keeps the type it had, and the new basal-ganglia rows take both, like the
@@ -582,8 +584,8 @@ export const REGION_SETTINGS: SettingRow[] = [
     bg_temperature: "warm",
     bg_types: ["textured"],
     motion: [
-      { movement_types: [0, 3], directions: ["rtl"] },
-      { movement_types: [1, 4], directions: ["ltr"] },
+      { movement_types: [0, 3], directions: ["rtl", "trdbl"] },
+      { movement_types: [1, 4], directions: ["ltr", "bldtr"] },
     ],
     target_locations: ["E", "SE", "S"],
     rotation: "ccw",
@@ -595,8 +597,8 @@ export const REGION_SETTINGS: SettingRow[] = [
     bg_temperature: "warm",
     bg_types: ["solid"],
     motion: [
-      { movement_types: [0, 3], directions: ["rtl"] },
-      { movement_types: [1, 4], directions: ["ltr"] },
+      { movement_types: [0, 3], directions: ["rtl", "trdbl"] },
+      { movement_types: [1, 4], directions: ["ltr", "bldtr"] },
     ],
     target_locations: ["E", "NE", "N"],
     rotation: "ccw",
@@ -715,8 +717,15 @@ export const REGION_SETTINGS: SettingRow[] = [
   },
 ];
 
+/** The table as migration 0045 left it: before the sheet of 2026-11-27 (xlsx) added diagonals to the left frontal rows. */
+export const REGION_SETTINGS_0045: SettingRow[] = REGION_SETTINGS.map((r) =>
+  r.side === "left" && r.lobe === "frontal"
+    ? { ...r, motion: [{ movement_types: [0, 3], directions: ["rtl"] }, { movement_types: [1, 4], directions: ["ltr"] }] }
+    : r,
+);
+
 /** The table as migration 0044 left it: before the correction to the left basal ganglia's direct pathway. */
-export const REGION_SETTINGS_0044: SettingRow[] = REGION_SETTINGS.map((r) =>
+export const REGION_SETTINGS_0044: SettingRow[] = REGION_SETTINGS_0045.map((r) =>
   r.side === "left" && r.sublobe === "basal_ganglia_direct"
     ? { ...r, motion: [{ movement_types: [1, 4], directions: ["ltr", "tldbr"] }, { movement_types: [0, 3], directions: ["rtl", "brdtl"] }, { movement_types: [0, 1], directions: ["btt"] }] }
     : r,

@@ -59,6 +59,9 @@ describe("region settings sheet", () => {
     expect(bg("left", "basal_ganglia_indirect")).toMatchObject({ bg_temperature: "warm", rotation: "ccw", motion: [{ movement_types: [1], directions: ["ltr", "tldbr"] }, { movement_types: [1], directions: ["btt"] }] });
     const used = new Set(REGION_SETTINGS.flatMap((r) => r.motion.flatMap((m) => m.movement_types)));
     expect([...used].sort()).toEqual([0, 1, 3, 4]);
+    // Left frontal rows gained their diagonals in the spreadsheet of 2026-11-27.
+    expect(bg("left", "dlpfc").motion).toEqual([{ movement_types: [0, 3], directions: ["rtl", "trdbl"] }, { movement_types: [1, 4], directions: ["ltr", "bldtr"] }]);
+    expect(bg("left", "orbitofrontal").motion).toEqual(bg("left", "dlpfc").motion);
     // The first table obeys the rule too.
     expect(motionRuleErrors(REGION_SETTINGS_0018.map((r) => ({ ...r, path: `${r.side}.${r.lobe}.${r.sublobe}` })))).toEqual([]);
   });
@@ -100,7 +103,7 @@ describe("sub-lobes and Brodmann links", () => {
       expect(area, ba).toBeDefined();
       expect(SUBLOBES.find((s) => s.code === sub)?.lobe, `${ba} → ${sub}`).toBe(area!.lobe);
     }
-    expect(Object.keys(AREA_SUBLOBE)).toHaveLength(19);
+    expect(Object.keys(AREA_SUBLOBE)).toHaveLength(14); // 19 in the first table; the 2026-11-27 sheet lists five fewer
   });
 
   it("every sub-lobe has English and Hebrew labels, and the subcortical lobe is new", () => {
