@@ -87,7 +87,7 @@ export const SUBLOBES_0018: Array<Named & { lobe: string }> = [
  * The table of 2026-11-27 (migration 0044) added the two basal-ganglia pathways and files the pons and the
  * mesencephalon under "Brainstem". New entries go at the end: a sub-lobe's place in this list is its sort order.
  */
-export const SUBLOBES: Array<Named & { lobe: string }> = [
+export const SUBLOBES_0044: Array<Named & { lobe: string }> = [
   ...SUBLOBES_0018.map((s) =>
     s.code === "pons"
       ? { ...s, en: "Brainstem – Pons", he: "גזע המוח – גשר (פונס)" }
@@ -99,18 +99,24 @@ export const SUBLOBES: Array<Named & { lobe: string }> = [
   { code: "basal_ganglia_indirect", lobe: "subcortical", en: "Basal ganglia – indirect pathway", he: "גרעיני הבסיס – המסלול העקיף" },
 ];
 
-/** The statements migration 0044 runs to bring the tree from 0018's sub-lobes to today's: new nodes and new labels. */
-export function sublobeRevisionSql(): string {
+/**
+ * Today's sub-lobes. The owner's note of 2026-11-27 (migration 0045): the sub-lobe of BA5 and BA7 is called
+ * "Inferior parietal" (its code stays `superior_parietal`, so steps and videos that point at it are untouched).
+ */
+export const SUBLOBES: Array<Named & { lobe: string }> = SUBLOBES_0044.map((s) => (s.code === "superior_parietal" ? { ...s, en: "Inferior parietal", he: "קודקודי תחתון" } : s));
+
+/** The statements a migration runs to bring the tree from one list of sub-lobes to the next: new nodes and new labels. */
+export function sublobeRevisionSql(before: Array<Named & { lobe: string }>, after: Array<Named & { lobe: string }>): string {
   const out: string[] = [];
   for (const h of HEMISPHERES) {
-    SUBLOBES.forEach((s, i) => {
+    after.forEach((s, i) => {
       const path = `${h.code}.${s.lobe}.${s.code}`;
-      const before = SUBLOBES_0018.find((o) => o.code === s.code);
-      if (!before) {
+      const old = before.find((o) => o.code === s.code);
+      if (!old) {
         out.push(
           `INSERT INTO app.brain_region (kind, code, path, parent_id, labels, sort) SELECT 'sublobe', ${q(s.code)}, ${q(path)}, id, ${labels(s)}, ${100 + i} FROM app.brain_region WHERE path = ${q(`${h.code}.${s.lobe}`)};`,
         );
-      } else if (before.en !== s.en || before.he !== s.he) {
+      } else if (old.en !== s.en || old.he !== s.he) {
         out.push(`UPDATE app.brain_region SET labels = ${labels(s)} WHERE path = ${q(path)};`);
       }
     });

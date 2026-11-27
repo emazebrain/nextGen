@@ -40,6 +40,7 @@ const SUBLOBE_CODE: Record<string, string> = {
   "basal ganglia - indirect": "basal_ganglia_indirect",
   // The same sub-lobe as "Superior Parietal" in the first table (BA5, BA7); renamed in the sheet, open question.
   inferiorparietal: "superior_parietal",
+  "inferior parietal": "superior_parietal",
 };
 const DIRS = new Set([
   "ltr",
@@ -396,7 +397,15 @@ export const REGION_SETTINGS_0018: SettingRow[] = [
 ];
 
 /**
- * The table as it stands: the product owner's sheet of 2026-11-27 (region-settings.csv), applied by migration 0044.
+ * The table as it stands: the product owner's sheet of 2026-11-27 with the same day's correction to the left
+ * basal ganglia (region-settings.csv), applied by migrations 0044 and 0045.
+ *
+ * One deviation from the sheet as typed, pending the owner's confirmation: the correction gave the left direct
+ * pathway "LTR, TRDBL" for intervals and "RTL, BLDTR" for continuous movement. TRDBL heads left and BLDTR heads
+ * right, so as typed both diagonals break the owner's own rule for a left-hemisphere row (continuous heads left,
+ * intervals head right). The two diagonals are stored the other way round — intervals LTR, BLDTR; continuous RTL,
+ * TRDBL — which is also what the right cerebellum row has.
+ *
  * Generated from the CSV with parseSettingsCsv; kept in step by test/region-data.test.ts. The sheet has no
  * background-type column: each sub-lobe keeps the type it had, and the new basal-ganglia rows take both, like the
  * other subcortical rows.
@@ -672,8 +681,8 @@ export const REGION_SETTINGS: SettingRow[] = [
     bg_temperature: "warm",
     bg_types: ["textured", "solid"],
     motion: [
-      { movement_types: [1, 4], directions: ["ltr", "tldbr"] },
-      { movement_types: [0, 3], directions: ["rtl", "brdtl"] },
+      { movement_types: [1, 4], directions: ["ltr", "bldtr"] },
+      { movement_types: [0, 3], directions: ["rtl", "trdbl"] },
       { movement_types: [0, 1], directions: ["btt"] },
     ],
     target_locations: ["E", "SE", "NE", "N", "S"],
@@ -706,6 +715,13 @@ export const REGION_SETTINGS: SettingRow[] = [
   },
 ];
 
+/** The table as migration 0044 left it: before the correction to the left basal ganglia's direct pathway. */
+export const REGION_SETTINGS_0044: SettingRow[] = REGION_SETTINGS.map((r) =>
+  r.side === "left" && r.sublobe === "basal_ganglia_direct"
+    ? { ...r, motion: [{ movement_types: [1, 4], directions: ["ltr", "tldbr"] }, { movement_types: [0, 3], directions: ["rtl", "brdtl"] }, { movement_types: [0, 1], directions: ["btt"] }] }
+    : r,
+);
+
 const same = (a: SettingRow, b: SettingRow) => JSON.stringify(a) === JSON.stringify(b);
 
 /**
@@ -713,7 +729,7 @@ const same = (a: SettingRow, b: SettingRow) => JSON.stringify(a) === JSON.string
  * is replaced, goes back to draft and has its revision bumped (launches record the revision they ran with); a new
  * sub-lobe's row is inserted. Rows that did not change are left alone.
  */
-export function settingRevisionSql(before: SettingRow[] = REGION_SETTINGS_0018, after: SettingRow[] = REGION_SETTINGS): string {
+export function settingRevisionSql(before: SettingRow[], after: SettingRow[]): string {
   const out: string[] = [];
   for (const r of after) {
     const path = `${r.side}.${r.lobe}.${r.sublobe}`;

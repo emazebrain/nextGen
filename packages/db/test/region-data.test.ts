@@ -48,6 +48,14 @@ describe("region settings sheet", () => {
       { movement_types: [0, 3], directions: ["ltr", "tldbr"] },
       { movement_types: [0, 1], directions: ["ttb"] },
     ]);
+    // Left direct pathway: the mirror of the right one — continuous heads left (RTL, TRDBL), intervals head right.
+    expect(bg("left", "basal_ganglia_direct").motion).toEqual([
+      { movement_types: [1, 4], directions: ["ltr", "bldtr"] },
+      { movement_types: [0, 3], directions: ["rtl", "trdbl"] },
+      { movement_types: [0, 1], directions: ["btt"] },
+    ]);
+    // As typed in the correction (LTR, TRDBL for intervals; RTL, BLDTR for continuous) it would break the rule.
+    expect(motionRuleErrors([{ path: "as typed", bg_temperature: "warm", motion: [{ movement_types: [1, 4], directions: ["ltr", "trdbl"] }, { movement_types: [0, 3], directions: ["rtl", "bldtr"] }] }]).length).toBeGreaterThan(0);
     expect(bg("left", "basal_ganglia_indirect")).toMatchObject({ bg_temperature: "warm", rotation: "ccw", motion: [{ movement_types: [1], directions: ["ltr", "tldbr"] }, { movement_types: [1], directions: ["btt"] }] });
     const used = new Set(REGION_SETTINGS.flatMap((r) => r.motion.flatMap((m) => m.movement_types)));
     expect([...used].sort()).toEqual([0, 1, 3, 4]);
