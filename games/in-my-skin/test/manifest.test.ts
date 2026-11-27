@@ -19,10 +19,11 @@ describe("manifest", () => {
     expect(manifest.lifeLossEvents.map((e) => e.id)).toEqual(["stopped_early", "stopped_late", "no_stop"]);
   });
 
-  it("offers every picture category and every movement type as a setting", () => {
+  it("offers every picture category, and the movement types whose return leg obeys the eye-movement rule", () => {
     const p = manifest.paramsSchema.properties;
     expect(p.category!.enum).toEqual(["auto", ...CATEGORIES]);
-    expect(p.movement_type!.enum).toEqual(["auto", ...MOVEMENT_TYPES]);
+    // Out and back by the same kind of movement (continuous-continuous, intervals-intervals) is not offered.
+    expect(p.movement_type!.enum).toEqual(["auto", ...MOVEMENT_TYPES.filter((m) => m.split("-")[0] !== m.split("-")[1])]);
     for (const key of ["category", "movement_type", "bg_temperature", "background", "direction"]) {
       const def = p[key]!;
       for (const v of def.enum!) {

@@ -185,10 +185,8 @@ export const manifest: GameManifest = {
           "auto",
           "continuous",
           "intervals",
-          "continuous-continuous",
           "continuous-intervals",
-          "intervals-continuous",
-          "intervals-intervals"
+          "intervals-continuous"
         ],
         "default": "auto",
         "x-ui": {
@@ -197,8 +195,8 @@ export const manifest: GameManifest = {
             "he": "תנועה"
           },
           "help": {
-            "en": "Automatic = from the brain region. Intervals: the picture jumps from spot to spot.",
-            "he": "אוטומטי = לפי אזור המוח. בקפיצות: התמונה קופצת מנקודה לנקודה."
+            "en": "Automatic = from the brain region. Intervals: the picture jumps from spot to spot. \"Back\" = it returns the opposite way.",
+            "he": "אוטומטי = לפי אזור המוח. בקפיצות: התמונה קופצת מנקודה לנקודה. ״חזרה״ = היא חוזרת בכיוון ההפוך."
           },
           "widget": "select",
           "options": {
@@ -214,10 +212,6 @@ export const manifest: GameManifest = {
               "en": "Intervals",
               "he": "בקפיצות"
             },
-            "continuous-continuous": {
-              "en": "Continuous, back continuous",
-              "he": "רציפה, חזרה רציפה"
-            },
             "continuous-intervals": {
               "en": "Continuous, back in intervals",
               "he": "רציפה, חזרה בקפיצות"
@@ -225,10 +219,6 @@ export const manifest: GameManifest = {
             "intervals-continuous": {
               "en": "Intervals, back continuous",
               "he": "בקפיצות, חזרה רציפה"
-            },
-            "intervals-intervals": {
-              "en": "Intervals, back in intervals",
-              "he": "בקפיצות, חזרה בקפיצות"
             }
           }
         }

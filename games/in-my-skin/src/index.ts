@@ -106,8 +106,11 @@ class InMySkin implements GameModule {
     this.textured = p["in_my_skin.background"] === "textured";
     const temp = p["in_my_skin.bg_temperature"];
     this.look = ctx.monochrome ? LOOKS.mono : LOOKS[temp === "warm" || temp === "cold" ? temp : ctx.palette];
+    // "Out and back the same way" (continuous-continuous, intervals-intervals) is no longer offered: its return leg
+    // breaks the eye-movement rule (product owner, 2026-11-27). A step saved with one plays the one-word type.
+    const SAME_WAY_BACK: Record<number, number> = { 2: 0, 5: 1 };
     const move = MOVEMENT_TYPES.indexOf(p["in_my_skin.movement_type"] as (typeof MOVEMENT_TYPES)[number]);
-    this.movementOverride = move >= 0 ? move : null;
+    this.movementOverride = move >= 0 ? (SAME_WAY_BACK[move] ?? move) : null;
     const cat = p["in_my_skin.category"];
     const category = (CATEGORIES as readonly string[]).includes(cat as string) ? (cat as Category) : null;
 
