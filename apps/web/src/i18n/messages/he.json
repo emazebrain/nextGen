@@ -641,6 +641,7 @@
   "videos.status.draft": "טיוטה",
   "videos.status.published": "פורסם",
   "videos.status.archived": "בארכיון",
+  "videos.fileMissing": "הקובץ חסר — יש להעלות שוב",
   "videos.needsInternet": "דורש אינטרנט",
   "videos.onDevice": "אפשר לשמור במכשיר",
   "videos.noRegions": "עדיין אין אזורים",

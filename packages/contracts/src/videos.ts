@@ -83,6 +83,8 @@ export interface VideoSummary {
   status: "draft" | "published" | "archived";
   version: number;
   has_file: boolean;
+  /** Library managers only: the upload's file is no longer in storage and must be uploaded again. */
+  file_missing?: boolean;
   /** YouTube videos stream from YouTube and cannot be kept on the device. */
   needs_internet: boolean;
   regions: RegionRef[];

@@ -69,7 +69,13 @@ export function VideosAdminPage() {
     { id: "source", header: t("videos.col.source"), cell: (v) => <VideoSourceChip video={v} /> },
     { id: "regions", header: t("videos.col.regions"), cell: (v) => <VideoRegionChips video={v} /> },
     { id: "length", header: t("videos.col.length"), numeric: true, cell: (v) => formatDuration(v.duration_s) },
-    { id: "status", header: t("videos.col.status"), cell: (v) => <Chip tone={statusTone[v.status]}>{t(`videos.status.${v.status}`)}</Chip> },
+    { id: "status", header: t("videos.col.status"), cell: (v) => (
+        <>
+          <Chip tone={statusTone[v.status]}>{t(`videos.status.${v.status}`)}</Chip>
+          {v.file_missing && <> <Chip tone="danger">{t("videos.fileMissing")}</Chip></>}
+        </>
+      ),
+    },
   ];
   return (
     <div className="app-page">

@@ -139,7 +139,20 @@ export function videoRoutes(pool: pg.Pool, files: FileStore) {
           ORDER BY v.created_at DESC`,
         [all, region ?? null, like, code],
       );
-      return rows.map((row) => toSummary(row, lang)).sort((a, b) => a.title.localeCompare(b.title, lang));
+      const list = rows.map((row) => toSummary(row, lang)).sort((a, b) => a.title.localeCompare(b.title, lang));
+      // The library manager sees which uploads have lost their file, so they can be uploaded again.
+      if (all && (await isAdmin(db))) {
+        const keys = await db.query<{ id: string; storage_key: string }>(`SELECT v.id, f.storage_key FROM app.video v JOIN app.file_object f ON f.id = v.file_id`);
+        for (const k of keys.rows) {
+          const opened = await files.open(k.storage_key, { start: 0, end: 0 });
+          if (opened) await opened.stream.cancel();
+          else {
+            const v = list.find((x) => x.id === k.id);
+            if (v) v.file_missing = true;
+          }
+        }
+      }
+      return list;
     });
     return c.json({ videos });
   });
@@ -158,7 +171,7 @@ export function videoRoutes(pool: pg.Pool, files: FileStore) {
     const vParam = c.req.query("v");
     const version = vParam === undefined ? null : /^[1-9]\d{0,8}$/.test(vParam) ? Number(vParam) : -1;
     if (version === -1) return notFound(c);
-    const file = await run(c, async (db) => {
+    const read = async (db: pg.PoolClient) => {
       if (version === null) {
         const { rows } = await db.query<{ storage_key: string; mime: string; sha256: Buffer; bytes: string }>(
           `SELECT f.storage_key, f.mime, f.sha256, f.bytes FROM app.video v JOIN app.file_object f ON f.id = v.file_id WHERE v.id = $1`,
@@ -175,7 +188,8 @@ export function videoRoutes(pool: pg.Pool, files: FileStore) {
         [id, version],
       );
       return rows[0] ?? null;
-    });
+    };
+    const file = await run(c, read);
     if (!file) return notFound(c);
     const size = Number(file.bytes);
     const range = parseRange(c.req.header("range"), size);
@@ -188,7 +202,8 @@ export function videoRoutes(pool: pg.Pool, files: FileStore) {
     };
     if (range === "invalid") return new Response(null, { status: 416, headers: { ...headers, "content-range": `bytes */${size}` } });
     const opened = await files.open(file.storage_key, range ?? undefined);
-    if (!opened) return notFound(c);
+    // The record is there but the file is not (lost storage): say so, so it is not mistaken for "no such video".
+    if (!opened) return c.json({ error: "file_missing" }, 404);
     if (!range) return new Response(opened.stream, { status: 200, headers: { ...headers, "content-length": String(size) } });
     return new Response(opened.stream, {
       status: 206,

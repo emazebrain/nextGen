@@ -641,6 +641,7 @@
   "videos.status.draft": "Draft",
   "videos.status.published": "Published",
   "videos.status.archived": "Archived",
+  "videos.fileMissing": "File missing — upload again",
   "videos.needsInternet": "Needs Internet",
   "videos.onDevice": "Can be kept on the device",
   "videos.noRegions": "No regions yet",

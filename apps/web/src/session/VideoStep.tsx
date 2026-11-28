@@ -11,6 +11,7 @@ import { Alert, Button } from "@emb/ui";
 import { useT } from "../i18n/index.tsx";
 import { uuidv7 } from "../lib/ids.ts";
 import { noteActivity } from "../lib/idle.ts";
+import { canKeepVideos, dropVideo, keepVideo, storedVideo } from "./videoCache.ts";
 
 const YOUTUBE_CONTINUE_AFTER_S = 3;
 
@@ -57,6 +58,28 @@ export function VideoStep({
   const videoRef = useRef<HTMLVideoElement>(null);
   const offline = v.source === "youtube" && typeof navigator !== "undefined" && navigator.onLine === false;
   // Nothing to play (an upload without a file): the child must still be able to go on.
+  // Uploaded videos play from the copy kept on this device when there is one; otherwise from the server, and the
+  // file is then kept for next time (a new version has a new address, so it is fetched once more).
+  const fileUrl = v.source === "upload" ? v.file_url ?? null : null;
+  const keeps = canKeepVideos(fileUrl);
+  const [src, setSrc] = useState<{ url: string; local: boolean } | null>(() => (fileUrl && !keeps ? { url: fileUrl, local: false } : null));
+  useEffect(() => {
+    if (!fileUrl || !keeps) return;
+    let gone = false;
+    let made: string | null = null;
+    void storedVideo(fileUrl).then((local) => {
+      if (gone) {
+        if (local) URL.revokeObjectURL(local);
+        return;
+      }
+      made = local;
+      setSrc(local ? { url: local, local: true } : { url: fileUrl, local: false });
+    });
+    return () => {
+      gone = true;
+      if (made) URL.revokeObjectURL(made);
+    };
+  }, [fileUrl, keeps]);
   const playable = (v.source === "upload" && !!v.file_url) || (v.source === "youtube" && !!v.youtube_id);
   if (!playable && !canContinue) setCanContinue(true);
 
@@ -94,11 +117,11 @@ export function VideoStep({
         {v.source === "upload" && v.file_url ? (
           failed ? (
             <Alert tone="warning">{t("run.video.failed")}</Alert>
-          ) : (
+          ) : !src ? null : (
             <video
               ref={videoRef}
               className="videostep__video"
-              src={v.file_url}
+              src={src.url}
               controls
               autoPlay
               muted
@@ -112,8 +135,16 @@ export function VideoStep({
               onEnded={() => {
                 setEnded(true);
                 setCanContinue(true);
+                // Played through from the server: keep the file, in the background, for the next session.
+                if (fileUrl && !src.local) void keepVideo(fileUrl);
               }}
               onError={() => {
+                // A stored copy that will not play is dropped and the video is fetched again.
+                if (src.local && fileUrl) {
+                  void dropVideo(fileUrl);
+                  setSrc({ url: fileUrl, local: false });
+                  return;
+                }
                 setFailed(true);
                 setCanContinue(true);
               }}

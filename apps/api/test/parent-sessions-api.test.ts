@@ -229,6 +229,12 @@ describe.skipIf(!ADMIN_URL)("parent portal: session contents and starting in ord
     // The guardian's device can load the file.
     expect(v.video.file_url).toBe(`/v1/parent/videos/${video}/file?v=${v.video.version}`);
     expect((await miri.api.raw(v.video.file_url)).status).toBe(200);
+    // Taken out of the library after it was assigned: it still plays for the child's guardian (as for the therapist),
+    // and stays closed to a guardian whose child does not have it.
+    await env.db.query(`UPDATE app.video SET status = 'archived' WHERE id = $1`, [video]);
+    expect((await miri.api.raw(v.video.file_url)).status).toBe(200);
+    expect((await other.api.raw(v.video.file_url)).status).toBe(404);
+    await env.db.query(`UPDATE app.video SET status = 'published' WHERE id = $1`, [video]);
     // The parent door for videos opens for guardians only; a disabled guardian account is refused everywhere.
     expect((await yael.api.raw(v.video.file_url)).status).toBe(404);
     await env.db.query(`UPDATE app.app_user SET status = 'disabled' WHERE id = $1`, [other.userId]);
