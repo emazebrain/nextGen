@@ -171,26 +171,32 @@ export function videoRoutes(pool: pg.Pool, files: FileStore) {
     const vParam = c.req.query("v");
     const version = vParam === undefined ? null : /^[1-9]\d{0,8}$/.test(vParam) ? Number(vParam) : -1;
     if (version === -1) return notFound(c);
-    const read = async (db: pg.PoolClient) => {
-      if (version === null) {
-        const { rows } = await db.query<{ storage_key: string; mime: string; sha256: Buffer; bytes: string }>(
-          `SELECT f.storage_key, f.mime, f.sha256, f.bytes FROM app.video v JOIN app.file_object f ON f.id = v.file_id WHERE v.id = $1`,
-          [id],
-        );
-        return rows[0] ?? null;
-      }
-      // Try exact version first; fall back to the video's current file (metadata updates bump the version
-      // without re-uploading, so the file_object may still have the earlier video_version).
-      const { rows } = await db.query<{ storage_key: string; mime: string; sha256: Buffer; bytes: string }>(
+    type FileRow = { storage_key: string; mime: string; sha256: Buffer; bytes: string };
+    // The file of the version asked for comes first, then the video's current file. The second is there for two
+    // cases: an edit that bumped the version without a new upload, and a version whose file is no longer in storage
+    // (a player that was handed the older address then gets the current file instead of nothing).
+    const found = await run(c, async (db) => {
+      const { rows } = await db.query<FileRow>(
         `SELECT f.storage_key, f.mime, f.sha256, f.bytes FROM app.video v JOIN app.file_object f
-            ON (f.video_id = v.id AND f.video_version = $2) OR f.id = v.file_id
-          WHERE v.id = $1 ORDER BY (f.video_version = $2)::int DESC LIMIT 1`,
+            ON (f.video_id = v.id AND f.video_version = $2::int) OR f.id = v.file_id
+          WHERE v.id = $1 ORDER BY COALESCE(f.video_version = $2::int, false)::int DESC, (f.id = v.file_id)::int DESC`,
         [id, version],
       );
-      return rows[0] ?? null;
-    };
-    const file = await run(c, read);
-    if (!file) return notFound(c);
+      return rows;
+    });
+    if (found.length === 0) return notFound(c);
+    let file: FileRow | null = null;
+    let stood_in = false;
+    for (const row of found) {
+      const there = await files.open(row.storage_key, { start: 0, end: 0 });
+      if (!there) continue;
+      await there.stream.cancel();
+      file = row;
+      stood_in = row !== found[0];
+      break;
+    }
+    // The record is there but no file is (lost storage): say so, so it is not mistaken for "no such video".
+    if (!file) return c.json({ error: "file_missing" }, 404);
     const size = Number(file.bytes);
     const range = parseRange(c.req.header("range"), size);
     const headers: Record<string, string> = {
@@ -198,7 +204,8 @@ export function videoRoutes(pool: pg.Pool, files: FileStore) {
       "content-type": file.mime,
       etag: `"${file.sha256.toString("hex")}"`,
       // A versioned URL never changes its bytes, so it may be kept for good; the bare URL follows new uploads.
-      "cache-control": version === null ? "private, no-cache" : "private, max-age=31536000, immutable",
+      // A stand-in for a lost version is not kept: the address may name other bytes later.
+      "cache-control": version === null || stood_in ? "private, no-cache" : "private, max-age=31536000, immutable",
     };
     if (range === "invalid") return new Response(null, { status: 416, headers: { ...headers, "content-range": `bytes */${size}` } });
     const opened = await files.open(file.storage_key, range ?? undefined);

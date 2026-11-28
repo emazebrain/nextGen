@@ -24,6 +24,9 @@ import { calendarRoutes } from "./modules/calendar/routes.ts";
 import { searchRoutes } from "./modules/search/routes.ts";
 import { deviceKey, type DeviceKey } from "./device-crypto.ts";
 import { fileStorePlan, localFileStore, type FileStore } from "./files.ts";
+
+/** When this server process started (a deploy starts a new one). */
+const STARTED_AT = new Date().toISOString();
 import { createMailer, type Mailer } from "./email.ts";
 import { ticketSigner, type TicketSigner } from "./tickets.ts";
 
@@ -139,6 +142,30 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
     // Whether uploads are kept for good, so the upload screens can warn while they are not.
     const filesDurable = deps.filesDurable ?? (deps.files ? true : fileStorePlan().durable);
     v1.get("/files/status", (c) => c.json({ durable: filesDurable }));
+    // For the platform admin: where files are kept and which uploaded videos have lost theirs. Answered by the
+    // server from its own storage, so it does not depend on what any browser has saved. No patient data.
+    v1.get("/files/check", async (c) => {
+      const rows = await withUser(deps.pool, c.get("user").id, c.get("requestId"), async (db) => {
+        const admin = (await db.query<{ a: boolean }>(`SELECT app.is_platform_admin() AS a`)).rows[0]!.a;
+        if (!admin) return null;
+        return (
+          await db.query<{ id: string; title: string | null; version: number; status: string; file_version: number | null; storage_key: string; bytes: string; uploaded_at: Date }>(
+            `SELECT v.id, (SELECT i.title FROM app.video_i18n i WHERE i.video_id = v.id ORDER BY (i.locale = 'en') DESC LIMIT 1) AS title,
+                    v.version, v.status, f.video_version AS file_version, f.storage_key, f.bytes, f.created_at AS uploaded_at
+               FROM app.video v JOIN app.file_object f ON f.id = v.file_id ORDER BY f.created_at`,
+          )
+        ).rows;
+      });
+      if (!rows) return c.json({ error: "forbidden" }, 403);
+      const videos = [];
+      for (const r of rows) {
+        const opened = await fileStore.open(r.storage_key, { start: 0, end: 0 });
+        if (opened) await opened.stream.cancel();
+        videos.push({ id: r.id, title: r.title, status: r.status, version: r.version, file_version: r.file_version, uploaded_at: r.uploaded_at, bytes: Number(r.bytes), on_disk: !!opened, size_on_disk: opened?.size ?? null });
+      }
+      const plan = deps.files ? null : fileStorePlan();
+      return c.json({ durable: filesDurable, folder: plan?.dir ?? null, started_at: STARTED_AT, videos });
+    });
     const videos = videoRoutes(deps.pool, fileStore);
     v1.route("/", videos);
     const music = musicRoutes(deps.pool, fileStore);

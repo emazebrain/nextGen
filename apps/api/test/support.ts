@@ -69,6 +69,8 @@ export function client(app: App): Api {
 }
 
 export interface TestEnv {
+  /** The folder uploaded files are kept in. */
+  fileDir: string;
   app: App;
   db: pg.Client;
   pool: pg.Pool;
@@ -111,6 +113,8 @@ export async function setupApi(opts: { authSchema?: string; mailer?: Mailer } = 
     nextStep: () => vi.setSystemTime(Date.now() + 30_000),
     deviceKey: key,
     tickets,
+    /** The folder uploaded files are kept in, so a test can lose one. */
+    fileDir,
     close: async () => {
       vi.useRealTimers();
       await pool.end();

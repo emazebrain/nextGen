@@ -1,4 +1,6 @@
 /** The video library through the API (ADR 0018): regions, adding and finding videos, uploads and byte ranges. */
+import { rmSync } from "node:fs";
+import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ADMIN_URL, addMember, platformAdmin, seedClinics, setupApi, staffClient, type Api, type TestEnv } from "./support.ts";
@@ -188,6 +190,27 @@ describe.skipIf(!ADMIN_URL)("videos API", () => {
     const current = await admin.raw(`/v1/videos/${id}/file`);
     expect(new Uint8Array(await current.arrayBuffer())).toEqual(b);
     expect(current.headers.get("cache-control")).not.toContain("immutable");
+  });
+
+  it("a version whose file was lost plays the current file instead, and a video with no file left says so", async () => {
+    const id = (await admin("/v1/admin/videos", { method: "POST", body: video({ source: "upload", youtube_url: undefined, titles: { en: "Lost" }, status: "draft" }) })).body.video.id;
+    await upload(id, new Uint8Array(32).fill(1));
+    const b = new Uint8Array(48).fill(2);
+    await upload(id, b);
+    const keys = (await env.db.query<{ storage_key: string; video_version: number }>(`SELECT storage_key, video_version FROM app.file_object WHERE video_id = $1 ORDER BY video_version`, [id])).rows;
+    rmSync(join(env.fileDir, keys[0]!.storage_key));
+    const stoodIn = await admin.raw(`/v1/videos/${id}/file?v=2`);
+    expect(new Uint8Array(await stoodIn.arrayBuffer())).toEqual(b);
+    expect(stoodIn.headers.get("cache-control")).not.toContain("immutable");
+    const listed = (await admin("/v1/videos?all=1")).body.videos.find((v: { id: string }) => v.id === id);
+    expect(listed.file_missing).toBeUndefined();
+    rmSync(join(env.fileDir, keys[1]!.storage_key));
+    const gone = await admin(`/v1/videos/${id}/file?v=3`);
+    expect(gone.status).toBe(404);
+    expect(gone.body.error).toBe("file_missing");
+    expect((await admin("/v1/videos?all=1")).body.videos.find((v: { id: string }) => v.id === id).file_missing).toBe(true);
+    const check = (await admin("/v1/files/check")).body.videos.find((v: { id: string }) => v.id === id);
+    expect(check).toMatchObject({ title: "Lost", version: 3, on_disk: false });
   });
 
   it("an upload video can't be published before its file is in", async () => {
