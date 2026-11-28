@@ -68,6 +68,11 @@ export function PatientsPage() {
       ),
     },
     { id: "age", header: t("patients.col.age"), cell: (p) => age(p.date_of_birth) },
+    {
+      id: "therapist",
+      header: t("patients.col.therapist"),
+      cell: (p) => (p.therapists?.length ? <bdi>{intl.formatList(p.therapists, { type: "conjunction", style: "narrow" })}</bdi> : dash),
+    },
     ...(archived
       ? []
       : ([

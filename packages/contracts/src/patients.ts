@@ -133,6 +133,8 @@ export interface PatientListItem {
   status: PatientStatus;
   has_alert: boolean;
   archived: boolean;
+  /** Names of the therapists the patient is assigned to (current care team), primary first. */
+  therapists?: string[];
 }
 
 export interface GuardianView {

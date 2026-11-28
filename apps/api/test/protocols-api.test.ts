@@ -121,6 +121,8 @@ describe.skipIf(!ADMIN_URL)("protocols API", () => {
     // The patient list narrows the same way.
     const listed = async (who: Api, therapist: string) => (await who(`/v1/patients?clinic=${ids.clinic}&therapist=${therapist}`)).body.patients.length;
     expect(await listed(m.api, ids.yael)).toBe(1);
+    // The list names who each patient is assigned to.
+    expect((await m.api(`/v1/patients?clinic=${ids.clinic}`)).body.patients[0].therapists).toEqual(["Yael Bar"]);
     expect(await listed(m.api, dn)).toBe(0);
     expect(await listed(dana, ids.yael)).toBe(0);
     expect((await m.api(`/v1/patients?therapist=x`)).status).toBe(400);

@@ -127,6 +127,7 @@
   "patients.col.age": "גיל",
   "patients.col.dob": "תאריך לידה",
   "patients.col.status": "סטטוס",
+  "patients.col.therapist": "מטפל/ת",
   "patients.status": "{status, select, active {פעיל} pending_consent {ממתין להסכמה} consent_legacy {נדרש חידוש הסכמה} inactive {לא פעיל} discharged {סיים} other {לא ידוע}}",
   "patients.empty.title": "עדיין אין מטופלים",
   "patients.empty.body": "אפשר להוסיף את המטופל הראשון כדי להתחיל פרוטוקול.",

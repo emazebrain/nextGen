@@ -127,6 +127,7 @@
   "patients.col.age": "Age",
   "patients.col.dob": "Date of birth",
   "patients.col.status": "Status",
+  "patients.col.therapist": "Therapist",
   "patients.status": "{status, select, active {Active} pending_consent {Awaiting consent} consent_legacy {Consent to renew} inactive {Inactive} discharged {Discharged} other {Unknown}}",
   "patients.empty.title": "No patients yet",
   "patients.empty.body": "Add your first patient to start a protocol.",
