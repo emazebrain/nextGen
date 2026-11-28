@@ -23,7 +23,7 @@
   "auth.signIn.submit": "Sign in",
   "auth.signIn.invalid": "That email and password don't match. Check them and try again.",
   "auth.signIn.missing": "Enter your email and password.",
-  "auth.signIn.idle": "You were signed out after 15 minutes without activity, to protect patient information.",
+  "auth.signIn.idle": "You were signed out after a period without activity, to protect patient information.",
   "auth.signIn.demo": "Demo with synthetic data. Sign in with any email and a password of at least 12 characters. Any 6-digit code works except 000000.",
   "auth.signIn.signedOut": "You've signed out.",
   "auth.signIn.forgotPassword": "Forgot your password?",

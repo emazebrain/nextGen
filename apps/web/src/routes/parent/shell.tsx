@@ -10,6 +10,7 @@ import { Alert, Button, Logo, MazeLoader } from "@emb/ui";
 import { authClient } from "../../api/auth.ts";
 import { useParentThreads } from "../../api/messaging.ts";
 import { createContext, useContext, useState } from "react";
+import { forgetParentActivity, useParentIdleSignOut } from "./idle.ts";
 
 interface ParentContextValue {
   children: ParentChild[];
@@ -42,7 +43,10 @@ export function ParentShell() {
   const threads = useParentThreads();
   const unread = (threads.data ?? []).reduce((n, th) => n + th.unread_count, 0);
 
+  // Signed out after four minutes without activity (see idle.ts).
+  useParentIdleSignOut(!!me.data);
   const signOut = async () => {
+    forgetParentActivity();
     await authClient.signOut().catch(() => {});
     qc.clear();
     navigate("/sign-in?reason=signed_out", { replace: true });

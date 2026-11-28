@@ -12,6 +12,7 @@ import { useParentMe } from "../../api/parent.ts";
 import { useT } from "../../i18n/index.tsx";
 import { flush, setUploadPortal } from "../../session/outbox.ts";
 import { SessionPage } from "../../session/SessionPage.tsx";
+import { useParentIdleSignOut } from "./idle.ts";
 
 /** While a guardian is signed in: results go to the parent door, and anything still waiting is sent again. */
 export function useParentUploads(signedIn: boolean) {
@@ -36,6 +37,8 @@ export function ParentSessionRoute() {
   // Before the first render of the player, so its very first upload already goes to the right place.
   if (me.data) setUploadPortal("parent");
   useParentUploads(!!me.data);
+  // Playing counts as activity (the game and the video report it), so this only ends a session left unattended.
+  useParentIdleSignOut(!!me.data);
 
   if (me.isPending) {
     return (
