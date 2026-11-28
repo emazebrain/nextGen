@@ -80,6 +80,23 @@ export function VideoStep({
       if (made) URL.revokeObjectURL(made);
     };
   }, [fileUrl, keeps]);
+  // The video starts by itself, with sound. A browser that refuses sound without a tap (some do, on the first
+  // video after the page was opened) starts it muted instead, so nobody has to press play.
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!src || !el || typeof el.play !== "function") return;
+    try {
+      const started = el.play();
+      if (started && typeof started.catch === "function") {
+        started.catch(() => {
+          el.muted = true;
+          void el.play()?.catch?.(() => undefined);
+        });
+      }
+    } catch {
+      /* no playback here (tests); the controls remain */
+    }
+  }, [src]);
   const playable = (v.source === "upload" && !!v.file_url) || (v.source === "youtube" && !!v.youtube_id);
   if (!playable && !canContinue) setCanContinue(true);
 
@@ -124,7 +141,6 @@ export function VideoStep({
               src={src.url}
               controls
               autoPlay
-              muted
               playsInline
               preload="auto"
               aria-label={v.title}
@@ -158,7 +174,7 @@ export function VideoStep({
           <iframe
             className="videostep__frame"
             title={v.title}
-            src={`https://www.youtube-nocookie.com/embed/${v.youtube_id}?rel=0&modestbranding=1&playsinline=1`}
+            src={`https://www.youtube-nocookie.com/embed/${v.youtube_id}?autoplay=1&rel=0&modestbranding=1&playsinline=1`}
             allow="autoplay; encrypted-media; picture-in-picture"
             referrerPolicy="strict-origin"
             // No popups or top navigation: the child can't leave the session through the player.
