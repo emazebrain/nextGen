@@ -27,6 +27,7 @@ import { parseBody } from "../../validate.ts";
 import { UUID } from "../patients/routes.ts";
 import { pick } from "../videos/routes.ts";
 import { timerPositionFor, timerShown } from "@emb/session-rules";
+import { therapistsOf } from "../patients/therapists.ts";
 
 const STEP_COLUMNS = `game_id, session_mode, duration_s, lives, difficulty_start, hemisphere, timer_position, practice, trial_window_ms, game_params, progression, monochrome, lives_auto, step_type, video_id, region_id, tones_enabled`;
 
@@ -172,7 +173,7 @@ export async function todayItems(db: pg.PoolClient, clinic: string | null, date:
             (SELECT count(*)::int FROM app.planned_session x WHERE x.assignment_id = a.id AND x.status <> 'cancelled') AS total,
             json_build_object('id', p.id, 'given_name', p.given_name, 'family_name', p.family_name,
                               'date_of_birth', to_char(p.date_of_birth, 'YYYY-MM-DD'), 'alert', p.alert,
-                              'can_play', app.patient_can_play(p.id)) AS patient,
+                              'can_play', app.patient_can_play(p.id), 'therapists', ${therapistsOf("p.id")}) AS patient,
             json_build_object('id', a.id, 'name', a.name, 'weeks', a.weeks) AS assignment,
             (SELECT array_agg(s.game_id ORDER BY s.ordinal) FILTER (WHERE s.step_type = 'game') FROM app.assignment_step s WHERE s.assignment_id = a.id) AS games,
             ${ITEMS_SQL("assignment_step", "assignment_id", "a.id")}
@@ -480,7 +481,8 @@ export function protocolRoutes(pool: pg.Pool) {
         const { rows } = await db.query(
           `SELECT a.id, a.title, a.notes, to_char(a.date, 'YYYY-MM-DD') AS date, a.start_time::text, a.end_time::text,
                   ${hasColor ? "a.color" : "'blue' AS color"},
-                  p.given_name AS patient_given_name, p.family_name AS patient_family_name, p.id AS patient_id
+                  p.given_name AS patient_given_name, p.family_name AS patient_family_name, p.id AS patient_id,
+                  ${therapistsOf("p.id")} AS therapists
              FROM app.appointment a
              JOIN app.patient p ON p.id = a.patient_id AND p.deleted_at IS NULL
             WHERE a.date = $1::date AND a.status = 'scheduled'

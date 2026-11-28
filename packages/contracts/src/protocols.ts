@@ -170,7 +170,7 @@ export interface TodayItem {
   seq: number;
   week: number;
   total: number;
-  patient: { id: string; given_name: string; family_name: string; date_of_birth: string; alert: string | null; can_play: boolean };
+  patient: { id: string; given_name: string; family_name: string; date_of_birth: string; alert: string | null; can_play: boolean; /** Names of the therapists the patient is assigned to. */ therapists?: string[] };
   assignment: { id: string; name: string; weeks: number };
   games: string[];
   /** Every step in order, games and videos. */

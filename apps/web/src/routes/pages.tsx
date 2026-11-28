@@ -32,7 +32,7 @@ import { meKey, useCaseload, useMe, usePatients, useToday, useReviewCount, useRe
 import { apiSend } from "../api/http.ts";
 import { authClient } from "../api/auth.ts";
 import { findGame, localText, GAMES } from "../games/registry.ts";
-import { fullName, LoadError, StatusChip, useAge } from "./shared.tsx";
+import { fullName, LoadError, StatusChip, useAge, TherapistOf } from "./shared.tsx";
 import { useT, usePrefs, locales, type Locale, type MessageId, type Motion, type Theme } from "../i18n/index.tsx";
 import { useClinic } from "../lib/clinic.tsx";
 import { ageParts, calendarDate, dayPart, firstName, matchesQuery } from "../lib/format.ts";
@@ -166,6 +166,7 @@ export function TodayPage() {
                     <Link to={at ? progressHref(p.id) : `/patients/${p.id}`} className="emb-stretched">
                       <bdi>{fullName(p)}</bdi>
                     </Link>
+                    <TherapistOf names={p.therapists} />
                     {at ? (
                       // What a therapist decides with: how it is going, whether the plan is followed, when they last played.
                       <span className="app-muted today-pitem__facts emb-tnum">
@@ -272,6 +273,7 @@ function ReviewQueue({ clinicId, count }: { clinicId: string | null; count: numb
                     <Avatar name={`${item.given_name} ${item.family_name}`} size={36} />
                     <span className="reviewq-item__text">
                       <bdi className="reviewq-item__name">{item.given_name} {item.family_name}</bdi>
+                      <TherapistOf names={item.therapists} />
                       <span className="app-muted">
                         {item.kind === "video" ? t("review.videoView") : gameName(item.game_id)}
                         {" · "}
@@ -378,6 +380,7 @@ function NextUp({ therapist }: { therapist: string | null }) {
               <Link to={`/patients/${it.patient.id}`} className="nextup__name">
                 <bdi>{fullName(it.patient)}</bdi>
               </Link>
+              <TherapistOf names={it.patient.therapists} />
               <p className="app-muted">
                 {time && <strong className="nextup__time emb-tnum">{clock(time)}</strong>}
                 {age(it.patient.date_of_birth)} · {t("today.session", { week: it.week, seq: it.seq, total: it.total })}
@@ -411,6 +414,7 @@ function NextUp({ therapist }: { therapist: string | null }) {
               <Link to={`/patients/${appt.patient_id}`} className="nextup__name">
                 <bdi>{name}</bdi>
               </Link>
+              <TherapistOf names={appt.therapists} />
               <p className="app-muted">
                 {start && (
                   <strong className="nextup__time emb-tnum" dir="ltr">

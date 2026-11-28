@@ -102,6 +102,8 @@ describe.skipIf(!ADMIN_URL)("protocols API", () => {
     expect(today.body.items).toEqual([
       expect.objectContaining({ seq: 1, week: 1, total: 12, patient: expect.objectContaining({ given_name: "Noa", can_play: false }), games: ["catch-me-if-you-can", "catch-me-if-you-can"] }),
     ]);
+    // Wherever a patient is shown, so is the therapist they are assigned to.
+    expect(today.body.items[0].patient.therapists).toEqual(["Yael Bar"]);
     expect((await dana(`/v1/today?clinic=${ids.clinic}`)).body.items).toEqual([]);
 
     // Whose day (the home page's therapist switcher). A clinic manager is on nobody's care team: her own day is

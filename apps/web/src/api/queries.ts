@@ -295,6 +295,8 @@ export function useReviewCount(clinicId: string | null): number {
 
 export interface TodayAppointment {
   id: string;
+  /** Names of the therapists the patient is assigned to. */
+  therapists?: string[];
   title: string;
   notes: string;
   date: string;
@@ -401,6 +403,7 @@ export function useProgression(patientId: string) {
 
 export interface ReviewQueueItem {
   id: string;
+  therapists?: string[];
   kind: "game" | "video";
   game_id: string | null;
   video_id: string | null;
@@ -453,6 +456,8 @@ export interface CaseloadReason {
 /** One patient on the Reports caseload (reports dashboard design 2026-11-23). */
 export interface CaseloadRow {
   patient_id: string;
+  /** Names of the therapists the patient is assigned to. */
+  therapists?: string[];
   given_name: string;
   family_name: string;
   /** Up to eight latest scores, oldest first; 100 is the child's own baseline. */

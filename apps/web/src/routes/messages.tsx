@@ -15,7 +15,7 @@ import { useT } from "../i18n/index.tsx";
 import { useTitle } from "../lib/title.ts";
 import { useMe } from "../api/queries.ts";
 import { useIntl } from "react-intl";
-import { LoadError } from "./shared.tsx";
+import { LoadError, TherapistOf } from "./shared.tsx";
 
 export function MessagesPage() {
   const t = useT();
@@ -70,6 +70,7 @@ export function MessagesPage() {
                   </span>
                   <span className="messages-item__patient">
                     <bdi>{thread.patient_given_name} {thread.patient_family_name}</bdi>
+                    {thread.therapist_name && <> · <TherapistOf names={[thread.therapist_name]} /></>}
                   </span>
                   {thread.last_message_at && (
                     <time className="messages-item__time">
@@ -129,6 +130,7 @@ function ConversationView({ thread, myUserId, onBack }: { thread: MessageThread;
         </h2>
         <span className="conversation__patient">
           {t("messages.about", { name: `${thread.patient_given_name} ${thread.patient_family_name}` })}
+          {thread.therapist_name && <> · <TherapistOf names={[thread.therapist_name]} /></>}
         </span>
       </header>
 

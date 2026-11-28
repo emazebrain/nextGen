@@ -19,6 +19,7 @@ import { uuidv7 } from "../../ids.ts";
 import { parseBody } from "../../validate.ts";
 import type { Mailer } from "../../email.ts";
 import { registerConsentRequestRoutes } from "./consent-requests.ts";
+import { therapistsOf } from "./therapists.ts";
 
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MANAGERS = `ARRAY['clinic_manager','org_admin']::app.member_role[]`;
@@ -102,9 +103,7 @@ export function patientRoutes(pool: pg.Pool, mailer?: Mailer, publicAppUrl?: str
         `SELECT p.id, p.clinic_id, p.given_name, p.family_name, to_char(p.date_of_birth, 'YYYY-MM-DD') AS date_of_birth,
                 p.status, p.alert IS NOT NULL AND p.alert <> '' AS has_alert, p.deleted_at IS NOT NULL AS archived,
                 -- Who the patient is assigned to: the current care team, the primary therapist first.
-                COALESCE((SELECT array_agg(u.full_name ORDER BY t.role, u.full_name)
-                            FROM app.patient_care_team t JOIN app.app_user u ON u.id = t.user_id
-                           WHERE t.patient_id = p.id AND t.ended_at IS NULL), '{}') AS therapists
+                ${therapistsOf("p.id")} AS therapists
            FROM app.patient p
           WHERE (p.deleted_at IS NOT NULL) = $2 AND ($1::uuid IS NULL OR p.clinic_id = $1::uuid)
             AND ($3::uuid IS NULL OR EXISTS (SELECT 1 FROM app.patient_care_team t WHERE t.patient_id = p.id AND t.user_id = $3::uuid AND t.ended_at IS NULL))

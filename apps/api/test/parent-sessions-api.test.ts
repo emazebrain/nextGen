@@ -55,6 +55,12 @@ describe.skipIf(!ADMIN_URL)("parent portal: session contents and starting in ord
   });
   afterAll(async () => env?.close());
 
+  it("names the child's therapist to the parent", async () => {
+    const me = await miri.api(`/v1/parent/me`);
+    expect(me.status).toBe(200);
+    expect(me.body.children.map((ch: { therapists: string[] }) => ch.therapists)).toEqual([["Yael Bar"]]);
+  });
+
   it("lists the child's coming sessions with what is in each, and marks the one that can be started", async () => {
     const res = await miri.api(`/v1/parent/children/${dana}/sessions`);
     expect(res.status).toBe(200);

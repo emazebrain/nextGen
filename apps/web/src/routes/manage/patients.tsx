@@ -39,6 +39,7 @@ export function ManagePatientsPage() {
     },
     { id: "dob", header: t("manage.patients.dob"), cell: (p) => <bdi dir="ltr">{p.date_of_birth}</bdi> },
     { id: "clinic", header: t("manage.patients.clinic"), cell: (p) => <bdi>{p.clinic_name}</bdi> },
+    { id: "therapist", header: t("patients.col.therapist"), cell: (p) => (p.therapists?.length ? <bdi>{p.therapists.join(", ")}</bdi> : <span className="app-muted">—</span>) },
     {
       id: "status",
       header: t("manage.patients.status"),

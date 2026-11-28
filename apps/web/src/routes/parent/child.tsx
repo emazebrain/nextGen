@@ -12,6 +12,7 @@ import { useTitle } from "../../lib/title.ts";
 import { useParentContext } from "./shell.tsx";
 import { useChildAppointments, useChildSessions } from "../../api/parent.ts";
 import { ParentSessionPager } from "./session.tsx";
+import { TherapistOf } from "../shared.tsx";
 
 export function ParentChildPage() {
   const t = useT();
@@ -51,7 +52,7 @@ export function ParentChildPage() {
   return (
     <div className="app-page">
       {back}
-      <PageHeader title={<bdi>{child.given_name} {child.family_name}</bdi>} description={t("parent.childIntro")} />
+      <PageHeader title={<bdi>{child.given_name} {child.family_name}</bdi>} description={<>{t("parent.childIntro")} <TherapistOf names={child.therapists} /></>} />
 
       <Card as="section">
         <h2 className="app-cardtitle">{t("parent.sessionsTitle")}</h2>

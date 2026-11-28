@@ -25,7 +25,7 @@ import { useT } from "../i18n/index.tsx";
 import { useClinic } from "../lib/clinic.tsx";
 import { useTitle } from "../lib/title.ts";
 import { useIntl } from "react-intl";
-import { LoadError } from "./shared.tsx";
+import { LoadError, TherapistOf } from "./shared.tsx";
 
 // ---- Date helpers
 
@@ -195,7 +195,7 @@ function DayView({ events, date, isManager, onNewAppt, onEdit }: { events: Calen
         <div className="cal-unscheduled">
           <span className="cal-unscheduled__label">{t("calendar.unscheduled")}</span>
           <div className="cal-unscheduled__items">
-            {unscheduled.map((ev) => <EventChip key={ev.id} event={ev} showTherapist={isManager} onEdit={() => onEdit(ev)} />)}
+            {unscheduled.map((ev) => <EventChip key={ev.id} event={ev} showTherapist onEdit={() => onEdit(ev)} />)}
           </div>
         </div>
       )}
@@ -206,7 +206,7 @@ function DayView({ events, date, isManager, onNewAppt, onEdit }: { events: Calen
             <div key={hour} className="cal-row" onClick={() => onNewAppt(hour)}>
               <div className="cal-row__time">{`${String(hour).padStart(2, "0")}:00`}</div>
               <div className="cal-row__slot">
-                {hourEvents.map((ev) => <EventCard key={ev.id} event={ev} showTherapist={isManager} onEdit={() => onEdit(ev)} />)}
+                {hourEvents.map((ev) => <EventCard key={ev.id} event={ev} showTherapist onEdit={() => onEdit(ev)} />)}
               </div>
             </div>
           );
@@ -495,6 +495,7 @@ function RescheduleDialog({ event, onClose }: { event: CalendarEvent; onClose: (
         <p className="app-muted">
           <bdi>{event.patient_given_name} {event.patient_family_name}</bdi>
           {event.kind === "session" && <> — {t("calendar.sessionTitle", { seq: event.seq, week: event.week })}</>}
+          {event.therapist_name && <> · <TherapistOf names={[event.therapist_name]} /></>}
         </p>
         {event.kind === "session" && (
           <div className="calendar-dialog__session">

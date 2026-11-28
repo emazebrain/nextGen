@@ -25,6 +25,7 @@ import {
   createOrgPatientSchema,
 } from "./schemas.ts";
 import { uuidv7 } from "../../ids.ts";
+import { therapistsOf } from "../patients/therapists.ts";
 
 const CLINIC_COLS = `id, organization_id, name, country_code, timezone, status, created_at`;
 const USER_COLS = `id, email, full_name, status, created_at`;
@@ -508,7 +509,7 @@ export function orgAdminRoutes(pool: pg.Pool, auth: Auth, mailer: Mailer, public
                 to_char(p.date_of_birth, 'YYYY-MM-DD') AS date_of_birth,
                 p.status, p.alert IS NOT NULL AND p.alert <> '' AS has_alert,
                 p.deleted_at IS NOT NULL AS archived,
-                cl.name AS clinic_name
+                cl.name AS clinic_name, ${therapistsOf("p.id")} AS therapists
            FROM app.patient p
            JOIN app.clinic cl ON cl.id = p.clinic_id
           WHERE cl.organization_id = $1

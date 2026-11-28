@@ -142,6 +142,7 @@
   "patient.dob": "Date of birth",
   "patient.age": "Age",
   "patient.status": "Status",
+  "patient.therapistOf": "{count, plural, one {Therapist:} other {Therapists:}}",
   "patient.language": "Preferred language",
   "patient.languageName": "{lang, select, he {Hebrew} en {English} ar {Arabic} ru {Russian} fr {French} es {Spanish} zh {Chinese} other {Not set}}",
   "patient.protocol.title": "No protocol yet",

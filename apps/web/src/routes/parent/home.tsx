@@ -8,6 +8,7 @@ import { useTitle } from "../../lib/title.ts";
 import { useParentContext } from "./shell.tsx";
 import { useChildAppointments, useChildSessions } from "../../api/parent.ts";
 import { ParentSessionCard } from "./session.tsx";
+import { TherapistOf } from "../shared.tsx";
 
 export function ParentHomePage() {
   const t = useT();
@@ -29,13 +30,13 @@ export function ParentHomePage() {
       <PageHeader title={t("parent.kidsTitle")} description={t("parent.kidsIntro")} />
       {children.map((child) => (
         // With one clinic for every child the header already names it.
-        <ChildCard key={child.id} childId={child.id} name={`${child.given_name} ${child.family_name}`} givenName={child.given_name} clinicName={new Set(children.map((c) => c.clinic_name)).size > 1 ? child.clinic_name : ""} />
+        <ChildCard key={child.id} childId={child.id} name={`${child.given_name} ${child.family_name}`} givenName={child.given_name} therapists={child.therapists} clinicName={new Set(children.map((c) => c.clinic_name)).size > 1 ? child.clinic_name : ""} />
       ))}
     </div>
   );
 }
 
-function ChildCard({ childId, name, givenName, clinicName }: { childId: string; name: string; givenName: string; clinicName: string }) {
+function ChildCard({ childId, name, givenName, clinicName, therapists }: { childId: string; name: string; givenName: string; clinicName: string; therapists?: string[] | undefined }) {
   const t = useT();
   const intl = useIntl();
   const sessions = useChildSessions(childId);
@@ -60,6 +61,7 @@ function ChildCard({ childId, name, givenName, clinicName }: { childId: string; 
             <Link to={`/parent/children/${childId}`} className="parent-kid__link"><bdi>{name}</bdi></Link>
           </h2>
           {clinicName && <span className="app-muted">{clinicName}</span>}
+          <TherapistOf names={therapists} />
         </div>
 
         {sessions.isPending && <MazeLoader label={t("common.loading")} />}

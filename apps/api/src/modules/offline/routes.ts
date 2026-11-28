@@ -24,6 +24,7 @@ import { listTemplates, loadAssignment, todayItems } from "../protocols/routes.t
 import { loadRegionCatalog } from "../../regions.ts";
 import { allowedParamsFor, buildParams, loadLaunchRows, OFFLINE_TICKET_TTL_S } from "../sessions/routes.ts";
 import { pick } from "../videos/routes.ts";
+import { therapistsOf } from "../patients/therapists.ts";
 
 /** At least this many upcoming sessions per assignment, plus every one in the next PACKAGE_DAYS days. */
 export const PACKAGE_MIN_SESSIONS = 4;
@@ -64,7 +65,7 @@ export function offlineRoutes(pool: pg.Pool, tickets: TicketSigner) {
       // Caseload: the caller's own patients in this clinic who may play (consent in place).
       const caseload = (
         await db.query<PatientListItem>(
-          `SELECT p.id, p.clinic_id, p.given_name, p.family_name, to_char(p.date_of_birth, 'YYYY-MM-DD') AS date_of_birth,
+          `SELECT p.id, p.clinic_id, p.given_name, p.family_name, ${therapistsOf("p.id")} AS therapists, to_char(p.date_of_birth, 'YYYY-MM-DD') AS date_of_birth,
                   p.status, p.alert IS NOT NULL AND p.alert <> '' AS has_alert, p.deleted_at IS NOT NULL AS archived
              FROM app.patient p
             WHERE p.clinic_id = $1 AND p.deleted_at IS NULL AND app.patient_can_play(p.id)

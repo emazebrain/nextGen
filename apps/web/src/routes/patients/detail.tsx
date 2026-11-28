@@ -28,7 +28,7 @@ import { useT, usePrefs, type MessageId } from "../../i18n/index.tsx";
 import { useClinic } from "../../lib/clinic.tsx";
 import { calendarDate } from "../../lib/format.ts";
 import { useTitle } from "../../lib/title.ts";
-import { fullName, LoadError, StatusChip, useAge } from "../shared.tsx";
+import { fullName, LoadError, StatusChip, useAge, TherapistOf } from "../shared.tsx";
 import { issuesToErrors } from "./form.tsx";
 import { ProtocolCard } from "./protocol-card.tsx";
 
@@ -115,6 +115,7 @@ export function PatientLayout() {
           <p className="phead__meta">
             <span>{age(p.date_of_birth)}</span>
             <StatusChip status={p.status} />
+            <TherapistOf names={p.care_team.map((m) => m.full_name)} />
           </p>
         </div>
         {!p.archived && (

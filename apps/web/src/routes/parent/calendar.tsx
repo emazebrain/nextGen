@@ -16,6 +16,7 @@ import { findGame, localText } from "../../games/registry.ts";
 import { usePrefs } from "../../i18n/index.tsx";
 import { collapseRepeats, joinSteps } from "../../lib/steps.ts";
 import { localToday, useStartHomeSession } from "./session.tsx";
+import { TherapistOf } from "../shared.tsx";
 
 /** A protocol can run for months: the calendar opens on what is next, and the rest is one tap away. */
 const SHOWN = 6;
@@ -39,13 +40,13 @@ export function ParentCalendarPage() {
     <div className="app-page">
       <PageHeader title={t("parent.calendarTitle")} description={t("parent.calendarIntro")} />
       {children.map((child) => (
-        <ChildCalendar key={child.id} childId={child.id} childName={child.given_name} />
+        <ChildCalendar key={child.id} childId={child.id} childName={child.given_name} therapists={child.therapists} />
       ))}
     </div>
   );
 }
 
-function ChildCalendar({ childId, childName }: { childId: string; childName: string }) {
+function ChildCalendar({ childId, childName, therapists }: { childId: string; childName: string; therapists?: string[] | undefined }) {
   const t = useT();
   const intl = useIntl();
   const sessions = useChildSessions(childId);
@@ -79,7 +80,7 @@ function ChildCalendar({ childId, childName }: { childId: string; childName: str
   if (coming.length === 0 && recent.length === 0) {
     return (
       <Card>
-        <h3 className="app-cardtitle"><bdi>{childName}</bdi></h3>
+        <h3 className="app-cardtitle"><bdi>{childName}</bdi> <TherapistOf names={therapists} /></h3>
         {appointments.isError && <p className="app-muted">{t("parent.apptsUnavailable")}</p>}
         <p className="app-muted">{t("parent.nothingPlanned")}</p>
       </Card>
@@ -95,7 +96,7 @@ function ChildCalendar({ childId, childName }: { childId: string; childName: str
 
   return (
     <Card as="section">
-      <h3 className="app-cardtitle"><Link to={`/parent/children/${childId}`} className="parent-kid__link"><bdi>{childName}</bdi></Link></h3>
+      <h3 className="app-cardtitle"><Link to={`/parent/children/${childId}`} className="parent-kid__link"><bdi>{childName}</bdi></Link> <TherapistOf names={therapists} /></h3>
       {appointments.isError && <p className="app-muted">{t("parent.apptsUnavailable")}</p>}
       {coming.length > 0 && (
         <ul className="plainlist parent-calendar">

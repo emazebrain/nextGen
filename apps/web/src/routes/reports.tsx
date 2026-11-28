@@ -17,7 +17,7 @@ import { useT, usePrefs, type MessageId } from "../i18n/index.tsx";
 import { useTitle } from "../lib/title.ts";
 import { iso } from "../lib/format.ts";
 import { findGame, localText } from "../games/registry.ts";
-import { LoadError } from "./shared.tsx";
+import { LoadError, TherapistOf } from "./shared.tsx";
 import { ArcGauge, MiniArea, PlanChart, Sparkline, WeekBars } from "./reports/charts.tsx";
 import { LookList, TREND_LABEL } from "./reports/look.tsx";
 
@@ -319,6 +319,7 @@ function Caseload({ patients }: { patients: CaseloadRow[] }) {
                       <Link to={progressHref(p.patient_id)} className="rcase__name">
                         <bdi>{fullName(p)}</bdi>
                       </Link>
+                      <TherapistOf names={p.therapists} />
                     </span>
                   </td>
                   <td>{scored > 0 ? <Sparkline scores={p.scores} label={t("reports.caseload.sparkline", { count: scored })} /> : <span className="app-muted">{t("reports.caseload.noScores")}</span>}</td>

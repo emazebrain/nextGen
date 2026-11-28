@@ -142,6 +142,7 @@
   "patient.dob": "תאריך לידה",
   "patient.age": "גיל",
   "patient.status": "סטטוס",
+  "patient.therapistOf": "{count, plural, one {מטפל/ת:} other {מטפלים:}}",
   "patient.language": "שפה מועדפת",
   "patient.languageName": "{lang, select, he {עברית} en {אנגלית} ar {ערבית} ru {רוסית} fr {צרפתית} es {ספרדית} zh {סינית} other {לא הוגדרה}}",
   "patient.protocol.title": "עדיין אין פרוטוקול",

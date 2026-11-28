@@ -13,6 +13,7 @@
 import { Hono, type Context } from "hono";
 import type pg from "pg";
 import { withUser, type Env } from "../../context.ts";
+import { therapistsOf } from "../patients/therapists.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -58,10 +59,11 @@ export function searchRoutes(pool: pg.Pool) {
         db.query<{
           id: string;
           given_name: string;
+          therapists: string[];
           family_name: string;
           dob: string | null;
         }>(
-          `SELECT p.id, p.given_name, p.family_name, p.date_of_birth::text AS dob
+          `SELECT p.id, p.given_name, p.family_name, p.date_of_birth::text AS dob, ${therapistsOf("p.id")} AS therapists
              FROM app.patient p
             WHERE p.clinic_id = $1
               AND p.deleted_at IS NULL
@@ -105,7 +107,7 @@ export function searchRoutes(pool: pg.Pool) {
           id: p.id,
           kind: "patient",
           title: `${p.given_name} ${p.family_name}`,
-          subtitle: p.dob ?? undefined,
+          subtitle: [p.dob, ...p.therapists].filter(Boolean).join(" · ") || undefined,
           url: `/patients/${p.id}`,
           icon: "user",
         });

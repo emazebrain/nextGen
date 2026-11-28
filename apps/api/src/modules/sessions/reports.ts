@@ -16,6 +16,7 @@ import { caseloadSummary, type DecisionInput, type GameInfo, type PlannedInput, 
 import { withUser, type Env } from "../../context.ts";
 import { GAME_MANIFESTS } from "../../games.ts";
 import { UUID } from "../patients/routes.ts";
+import { therapistsOf } from "../patients/therapists.ts";
 
 const GAMES: GameInfo[] = Object.values(GAME_MANIFESTS).map((m) => ({ id: m.id, metrics: m.metrics }));
 
@@ -24,7 +25,7 @@ const SESSIONS_PER_PATIENT = 60;
 const MAX_PATIENTS = 1000;
 
 /** The caller's patients, optionally in one clinic. $1 = clinic or NULL. */
-const MINE = `SELECT p.id, p.given_name, p.family_name FROM app.patient p
+const MINE = `SELECT p.id, p.given_name, p.family_name, ${therapistsOf("p.id")} AS therapists FROM app.patient p
                WHERE p.deleted_at IS NULL AND app.can_treat_patient(p.id) AND ($1::uuid IS NULL OR p.clinic_id = $1::uuid)`;
 /** Counted sessions of those patients. */
 const COUNTED = `app.game_session g JOIN app.game_session_review r ON r.id = g.id JOIN mine ON mine.id = g.patient_id
@@ -54,7 +55,7 @@ export function reportRoutes(pool: pg.Pool) {
 
     const patients = await run(c, async (db) => {
       const clock = (await db.query<{ now: Date; today: string }>(`SELECT now() AS now, CURRENT_DATE::text AS today`)).rows[0]!;
-      const mine = (await db.query<{ id: string; given_name: string; family_name: string }>(`${MINE} ORDER BY p.family_name, p.given_name LIMIT ${MAX_PATIENTS}`, [clinic])).rows;
+      const mine = (await db.query<{ id: string; given_name: string; family_name: string; therapists: string[] }>(`${MINE} ORDER BY p.family_name, p.given_name LIMIT ${MAX_PATIENTS}`, [clinic])).rows;
       if (mine.length === 0) return [];
 
       const sessions = await db.query<SessionInput & { patient_id: string }>(
@@ -123,6 +124,7 @@ export function reportRoutes(pool: pg.Pool) {
             patient_id: p.id,
             given_name: p.given_name,
             family_name: p.family_name,
+            therapists: p.therapists,
             scores: s.scores,
             summary: s.summary,
             week: s.week,

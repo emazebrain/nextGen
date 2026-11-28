@@ -37,6 +37,7 @@ import { sessionTracks } from "../music/routes.ts";
 import { timerPositionFor, timerShown } from "@emb/session-rules";
 import { ageBand, resolveRegion, seededIndex, type RegionCatalog } from "../../../../../packages/contracts/src/index.ts";
 import { loadRegionCatalog } from "../../regions.ts";
+import { therapistsOf } from "../patients/therapists.ts";
 
 const CLINIC_TICKET_TTL_S = 24 * 3600;
 /** Offline package tickets live 30 days (design doc §8.2; offline devices spec §7.4). */
@@ -498,7 +499,7 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
         family_name: string;
       }>(
         `SELECT g.id, 'game' AS kind, g.game_id, NULL AS video_id, g.ended_at, g.accuracy::float8 AS accuracy,
-                g.difficulty, r.review_reason, g.patient_id, p.given_name, p.family_name
+                g.difficulty, r.review_reason, g.patient_id, p.given_name, p.family_name, ${therapistsOf("p.id")} AS therapists
            FROM app.game_session g
            JOIN app.game_session_review r ON r.id = g.id
            JOIN app.patient p ON p.id = g.patient_id
@@ -507,7 +508,7 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
             AND ($1::uuid IS NULL OR g.patient_id = $1::uuid)
          UNION ALL
          SELECT v.id, 'video' AS kind, NULL AS game_id, v.video_id, v.ended_at, NULL AS accuracy,
-                NULL AS difficulty, vr.review_reason, v.patient_id, p.given_name, p.family_name
+                NULL AS difficulty, vr.review_reason, v.patient_id, p.given_name, p.family_name, ${therapistsOf("p.id")} AS therapists
            FROM app.video_view v
            JOIN app.video_view_review vr ON vr.id = v.id
            JOIN app.patient p ON p.id = v.patient_id

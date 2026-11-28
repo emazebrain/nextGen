@@ -7,6 +7,7 @@ import { Avatar, Chip } from "@emb/ui";
 import type { CaseloadReason, CaseloadRow, TrendSummary } from "../../api/queries.ts";
 import { useT, type MessageId } from "../../i18n/index.tsx";
 import { iso } from "../../lib/format.ts";
+import { TherapistOf } from "../shared.tsx";
 
 const fullName = (p: { given_name: string; family_name: string }) => `${p.given_name} ${p.family_name}`;
 export const progressHref = (id: string) => `/patients/${encodeURIComponent(id)}/progress`;
@@ -47,6 +48,7 @@ export function LookList({ patients, limit, compact = false }: { patients: Casel
                   <bdi>{fullName(p)}</bdi>
                 </span>
               )}
+              <TherapistOf names={p.therapists} />
               <span className="rlook__reasons">
                 {p.reasons.map((r) => (
                   <Chip key={r.kind} tone={r.kind === "review" ? "warning" : "neutral"}>

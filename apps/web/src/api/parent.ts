@@ -5,6 +5,8 @@ import type { GameSessionView, LaunchPackage, StepItem } from "@emb/contracts";
 import { usePrefs } from "../i18n/index.tsx";
 
 export interface ParentChild {
+  /** Names of the therapists the child is assigned to. */
+  therapists?: string[];
   id: string;
   given_name: string;
   family_name: string;

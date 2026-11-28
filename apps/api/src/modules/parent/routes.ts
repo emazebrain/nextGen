@@ -23,6 +23,7 @@ import { buildParams, type StepRow } from "../sessions/routes.ts";
 import { pick } from "../videos/routes.ts";
 import { loadRegionCatalog } from "../../regions.ts";
 import { ITEMS_SQL, toItems } from "../protocols/routes.ts";
+import { therapistsOf } from "../patients/therapists.ts";
 
 const LANGS = new Set(["en", "he", "ar", "ru", "fr", "es", "zh"]);
 
@@ -98,7 +99,7 @@ export function parentRoutes(servicePool: pg.Pool, tickets?: TicketSigner) {
       const { rows: children } = await db.query(
         `SELECT p.id, p.given_name, p.family_name, p.date_of_birth, p.status, p.preferred_locale,
                 gp.guardian_id, gp.relationship,
-                cl.name AS clinic_name
+                cl.name AS clinic_name, ${therapistsOf("p.id")} AS therapists
            FROM app.guardian_patient gp
            JOIN app.patient p ON p.id = gp.patient_id AND p.deleted_at IS NULL
            JOIN app.clinic cl ON cl.id = p.clinic_id
@@ -117,7 +118,7 @@ export function parentRoutes(servicePool: pg.Pool, tickets?: TicketSigner) {
           id: ch.id, given_name: ch.given_name, family_name: ch.family_name,
           date_of_birth: ch.date_of_birth, status: ch.status,
           preferred_locale: ch.preferred_locale, relationship: ch.relationship,
-          clinic_name: ch.clinic_name,
+          clinic_name: ch.clinic_name, therapists: ch.therapists,
         })),
       };
     });
@@ -137,7 +138,7 @@ export function parentRoutes(servicePool: pg.Pool, tickets?: TicketSigner) {
       if (!(await isLinkedGuardian(db, childId, userId))) return null;
 
       const { rows: patients } = await db.query(
-        `SELECT p.id, p.given_name, p.family_name, p.status FROM app.patient p WHERE p.id = $1 AND p.deleted_at IS NULL`,
+        `SELECT p.id, p.given_name, p.family_name, p.status, ${therapistsOf("p.id")} AS therapists FROM app.patient p WHERE p.id = $1 AND p.deleted_at IS NULL`,
         [childId],
       );
       if (!patients[0]) return null;

@@ -62,6 +62,8 @@ export interface OrgPatient {
   has_alert: boolean;
   archived: boolean;
   clinic_name: string;
+  /** Names of the therapists the patient is assigned to. */
+  therapists?: string[];
 }
 export interface PatientFilters {
   clinic_id?: string;

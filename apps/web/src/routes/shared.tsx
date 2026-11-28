@@ -13,6 +13,18 @@ export const statusTone: Record<PatientStatus, ChipTone> = {
   discharged: "neutral",
 };
 
+/** "Therapist: Yael Bar" — who the patient is assigned to, shown wherever a patient is shown. Nothing when unassigned. */
+export function TherapistOf({ names, className = "" }: { names?: readonly string[] | null | undefined; className?: string }) {
+  const t = useT();
+  const list = (names ?? []).filter(Boolean);
+  if (list.length === 0) return null;
+  return (
+    <span className={`app-muted app-therapist ${className}`.trim()}>
+      {t("patient.therapistOf", { count: list.length })} <bdi>{list.join(", ")}</bdi>
+    </span>
+  );
+}
+
 export const fullName = (p: { given_name: string; family_name: string }) => `${p.given_name} ${p.family_name}`;
 
 export function useAge() {
