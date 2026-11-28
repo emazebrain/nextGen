@@ -254,12 +254,12 @@ export interface DecisionInput {
   action: "up" | "down";
 }
 
-export type ReasonKind = "review" | "missed_home" | "missed_clinic" | "inactive" | "declining" | "stepped_down";
+export type ReasonKind = "review" | "missed_home" | "skipped_home" | "missed_clinic" | "inactive" | "declining" | "stepped_down" | "jumped";
 
 /** Why a patient is worth a look. Never a judgement of the child against anyone else (§11.6). */
 export interface Reason {
   kind: ReasonKind;
-  /** review, missed_*: how many. */
+  /** review, missed_*, skipped_home: how many. */
   count?: number;
   /** inactive: days since the last counted session (absent when there has never been one). */
   days?: number;
@@ -293,6 +293,8 @@ export interface CaseloadOptions {
   inactiveDays?: number;
   /** How far back a missed session still counts. */
   missedDays?: number;
+  /** A recent score at or above this (100 is the child's own baseline) reads as a big jump. */
+  jumpAt?: number;
   /** Today as YYYY-MM-DD in the clinic's calendar; defaults to `now` in UTC. */
   today?: string;
 }
@@ -317,11 +319,15 @@ export function caseloadSummary(input: CaseloadInput, games: readonly GameInfo[]
   const missed = (location: "clinic" | "home") =>
     input.planned.filter((p) => p.location === location && p.planned_date >= missedFrom && (p.status === "missed" || (p.status === "planned" && p.planned_date < today))).length;
 
+  // Home sessions the family chose to skip: the plan is not being followed, even though nothing is overdue.
+  const skippedHome = input.planned.filter((p) => p.location === "home" && p.planned_date >= missedFrom && p.status === "skipped").length;
+
   const reasons: Reason[] = [];
   if (input.reviewPending > 0) reasons.push({ kind: "review", count: input.reviewPending });
   const home = missed("home");
   const clinic = missed("clinic");
   if (home > 0) reasons.push({ kind: "missed_home", count: home });
+  if (skippedHome > 0) reasons.push({ kind: "skipped_home", count: skippedHome });
   if (clinic > 0) reasons.push({ kind: "missed_clinic", count: clinic });
   if (input.hasActiveAssignment) {
     if (!last) reasons.push({ kind: "inactive" });
@@ -332,6 +338,10 @@ export function caseloadSummary(input: CaseloadInput, games: readonly GameInfo[]
   }
   if (tr.summary === "declining") reasons.push({ kind: "declining" });
   if (decisions.length >= 2 && decisions.at(-1)!.action === "down" && decisions.at(-2)!.action === "down") reasons.push({ kind: "stepped_down" });
+  // A big jump is worth a look too (a harder step may be due): far above the child's own baseline, or the
+  // difficulty stepped up twice in a row. Against their own earlier sessions only, never against other children.
+  const steppedUpTwice = decisions.length >= 2 && decisions.at(-1)!.action === "up" && decisions.at(-2)!.action === "up";
+  if ((tr.recentScore !== null && tr.recentScore >= (options.jumpAt ?? 125)) || steppedUpTwice) reasons.push({ kind: "jumped" });
 
   return {
     scores: tr.points.slice(-8).map((p) => p.score),

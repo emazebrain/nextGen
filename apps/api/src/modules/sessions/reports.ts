@@ -41,6 +41,9 @@ function intParam(raw: string | undefined, fallback: number, min: number, max: n
   return n >= min && n <= max ? n : null;
 }
 
+/** Days without any activity in the clinic before a therapist is listed for the manager. */
+const STAFF_QUIET_DAYS = 7;
+
 export function reportRoutes(pool: pg.Pool) {
   const r = new Hono<Env>();
   const run = <T>(c: C, fn: (db: pg.PoolClient) => Promise<T>) => withUser(pool, c.get("user").id, c.get("requestId"), fn);
@@ -48,6 +51,35 @@ export function reportRoutes(pool: pg.Pool) {
     const clinic = c.req.query("clinic");
     return clinic === undefined ? null : UUID.test(clinic) ? clinic : undefined;
   };
+
+  // For a clinic manager or organisation admin: therapists who have patients in an active protocol but have not
+  // used the system in this clinic for a while. From the audit log, which a manager may read for their own clinic;
+  // anyone else gets an empty list. Staff names and counts only — no patient data.
+  r.get("/reports/staff-attention", async (c) => {
+    const clinic = c.req.query("clinic");
+    if (!clinic || !UUID.test(clinic)) return c.json({ error: "invalid_clinic" }, 400);
+    const therapists = await run(c, async (db) => {
+      const manager = (await db.query<{ ok: boolean }>(`SELECT app.has_clinic_role($1, ARRAY['clinic_manager', 'org_admin']::app.member_role[]) AS ok`, [clinic])).rows[0]!.ok;
+      if (!manager) return [];
+      const { rows } = await db.query<{ user_id: string; full_name: string; days: number | null; patients: number }>(
+        `SELECT u.id AS user_id, u.full_name, x.patients,
+                (SELECT floor(extract(epoch FROM now() - max(e.occurred_at)) / 86400)::int
+                   FROM app.audit_event e WHERE e.actor_user_id = u.id AND e.clinic_id = $1) AS days
+           FROM (SELECT t.user_id, count(DISTINCT t.patient_id)::int AS patients
+                   FROM app.patient_care_team t
+                   JOIN app.patient p ON p.id = t.patient_id AND p.clinic_id = $1 AND p.deleted_at IS NULL
+                  WHERE t.ended_at IS NULL
+                    AND EXISTS (SELECT 1 FROM app.protocol_assignment a WHERE a.patient_id = p.id AND a.status = 'active')
+                  GROUP BY t.user_id) x
+           JOIN app.app_user u ON u.id = x.user_id
+          WHERE u.id <> app.current_user_id()
+          ORDER BY u.full_name`,
+        [clinic],
+      );
+      return rows.filter((r) => r.days === null || r.days >= STAFF_QUIET_DAYS).sort((a, b) => (b.days ?? Infinity) - (a.days ?? Infinity));
+    });
+    return c.json({ therapists });
+  });
 
   r.get("/reports/caseload", async (c) => {
     const clinic = clinicOf(c);

@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { Alert, Avatar, Button, Card, Chip, DataList, EmptyState, MazeLoader, PageHeader, Segmented, SelectField, TextField, type ChipTone, type Column } from "@emb/ui";
 import { useQueryClient } from "@tanstack/react-query";
-import { meKey, useCaseload, useMe, usePatients, useToday, useReviewCount, useReviewQueue, useReviewFromQueue, type ReviewQueueItem } from "../api/queries.ts";
+import { meKey, useCaseload, useMe, useStaffAttention, usePatients, useToday, useReviewCount, useReviewQueue, useReviewFromQueue, type ReviewQueueItem } from "../api/queries.ts";
 import { apiSend } from "../api/http.ts";
 import { authClient } from "../api/auth.ts";
 import { findGame, localText, GAMES } from "../games/registry.ts";
@@ -52,7 +52,7 @@ export function TodayPage() {
   const t = useT();
   const intl = useIntl();
   const me = useMe();
-  const { clinicId } = useClinic();
+  const { clinicId, isManager } = useClinic();
   const view = useTherapistView();
   const patients = usePatients(clinicId, false, view.patients);
   const reviewCount = useReviewCount(clinicId);
@@ -75,6 +75,8 @@ export function TodayPage() {
   const lastSeen = (s: string) => relative.format(-Math.max(0, Math.floor((Date.now() - Date.parse(s)) / 86_400_000)), "day");
   // Looking at one therapist: only that therapist's patients need a look.
   const theirs = useMemo(() => (view.patients ? new Set((patients.data ?? []).map((p) => p.id)) : null), [view.patients, patients.data]);
+  // For a manager: therapists with patients in a protocol who have not used the system lately.
+  const quiet = (useStaffAttention(clinicId, isManager).data ?? []).filter((s) => !view.chosen || s.user_id === view.chosen);
   const look = (caseload.data ?? []).filter((r) => r.reasons.length > 0 && (!theirs || theirs.has(r.patient_id)));
 
   return (
@@ -116,19 +118,42 @@ export function TodayPage() {
         <Card as="section" className="today-attention" labelledBy="attention">
           <h2 id="attention" className="app-cardtitle">
             {t("today.attention.title")}
-            {look.length > 0 && <span className="reports__count emb-tnum">{look.length}</span>}
+            {look.length + quiet.length > 0 && <span className="reports__count emb-tnum">{look.length + quiet.length}</span>}
           </h2>
           {caseload.isPending ? (
             <MazeLoader label={t("common.loading")} />
           ) : caseload.isError ? (
             <p className="app-muted">{t("today.attention.unavailable")}</p>
-          ) : look.length === 0 ? (
+          ) : look.length === 0 && quiet.length === 0 ? (
             <p className="today-clear">
               <CircleCheck size={20} aria-hidden="true" />
               {t("today.attention.empty")}
             </p>
           ) : (
             <>
+              {quiet.length > 0 && (
+                <section aria-labelledby="attention-staff" className="today-staff">
+                  <h3 id="attention-staff" className="app-cardtitle today-staff__title">
+                    {t("today.attention.staff")}
+                  </h3>
+                  <ul className="plainlist rlook">
+                    {quiet.map((s) => (
+                      <li key={s.user_id} className="rlook__item rlook__item--compact">
+                        <Avatar name={s.full_name} size={38} />
+                        <div className="rlook__text">
+                          <span className="rlook__name">
+                            <bdi>{s.full_name}</bdi>
+                          </span>
+                          <span className="rlook__reasons">
+                            <Chip tone="neutral">{s.days === null ? t("today.attention.staffNever") : t("today.attention.staffDays", { days: s.days })}</Chip>
+                            <Chip tone="neutral">{t("today.attention.staffPatients", { count: s.patients })}</Chip>
+                          </span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
               <LookList patients={look} limit={5} compact />
               {look.length > 5 && (
                 <Link to="/reports" className="app-textlink today-more">

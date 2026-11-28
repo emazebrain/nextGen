@@ -128,6 +128,19 @@ describe.skipIf(!ADMIN_URL)("protocols API", () => {
     expect(await listed(m.api, dn)).toBe(0);
     expect(await listed(dana, ids.yael)).toBe(0);
     expect((await m.api(`/v1/patients?therapist=x`)).status).toBe(400);
+
+    // "Needs attention" for a manager: a therapist with a patient in an active protocol who has not used the system.
+    // Yael has just been working, so she is not listed; Omer has done nothing in the clinic yet.
+    const omer = await staffClient(env, "omer@synthetic.test", "Omer Gal");
+    await addMember(env.db, omer.userId, ids.org, ids.clinic, "therapist");
+    await env.db.query(`INSERT INTO app.patient_care_team (patient_id, user_id) SELECT patient_id, $1 FROM app.patient_care_team WHERE user_id = $2 LIMIT 1`, [omer.userId, ids.yael]);
+    const quiet = await m.api(`/v1/reports/staff-attention?clinic=${ids.clinic}`);
+    expect(quiet.status).toBe(200);
+    expect(quiet.body.therapists).toEqual([{ user_id: omer.userId, full_name: "Omer Gal", days: null, patients: 1 }]);
+    // Only for managers: a therapist gets nothing about colleagues.
+    expect((await yael(`/v1/reports/staff-attention?clinic=${ids.clinic}`)).body.therapists).toEqual([]);
+    expect((await m.api(`/v1/reports/staff-attention`)).status).toBe(400);
+    await env.db.query(`DELETE FROM app.patient_care_team WHERE user_id = $1`, [omer.userId]);
     // A session has no time of day until it is given one on the calendar; Today then shows it.
     expect(today.body.items[0].planned_time).toBeNull();
     expect((await yael(`/v1/calendar/sessions/${a.sessions[0].id}`, { method: "PATCH", body: { planned_date: start, planned_time: "09:30" } })).status).toBe(200);

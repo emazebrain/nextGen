@@ -30,7 +30,8 @@ describe("caseloadSummary", () => {
     expect(row.summary).toBe("improving");
     expect(row.difficulty).toBe(2);
     expect(row.lastSessionAt).toBe(sessions.at(-1)!.ended_at);
-    expect(row.reasons).toEqual([]);
+    // Far above the child's own baseline: a big jump, worth a look.
+    expect(row.reasons).toEqual([{ kind: "jumped" }]);
   });
 
   it("says nothing about a trend until there are enough sessions", () => {
@@ -76,6 +77,26 @@ describe("caseloadSummary", () => {
     expect(kinds(input({ sessions: [session(13, 0.5)] }))).toEqual([]);
     // Never played, protocol assigned: worth a look, with no day count to show.
     expect(caseloadSummary(input(), GAMES, NOW).reasons).toEqual([{ kind: "inactive" }]);
+  });
+
+  it("flags a big jump: far above the child's own baseline, or difficulty stepped up twice in a row", () => {
+    const rising = [0.5, 0.5, 0.52, 0.55, 0.56].map((a, i) => session(5 - i, a)); // recent ≈ 109: improving a little, no jump
+    expect(kinds(input({ sessions: rising }))).toEqual([]);
+    const jump = [0.5, 0.5, 0.6, 0.65, 0.7].map((a, i) => session(5 - i, a)); // recent = 130
+    expect(kinds(input({ sessions: jump }))).toEqual(["jumped"]);
+    expect(caseloadSummary(input({ sessions: jump }), GAMES, NOW, { jumpAt: 140 }).reasons).toEqual([]);
+    const up2 = input({ sessions: [session(1, 0.5)], decisions: [{ decided_at: day(3), action: "up" }, { decided_at: day(1), action: "up" }] });
+    expect(kinds(up2)).toEqual(["jumped"]);
+  });
+
+  it("flags home sessions the family skipped", () => {
+    const planned = [
+      { planned_date: date(3), location: "home" as const, status: "skipped" },
+      { planned_date: date(2), location: "home" as const, status: "skipped" },
+      { planned_date: date(2), location: "clinic" as const, status: "skipped" },
+      { planned_date: date(20), location: "home" as const, status: "skipped" },
+    ];
+    expect(caseloadSummary(input({ sessions: [session(1, 0.5)], planned }), GAMES, NOW).reasons).toEqual([{ kind: "skipped_home", count: 2 }]);
   });
 
   it("flags difficulty stepping down twice in a row, and reports the last change", () => {

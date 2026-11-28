@@ -21,7 +21,7 @@ export const TREND_LABEL: Record<TrendSummary, MessageId> = {
 
 export function reasonText(t: ReturnType<typeof useT>, r: CaseloadReason): string {
   if (r.kind === "inactive") return r.days === undefined ? t("reports.reason.inactiveNever") : t("reports.reason.inactive", { days: r.days });
-  if (r.kind === "declining" || r.kind === "stepped_down") return t(`reports.reason.${r.kind}`);
+  if (r.kind === "declining" || r.kind === "stepped_down" || r.kind === "jumped") return t(`reports.reason.${r.kind}`);
   return t(`reports.reason.${r.kind}`, { count: r.count ?? 1 });
 }
 
@@ -51,7 +51,7 @@ export function LookList({ patients, limit, compact = false }: { patients: Casel
               <TherapistOf names={p.therapists} />
               <span className="rlook__reasons">
                 {p.reasons.map((r) => (
-                  <Chip key={r.kind} tone={r.kind === "review" ? "warning" : "neutral"}>
+                  <Chip key={r.kind} tone={r.kind === "review" ? "warning" : r.kind === "jumped" ? "success" : "neutral"}>
                     {reasonText(t, r)}
                   </Chip>
                 ))}

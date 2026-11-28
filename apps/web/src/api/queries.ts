@@ -447,7 +447,7 @@ export function useReviewFromQueue(clinicId: string | null) {
 // ---------------------------------------------------------------- reports (design doc §5.9.2)
 
 export type TrendSummary = "not_enough" | "improving" | "steady" | "declining";
-export type ReasonKind = "review" | "missed_home" | "missed_clinic" | "inactive" | "declining" | "stepped_down";
+export type ReasonKind = "review" | "missed_home" | "skipped_home" | "missed_clinic" | "inactive" | "declining" | "stepped_down" | "jumped";
 export interface CaseloadReason {
   kind: ReasonKind;
   count?: number;
@@ -496,6 +496,25 @@ const reportQs = (clinicId: string | null, extra: Record<string, string | number
   return qs ? `?${qs}` : "";
 };
 
+/** A therapist the clinic's manager may want to check on: has patients in an active protocol but no recent activity. */
+export interface StaffAttention {
+  user_id: string;
+  full_name: string;
+  /** Days since their last activity in this clinic; null when there has been none. */
+  days: number | null;
+  /** Patients with an active protocol assigned to them. */
+  patients: number;
+}
+/** Managers only (the server answers an empty list to everyone else). */
+export function useStaffAttention(clinicId: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: ["reports", "staff-attention", clinicId],
+    queryFn: ({ signal }) => apiGet<{ therapists: StaffAttention[] }>(`/v1/reports/staff-attention?clinic=${clinicId}`, { signal }).then((r) => r.therapists),
+    enabled: enabled && !!clinicId,
+    staleTime: 60_000,
+    retry: false,
+  });
+}
 export function useCaseload(clinicId: string | null) {
   return useQuery({
     queryKey: ["reports", "caseload", clinicId],

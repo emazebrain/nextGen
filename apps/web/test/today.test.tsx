@@ -22,6 +22,7 @@ function mockApi(over: { caseload?: unknown[] | "fail"; role?: string; therapist
     asked.push(p + url.search);
     if (p === "/v1/me") return ok({ user: { id: "u", email: "y@synthetic.test", name: "Yael Bar" }, memberships: [{ clinic_id: "c1", organization_id: "o", role: over.role ?? "therapist", clinic_name: "Clinic" }] });
     if (p === "/v1/calendar/therapists") return ok({ therapists: over.therapists ?? [] });
+    if (p === "/v1/reports/staff-attention") return ok({ therapists: over.role === "clinic_manager" ? [{ user_id: "t1", full_name: "Noam Peri", days: 12, patients: 3 }] : [] });
     // One therapist's list: only Amit is on Noam's care team.
     if (p === "/v1/patients" && url.searchParams.get("therapist")) return ok({ patients: [patient("p2", "Amit", "Lavi")] });
     if (p === "/v1/patients") return ok({ patients: [patient("p1", "Dana", "Katz"), patient("p2", "Amit", "Lavi"), patient("p3", "Eli", "Baron")] });
@@ -104,6 +105,17 @@ describe("Today", () => {
     await waitFor(() => expect(asked.some((u) => u.startsWith("/v1/patients") && u.includes("therapist=t1"))).toBe(true));
     await waitFor(() => expect(screen.queryByText("Eli Baron")).toBeNull());
     expect(screen.getAllByText("Amit Lavi").length).toBeGreaterThan(0);
+  });
+
+  it("shows a manager the therapists who are not using the system, under Needs attention", async () => {
+    sessionStorage.clear();
+    mockApi({ role: "clinic_manager", therapists: TEAM });
+    show();
+    const card = await screen.findByRole("region", { name: /Needs attention/ });
+    const staff = await within(card).findByRole("region", { name: "Therapists not using the system" });
+    expect(within(staff).getByText("Noam Peri")).toBeInTheDocument();
+    expect(within(staff).getByText("No activity for 12 days")).toBeInTheDocument();
+    expect(within(staff).getByText("3 patients in a protocol")).toBeInTheDocument();
   });
 
   it("offers no switcher to a therapist, or in a clinic with one therapist", async () => {
