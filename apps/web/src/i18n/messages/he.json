@@ -101,6 +101,7 @@
   "shell.help.body": "הנהלת המרפאה יכולה לאפס את הגישה שלך ולענות על שאלות לגבי רשימת המטופלים.",
   "shell.role": "{role, select, platform_admin {מנהל/ת פלטפורמה} org_admin {מנהל/ת ארגון} clinic_manager {מנהל/ת מרפאה} therapist {מטפל/ת} assistant {עוזר/ת} other {צוות}}",
   "today.greeting": "{part, select, morning {בוקר טוב} afternoon {צהריים טובים} other {ערב טוב}}, {name}",
+  "today.therapist": "מטפל/ת",
   "today.nextUp.title": "הבא בתור",
   "today.nextUp.empty": "אין מפגשים מתוכננים להיום",
   "today.nextUp.emptyBody": "מפגשים יופיעו כאן אחרי שיוקצה פרוטוקול למטופל.",

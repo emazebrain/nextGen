@@ -159,7 +159,12 @@ export async function listTemplates(db: pg.PoolClient, clinic: string | null, la
 }
 
 /** Today: each of the caller's patients' earliest open clinic session, planned up to today (and overdue 7 days). */
-export async function todayItems(db: pg.PoolClient, clinic: string | null, date: string | null, lang: string): Promise<TodayItem[]> {
+/**
+ * `therapist`: whose patients — null for the signed-in user's own (the default), a user id for one therapist's, or
+ * "all" for everyone the signed-in user can see. Row-level security still decides what is visible, so a therapist
+ * asking for "all" or for a colleague gets no more than their own patients.
+ */
+export async function todayItems(db: pg.PoolClient, clinic: string | null, date: string | null, lang: string, therapist: string | null = null): Promise<TodayItem[]> {
   const { rows } = await db.query<TodayItem & { patient_id: string }>(
     `SELECT ps.id AS planned_session_id, to_char(ps.planned_date, 'YYYY-MM-DD') AS planned_date,
             -- The time of day, when the session was given one on the calendar (migration 0027).
@@ -177,11 +182,11 @@ export async function todayItems(db: pg.PoolClient, clinic: string | null, date:
       WHERE ps.status IN ('planned', 'in_progress') AND ps.location = 'clinic'
         AND ps.planned_date BETWEEN COALESCE($2::date, current_date) - 7 AND COALESCE($2::date, current_date)
         AND ($1::uuid IS NULL OR ps.clinic_id = $1::uuid)
-        AND EXISTS (SELECT 1 FROM app.patient_care_team t WHERE t.patient_id = p.id AND t.user_id = app.current_user_id() AND t.ended_at IS NULL)
+        AND ($3::text = 'all' OR EXISTS (SELECT 1 FROM app.patient_care_team t WHERE t.patient_id = p.id AND t.user_id = COALESCE($3::uuid, app.current_user_id()) AND t.ended_at IS NULL))
         -- one item per patient: their earliest open session
         AND ps.seq = (SELECT min(y.seq) FROM app.planned_session y WHERE y.assignment_id = a.id AND y.status IN ('planned', 'in_progress'))
       ORDER BY ps.planned_date, ps.planned_time NULLS LAST, p.family_name, p.given_name`,
-    [clinic, date],
+    [clinic, date, therapist],
   );
   if (rows.length) await db.query(`SELECT app.record_audit('list', 'planned_session', NULL)`);
   return rows.map((r) => ({ ...r, games: r.games ?? [], items: toItems((r as unknown as { items: RawItem[] }).items, lang) }));
@@ -459,10 +464,13 @@ export function protocolRoutes(pool: pg.Pool) {
     const date = c.req.query("date");
     if (clinic !== undefined && !UUID.test(clinic)) return c.json({ error: "invalid_clinic" }, 400);
     if (date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return c.json({ error: "invalid_date" }, 400);
+    // Whose day: the signed-in user's own (default), one therapist's, or "all" (what a clinic manager sees).
+    const therapist = c.req.query("therapist") ?? null;
+    if (therapist !== null && therapist !== "all" && !UUID.test(therapist)) return c.json({ error: "invalid_therapist" }, 400);
     const { items, appointments, review_count } = await run(c, async (db) => {
       const todayDate = date ?? new Date().toISOString().slice(0, 10);
       // Protocol sessions
-      const sessionItems = await todayItems(db, clinic ?? null, date ?? null, langOf(c));
+      const sessionItems = await todayItems(db, clinic ?? null, date ?? null, langOf(c), therapist);
 
       // Calendar appointments for today (if the table exists)
       let appts: Array<{ id: string; title: string; notes: string; date: string; start_time: string | null; end_time: string | null; color: string; patient_given_name: string; patient_family_name: string; patient_id: string }> = [];
@@ -477,8 +485,11 @@ export function protocolRoutes(pool: pg.Pool) {
              JOIN app.patient p ON p.id = a.patient_id AND p.deleted_at IS NULL
             WHERE a.date = $1::date AND a.status = 'scheduled'
               AND ($2::uuid IS NULL OR a.clinic_id = $2::uuid)
+              -- One therapist's day: the appointments they booked, and those of the patients on their care team.
+              AND ($3::uuid IS NULL OR a.created_by = $3::uuid
+                   OR EXISTS (SELECT 1 FROM app.patient_care_team t WHERE t.patient_id = a.patient_id AND t.user_id = $3::uuid AND t.ended_at IS NULL))
             ORDER BY a.start_time NULLS LAST, p.family_name`,
-          [todayDate, clinic ?? null],
+          [todayDate, clinic ?? null, therapist && therapist !== "all" ? therapist : null],
         );
         appts = rows;
       }

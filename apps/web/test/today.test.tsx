@@ -1,6 +1,6 @@
 /** Today answers "what next": who needs a look, how each patient is doing, and a reminder to set the kid-mode PIN. */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryRouter } from "react-router";
 import { makeQueryClient, routes } from "../src/App.tsx";
@@ -12,12 +12,18 @@ const patient = (id: string, given_name: string, family_name: string) => ({ id, 
 const AMIT = { patient_id: "p2", given_name: "Amit", family_name: "Lavi", scores: [100, 80, 70], summary: "declining", week: { done: 1, planned: 4 }, difficulty: 3, last_change: "down", last_session_at: day(1), reasons: [{ kind: "missed_clinic", count: 2 }, { kind: "declining" }] };
 const DANA = { patient_id: "p1", given_name: "Dana", family_name: "Katz", scores: [100, 120, 130], summary: "improving", week: { done: 2, planned: 3 }, difficulty: 4, last_change: "up", last_session_at: day(0), reasons: [] };
 
-function mockApi(over: { caseload?: unknown[] | "fail" } = {}) {
+const asked: string[] = [];
+function mockApi(over: { caseload?: unknown[] | "fail"; role?: string; therapists?: unknown[] } = {}) {
+  asked.length = 0;
   vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, "http://localhost");
     const ok = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
     const p = url.pathname;
-    if (p === "/v1/me") return ok({ user: { id: "u", email: "y@synthetic.test", name: "Yael Bar" }, memberships: [{ clinic_id: "c1", organization_id: "o", role: "therapist", clinic_name: "Clinic" }] });
+    asked.push(p + url.search);
+    if (p === "/v1/me") return ok({ user: { id: "u", email: "y@synthetic.test", name: "Yael Bar" }, memberships: [{ clinic_id: "c1", organization_id: "o", role: over.role ?? "therapist", clinic_name: "Clinic" }] });
+    if (p === "/v1/calendar/therapists") return ok({ therapists: over.therapists ?? [] });
+    // One therapist's list: only Amit is on Noam's care team.
+    if (p === "/v1/patients" && url.searchParams.get("therapist")) return ok({ patients: [patient("p2", "Amit", "Lavi")] });
     if (p === "/v1/patients") return ok({ patients: [patient("p1", "Dana", "Katz"), patient("p2", "Amit", "Lavi"), patient("p3", "Eli", "Baron")] });
     if (p === "/v1/today") return ok({ items: [], appointments: [], review_count: 0 });
     if (p === "/v1/reports/caseload") return over.caseload === "fail" ? new Response("{}", { status: 500 }) : ok({ patients: over.caseload ?? [AMIT, DANA] });
@@ -83,6 +89,38 @@ describe("Today", () => {
     show();
     expect(await screen.findByRole("link", { name: "Set the PIN" })).toHaveAttribute("href", "/settings");
   });
+
+  const TEAM = [{ id: "t1", full_name: "Noam Peri" }, { id: "t2", full_name: "Yael Bar" }];
+
+  it("lets a clinic manager switch between the clinic's therapists; everyone is shown first", async () => {
+    sessionStorage.clear();
+    mockApi({ role: "clinic_manager", therapists: TEAM });
+    show();
+    const pick = await screen.findByRole("combobox", { name: "Therapist" });
+    expect(pick).toHaveValue("");
+    await waitFor(() => expect(asked.some((u) => u.startsWith("/v1/today") && u.includes("therapist=all"))).toBe(true));
+    fireEvent.change(pick, { target: { value: "t1" } });
+    await waitFor(() => expect(asked.some((u) => u.startsWith("/v1/today") && u.includes("therapist=t1"))).toBe(true));
+    await waitFor(() => expect(asked.some((u) => u.startsWith("/v1/patients") && u.includes("therapist=t1"))).toBe(true));
+    await waitFor(() => expect(screen.queryByText("Eli Baron")).toBeNull());
+    expect(screen.getAllByText("Amit Lavi").length).toBeGreaterThan(0);
+  });
+
+  it("offers no switcher to a therapist, or in a clinic with one therapist", async () => {
+    sessionStorage.clear();
+    mockApi({ therapists: TEAM });
+    show();
+    await screen.findByRole("region", { name: /Needs attention/ });
+    expect(screen.queryByRole("combobox", { name: "Therapist" })).toBeNull();
+    expect(asked.some((u) => u.includes("therapist="))).toBe(false);
+    cleanup();
+    mockApi({ role: "clinic_manager", therapists: TEAM.slice(0, 1) });
+    show();
+    await screen.findByRole("region", { name: /Needs attention/ });
+    await waitFor(() => expect(asked.some((u) => u.startsWith("/v1/today") && u.includes("therapist=all"))).toBe(true));
+    expect(screen.queryByRole("combobox", { name: "Therapist" })).toBeNull();
+  });
+
 });
 
 describe("collapseRepeats", () => {

@@ -94,15 +94,19 @@ export function patientRoutes(pool: pg.Pool, mailer?: Mailer, publicAppUrl?: str
     const clinic = c.req.query("clinic");
     if (clinic !== undefined && !UUID.test(clinic)) return c.json({ error: "invalid_clinic" }, 400);
     const archived = c.req.query("archived") === "1";
+    // Optional: only the patients on one therapist's care team (a clinic manager looking at one therapist's list).
+    const therapist = c.req.query("therapist");
+    if (therapist !== undefined && !UUID.test(therapist)) return c.json({ error: "invalid_therapist" }, 400);
     const patients = await run(c, async (db) => {
       const { rows } = await db.query(
         `SELECT p.id, p.clinic_id, p.given_name, p.family_name, to_char(p.date_of_birth, 'YYYY-MM-DD') AS date_of_birth,
                 p.status, p.alert IS NOT NULL AND p.alert <> '' AS has_alert, p.deleted_at IS NOT NULL AS archived
            FROM app.patient p
           WHERE (p.deleted_at IS NOT NULL) = $2 AND ($1::uuid IS NULL OR p.clinic_id = $1::uuid)
+            AND ($3::uuid IS NULL OR EXISTS (SELECT 1 FROM app.patient_care_team t WHERE t.patient_id = p.id AND t.user_id = $3::uuid AND t.ended_at IS NULL))
           ORDER BY p.family_name, p.given_name
           LIMIT 1000`,
-        [clinic ?? null, archived],
+        [clinic ?? null, archived, therapist ?? null],
       );
       // The clinic is recorded only if the user belongs to it, so a made-up id can't write into another clinic's log.
       await db.query(

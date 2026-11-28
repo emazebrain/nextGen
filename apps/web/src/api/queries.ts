@@ -73,14 +73,16 @@ export function useMe(enabled = true) {
   });
 }
 
-export function usePatients(clinicId: string | null, archived = false) {
+/** `therapist`: only the patients on that therapist's care team (a clinic manager looking at one therapist). */
+export function usePatients(clinicId: string | null, archived = false, therapist: string | null = null) {
   const space = useOptionalDevice()?.space ?? null;
   return useQuery({
-    queryKey: ["patients", clinicId, archived],
+    queryKey: ["patients", clinicId, archived, therapist],
     queryFn: ({ signal }) => {
       const q = new URLSearchParams();
       if (clinicId) q.set("clinic", clinicId);
       if (archived) q.set("archived", "1");
+      if (therapist) q.set("therapist", therapist);
       const qs = q.toString();
       return offlineOr(space, `patients:${clinicId}:${archived}`, () => apiGet<{ patients: PatientListItem[] }>(`/v1/patients${qs ? `?${qs}` : ""}`, { signal }).then((r) => r.patients), (b) => (archived ? [] : b.caseload));
     },
@@ -309,18 +311,19 @@ interface TodayData {
   appointments: TodayAppointment[];
 }
 
-export function useToday(clinicId: string | null) {
+/** `therapist`: whose day — null for the signed-in user's own, "all" for everyone they can see, or one therapist's id. */
+export function useToday(clinicId: string | null, therapist: string | null = null) {
   const qc = useQueryClient();
   const { locale } = usePrefs();
   const space = useOptionalDevice()?.space ?? null;
   return useQuery({
-    queryKey: ["today", clinicId, locale],
+    queryKey: ["today", clinicId, locale, therapist],
     queryFn: ({ signal }) =>
       offlineOr(
         space,
         `today:${clinicId}`,
         () =>
-          apiGet<{ items: TodayItem[]; appointments?: TodayAppointment[]; review_count?: number }>(`/v1/today?lang=${locale}${clinicId ? `&clinic=${clinicId}` : ""}`, { signal }).then((r) => {
+          apiGet<{ items: TodayItem[]; appointments?: TodayAppointment[]; review_count?: number }>(`/v1/today?lang=${locale}${clinicId ? `&clinic=${clinicId}` : ""}${therapist ? `&therapist=${therapist}` : ""}`, { signal }).then((r) => {
             qc.setQueryData(reviewCountKey(clinicId), r.review_count ?? 0);
             return { items: r.items, appointments: r.appointments ?? [] } as TodayData;
           }),

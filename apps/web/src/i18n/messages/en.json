@@ -101,6 +101,7 @@
   "shell.help.body": "Your clinic manager can reset your access and answer questions about your caseload.",
   "shell.role": "{role, select, platform_admin {Platform admin} org_admin {Organization admin} clinic_manager {Clinic manager} therapist {Therapist} assistant {Assistant} other {Staff}}",
   "today.greeting": "{part, select, morning {Good morning} afternoon {Good afternoon} other {Good evening}}, {name}",
+  "today.therapist": "Therapist",
   "today.nextUp.title": "Next up",
   "today.nextUp.empty": "Nothing planned for today",
   "today.nextUp.emptyBody": "Sessions appear here once a patient has a protocol.",

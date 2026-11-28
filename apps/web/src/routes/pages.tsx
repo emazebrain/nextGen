@@ -26,7 +26,7 @@ import {
   ChevronRight,
   Play,
 } from "lucide-react";
-import { Alert, Avatar, Button, Card, Chip, DataList, EmptyState, MazeLoader, PageHeader, Segmented, TextField, type ChipTone, type Column } from "@emb/ui";
+import { Alert, Avatar, Button, Card, Chip, DataList, EmptyState, MazeLoader, PageHeader, Segmented, SelectField, TextField, type ChipTone, type Column } from "@emb/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { meKey, useCaseload, useMe, usePatients, useToday, useReviewCount, useReviewQueue, useReviewFromQueue, type ReviewQueueItem } from "../api/queries.ts";
 import { apiSend } from "../api/http.ts";
@@ -43,6 +43,7 @@ import { useTitle } from "../lib/title.ts";
 import { useSignOut } from "../shell/ClinicShell.tsx";
 import { SetPinForm } from "../session/SessionPage.tsx";
 import { hasPin } from "../session/kidmode.ts";
+import { useTherapistView } from "../lib/therapistView.ts";
 
 
 // ------------------------------------------------------------------ Today
@@ -52,7 +53,8 @@ export function TodayPage() {
   const intl = useIntl();
   const me = useMe();
   const { clinicId } = useClinic();
-  const patients = usePatients(clinicId);
+  const view = useTherapistView();
+  const patients = usePatients(clinicId, false, view.patients);
   const reviewCount = useReviewCount(clinicId);
   const age = useAge();
   useTitle(t("nav.today"));
@@ -71,13 +73,27 @@ export function TodayPage() {
     .slice(0, 8);
   const relative = useMemo(() => new Intl.RelativeTimeFormat(intl.locale, { numeric: "auto" }), [intl.locale]);
   const lastSeen = (s: string) => relative.format(-Math.max(0, Math.floor((Date.now() - Date.parse(s)) / 86_400_000)), "day");
-  const look = (caseload.data ?? []).filter((r) => r.reasons.length > 0);
+  // Looking at one therapist: only that therapist's patients need a look.
+  const theirs = useMemo(() => (view.patients ? new Set((patients.data ?? []).map((p) => p.id)) : null), [view.patients, patients.data]);
+  const look = (caseload.data ?? []).filter((r) => r.reasons.length > 0 && (!theirs || theirs.has(r.patient_id)));
 
   return (
     <div className="app-page">
       <PageHeader
         eyebrow={intl.formatDate(new Date(), { weekday: "long", day: "numeric", month: "long" })}
         title={t("today.greeting", { part: dayPart(), name })}
+        actions={
+          view.options.length > 0 && (
+            <SelectField label={t("today.therapist")} name="therapist" value={view.chosen} onChange={(e) => view.choose(e.target.value)}>
+              <option value="">{t("calendar.allTherapists")}</option>
+              {view.options.map((th) => (
+                <option key={th.id} value={th.id}>
+                  {th.full_name}
+                </option>
+              ))}
+            </SelectField>
+          )
+        }
       />
       {needsPin && (
         <div className="today-pin">
@@ -95,7 +111,7 @@ export function TodayPage() {
           <h2 id="next-up" className="app-cardtitle">
             {t("today.nextUp.title")}
           </h2>
-          <NextUp />
+          <NextUp therapist={view.today} />
         </Card>
         <Card as="section" className="today-attention" labelledBy="attention">
           <h2 id="attention" className="app-cardtitle">
@@ -316,12 +332,12 @@ function ReviewQueue({ clinicId, count }: { clinicId: string | null; count: numb
 }
 
 /** Today's sessions (and any missed in the last week), one per patient (design doc §4.1, journey T1). */
-function NextUp() {
+function NextUp({ therapist }: { therapist: string | null }) {
   const t = useT();
   const intl = useIntl();
   const { locale } = usePrefs();
   const { clinicId } = useClinic();
-  const today = useToday(clinicId);
+  const today = useToday(clinicId, therapist);
   const age = useAge();
   const todayIso = new Date().toLocaleDateString("en-CA");
   if (today.isPending) return <MazeLoader label={t("common.loading")} />;

@@ -103,6 +103,27 @@ describe.skipIf(!ADMIN_URL)("protocols API", () => {
       expect.objectContaining({ seq: 1, week: 1, total: 12, patient: expect.objectContaining({ given_name: "Noa", can_play: false }), games: ["catch-me-if-you-can", "catch-me-if-you-can"] }),
     ]);
     expect((await dana(`/v1/today?clinic=${ids.clinic}`)).body.items).toEqual([]);
+
+    // Whose day (the home page's therapist switcher). A clinic manager is on nobody's care team: her own day is
+    // empty, "all" shows the clinic, and one therapist's id shows that therapist's patients.
+    const m = await staffClient(env, "mira@synthetic.test", "Mira Tal");
+    await addMember(env.db, m.userId, ids.org, ids.clinic, "clinic_manager");
+    const dn = (await env.db.query<{ id: string }>(`SELECT id FROM app.app_user WHERE email = 'dana@synthetic.test'`)).rows[0]!.id;
+    const day = async (who: Api, therapist: string) => (await who(`/v1/today?clinic=${ids.clinic}&therapist=${therapist}`)).body.items.length;
+    expect((await m.api(`/v1/today?clinic=${ids.clinic}`)).body.items).toEqual([]);
+    expect(await day(m.api, "all")).toBe(1);
+    expect(await day(m.api, ids.yael)).toBe(1);
+    expect(await day(m.api, dn)).toBe(0);
+    expect((await m.api(`/v1/today?therapist=everyone`)).status).toBe(400);
+    // A therapist gets no more by asking: row-level security still shows only her own patients.
+    expect(await day(dana, "all")).toBe(0);
+    expect(await day(dana, ids.yael)).toBe(0);
+    // The patient list narrows the same way.
+    const listed = async (who: Api, therapist: string) => (await who(`/v1/patients?clinic=${ids.clinic}&therapist=${therapist}`)).body.patients.length;
+    expect(await listed(m.api, ids.yael)).toBe(1);
+    expect(await listed(m.api, dn)).toBe(0);
+    expect(await listed(dana, ids.yael)).toBe(0);
+    expect((await m.api(`/v1/patients?therapist=x`)).status).toBe(400);
     // A session has no time of day until it is given one on the calendar; Today then shows it.
     expect(today.body.items[0].planned_time).toBeNull();
     expect((await yael(`/v1/calendar/sessions/${a.sessions[0].id}`, { method: "PATCH", body: { planned_date: start, planned_time: "09:30" } })).status).toBe(200);
