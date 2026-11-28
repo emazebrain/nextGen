@@ -116,6 +116,12 @@ export class MusicPlayer {
 
   // ------------------------------------------------------------------------------------------------------- internals
 
+  /** Lets the music through once the browser allows it (it may hold audio back until the page is touched). */
+  resume(): void {
+    if (this.ctx?.state === "suspended") void this.ctx.resume().catch(() => undefined);
+    if (this.file?.audio.paused) void this.file.audio.play().catch(() => undefined);
+  }
+
   private ensure(): AudioContext | null {
     if (this.ctx) return this.ctx;
     const Ctor = typeof window === "undefined" ? undefined : (window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext);

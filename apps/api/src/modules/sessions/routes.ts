@@ -126,10 +126,34 @@ export function buildParams(step: StepRow, patient: { preferred_locale: string; 
 }
 
 
+/**
+ * The side of the brain a video works on, from its brain regions: the side most of them are on (null when it has
+ * none or as many on each). Background tones and music follow it while the video plays. `videoId`: an SQL expression.
+ */
+export const videoHemisphereSql = (videoId: string): string =>
+  `(SELECT CASE WHEN x.l > x.r THEN 'left' WHEN x.r > x.l THEN 'right' END
+      FROM (SELECT count(*) FILTER (WHERE br.path = 'left' OR br.path LIKE 'left.%') AS l,
+                   count(*) FILTER (WHERE br.path = 'right' OR br.path LIKE 'right.%') AS r
+              FROM app.video_region vr JOIN app.brain_region br ON br.id = vr.region_id WHERE vr.video_id = ${videoId}) x)`;
+
+/**
+ * The side the session's tones are made for: the first game's, or — in a session of videos only — the first
+ * video's that has one.
+ */
+export function sessionSide(steps: ReadonlyArray<{ step_type?: string | undefined; hemisphere?: string | null | undefined; video_id?: string | null | undefined }>, videos: ReadonlyMap<string, { hemisphere: "left" | "right" | null }>): "left" | "right" | null {
+  const game = steps.find((s) => s.step_type !== "video");
+  if (game && (game.hemisphere === "left" || game.hemisphere === "right")) return game.hemisphere;
+  for (const s of steps) {
+    const side = s.step_type === "video" && s.video_id ? videos.get(s.video_id)?.hemisphere : null;
+    if (side) return side;
+  }
+  return null;
+}
+
 export type LaunchRows = {
   row: { id: string; seq: number; week: number; status: string; assignment_id: string; assignment_name: string; total: number; patient_id: string; given_name: string; family_name: string; preferred_locale: string; alert: string | null; colour_vision_deficiency: boolean; planned_date: string; date_of_birth: string | null; tone_age_group: number | null; tones_enabled: boolean; music_enabled: boolean };
   steps: Array<StepRow & { done: boolean }>;
-  videos: Map<string, { id: string; version: number; source: "upload" | "youtube"; youtube_id: string | null; duration_s: number | null; titles: Record<string, string>; sha256: Buffer | null; has_file: boolean; bytes: number | null }>;
+  videos: Map<string, { id: string; version: number; source: "upload" | "youtube"; youtube_id: string | null; duration_s: number | null; titles: Record<string, string>; sha256: Buffer | null; has_file: boolean; bytes: number | null; hemisphere: "left" | "right" | null }>;
 };
 
 /** What a launch needs for one planned session, checked (care, consent, active, open); changes nothing. */
@@ -168,6 +192,7 @@ export async function loadLaunchRows(db: pg.PoolClient, id: string): Promise<Lau
   if (videoIds.length) {
     const v = await db.query(
       `SELECT v.id, v.version, v.source, v.youtube_id, v.duration_s, f.sha256, f.bytes::int AS bytes, v.file_id IS NOT NULL AS has_file,
+              ${videoHemisphereSql("v.id")} AS hemisphere,
               COALESCE((SELECT jsonb_object_agg(i.locale, i.title) FROM app.video_i18n i WHERE i.video_id = v.id), '{}') AS titles
          FROM app.video v LEFT JOIN app.file_object f ON f.id = v.file_id WHERE v.id = ANY($1::uuid[])`,
       [videoIds],
@@ -198,10 +223,10 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
       const { row, steps, videos } = loaded;
       const regions = steps.some((s) => s.region_id) ? await loadRegionCatalog(db) : undefined;
       await db.query(`UPDATE app.planned_session SET status = 'in_progress' WHERE id = $1 AND status = 'planned'`, [id]);
-      // Session-level tones: computed from patient settings + first game step's hemisphere
-      const firstGameStep = steps.find((s) => s.step_type !== "video");
-      const sessionTones = row.tones_enabled && row.date_of_birth && firstGameStep
-        ? toneParamsForPatient(row.date_of_birth, firstGameStep.hemisphere as "left" | "right", row.tone_age_group) ?? undefined
+      // Session-level tones: from the patient's settings and the side the session works on (videos included).
+      const side = sessionSide(steps, videos);
+      const sessionTones = row.tones_enabled && row.date_of_birth && side
+        ? toneParamsForPatient(row.date_of_birth, side, row.tone_age_group) ?? undefined
         : undefined;
 
       const pkg: LaunchPackage = {
@@ -226,6 +251,7 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
                 id: v.id, version: v.version, source: v.source, youtube_id: v.youtube_id, duration_s: v.duration_s,
                 title: pick(v.titles, row.preferred_locale) ?? "",
                 file_url: v.source === "upload" && v.has_file ? `/v1/videos/${v.id}/file?v=${v.version}` : null,
+                hemisphere: v.hemisphere,
                 sha256: v.sha256 ? v.sha256.toString("hex") : null,
               },
               done: s.done,

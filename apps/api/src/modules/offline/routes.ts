@@ -141,7 +141,7 @@ export function offlineRoutes(pool: pg.Pool, tickets: TicketSigner) {
                 assignment_step_id: s.id,
                 ordinal: s.ordinal,
                 ticket: vticket,
-                video: { id: v.id, version: v.version, source: v.source, youtube_id: v.youtube_id, duration_s: v.duration_s, title: pick(v.titles, row.preferred_locale) ?? "", file_url: url, sha256: v.sha256 ? v.sha256.toString("hex") : null },
+                video: { id: v.id, version: v.version, source: v.source, youtube_id: v.youtube_id, duration_s: v.duration_s, title: pick(v.titles, row.preferred_locale) ?? "", file_url: url, sha256: v.sha256 ? v.sha256.toString("hex") : null, hemisphere: v.hemisphere },
                 done: s.done,
               };
             }

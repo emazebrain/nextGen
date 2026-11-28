@@ -95,6 +95,8 @@ export interface LaunchVideoStep {
     /** Same-origin URL of the file for uploads (includes ?v=<version>); null for YouTube. */
     file_url: string | null;
     sha256: string | null;
+    /** The side of the brain the video works on (from its brain regions); tones and music follow it. */
+    hemisphere?: "left" | "right" | null;
   };
   /** Already watched in this session. */
   done: boolean;

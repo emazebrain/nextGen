@@ -232,8 +232,10 @@ function Runner({ pkg, space = null, fromParent = false }: { pkg: LaunchPackage;
   const musicRef = useRef<MusicPlayer | null>(null);
   const musicSide = useRef<Side | null>(null);
   const current = phase.k === "play" ? queue[phase.i] : undefined;
-  const stepSide = current?.kind === "game" ? sideOf(current.params.hemisphere) : null;
-  const firstSide = sideOf(queue.find((s) => s.kind === "game")?.params.hemisphere) ?? "right";
+  // A video has a side too (from its brain regions): the music follows it, as it follows a game's.
+  const sideOfStep = (s: (typeof queue)[number] | undefined): Side | null => (!s ? null : s.kind === "game" ? sideOf(s.params.hemisphere) : sideOf(s.video.hemisphere));
+  const stepSide = sideOfStep(current);
+  const firstSide = sideOf(queue.find((s) => s.kind === "game")?.params.hemisphere) ?? queue.map(sideOfStep).find((x) => x !== null) ?? "right";
   const onVideo = current?.kind === "video";
   useEffect(() => {
     if (!pkg.music) return;
@@ -253,6 +255,20 @@ function Runner({ pkg, space = null, fromParent = false }: { pkg: LaunchPackage;
     }
   }, [phase.k, pkg.music, pkg.music_tracks, pkg.seq, stepSide, firstSide, onVideo]);
   useEffect(() => () => { musicRef.current?.stop(); musicRef.current = null; }, []);
+  // A browser may hold sound back until the page is touched (a session opened by reloading the page, say). The
+  // first tap or key then lets the tones and the music through, so they are not silent for the whole session.
+  useEffect(() => {
+    const wake = () => {
+      tonePlayerRef.current?.resume();
+      musicRef.current?.resume();
+    };
+    window.addEventListener("pointerdown", wake, true);
+    window.addEventListener("keydown", wake, true);
+    return () => {
+      window.removeEventListener("pointerdown", wake, true);
+      window.removeEventListener("keydown", wake, true);
+    };
+  }, []);
   const gameName = (id: string) => (findGame(id) ? localText(findGame(id)!.manifest.name, locale) : id);
   const stepName = (s: LaunchStep) => (s.kind === "video" ? s.video.title : gameName(s.game_id));
 

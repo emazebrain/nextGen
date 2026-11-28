@@ -26,6 +26,11 @@ export class TonePlayer {
 
   constructor(private params: StepToneParams) {}
 
+  /** Lets the sound through once the browser allows it (it may hold audio back until the page is touched). */
+  resume() {
+    if (this.ctx?.state === "suspended") void this.ctx.resume().catch(() => undefined);
+  }
+
   start(volume = 0.3) {
     if (this.running) return;
     this.running = true;

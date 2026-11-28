@@ -185,7 +185,23 @@ describe.skipIf(!ADMIN_URL)("video steps API", () => {
     const a = await yael(`/v1/patients/${pid}/assignment`, { method: "POST", body: { template_id: null, name: "Watch", weeks: 1, sessions_per_week: 1, setting: "clinic", start_date: "2026-11-02", steps: [{ step_type: "video", video_id: upload }] } });
     expect(a.status).toBe(201);
     const psid = (await env.db.query(`SELECT id FROM app.planned_session WHERE patient_id = $1`, [pid])).rows[0].id;
+    // A video with no brain regions has no side: no tones for a session of only such videos.
+    await env.db.query(`UPDATE app.patient SET tones_enabled = true WHERE id = $1`, [pid]);
+    const plain = (await yael(`/v1/planned-sessions/${psid}/launch`, { method: "POST", body: {} })).body.launch;
+    expect(plain.steps[0].video.hemisphere).toBeNull();
+    expect(plain.tones).toBeUndefined();
+    // Tones and music play during videos too: the video's side comes from its brain regions (most of them win).
+    await env.db.query(
+      `INSERT INTO app.video_region (video_id, region_id)
+       SELECT $1, id FROM (
+         (SELECT id FROM app.brain_region WHERE path LIKE 'left.%' ORDER BY path LIMIT 2)
+         UNION ALL (SELECT id FROM app.brain_region WHERE path LIKE 'right.%' ORDER BY path LIMIT 1)) x`,
+      [upload],
+    );
     const launch = (await yael(`/v1/planned-sessions/${psid}/launch`, { method: "POST", body: {} })).body.launch;
+    expect(launch.steps[0].video.hemisphere).toBe("left");
+    expect(launch.tones).toBeDefined();
+    await env.db.query(`DELETE FROM app.video_region WHERE video_id = $1`, [upload]);
     const r = await yael("/v1/video-views", { method: "POST", body: { ...view(launch.steps[0].assignment_step_id, upload, { video_version: 2, completed: null }), planned_session_id: psid } });
     expect(r.status).toBe(201);
     expect(r.body.planned_session_status).toBe("done");

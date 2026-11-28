@@ -19,7 +19,7 @@ import { ageBand, resolveRegion, seededIndex } from "../../../../../packages/con
 import type { Env } from "../../context.ts";
 import type { TicketSigner } from "../../tickets.ts";
 import { paramsHash } from "../../tickets.ts";
-import { buildParams, type StepRow } from "../sessions/routes.ts";
+import { buildParams, sessionSide, videoHemisphereSql, type StepRow } from "../sessions/routes.ts";
 import { pick } from "../videos/routes.ts";
 import { loadRegionCatalog } from "../../regions.ts";
 import { ITEMS_SQL, toItems } from "../protocols/routes.ts";
@@ -394,16 +394,21 @@ export function parentRoutes(servicePool: pg.Pool, tickets?: TicketSigner) {
       }
 
       const videoIds = steps.rows.filter((s) => s.step_type === "video").map((s) => s.video_id!);
-      const videos = new Map<string, { id: string; version: number; source: "upload" | "youtube"; youtube_id: string | null; duration_s: number | null; titles: Record<string, string>; sha256: Buffer | null; has_file: boolean }>();
+      const videos = new Map<string, { id: string; version: number; source: "upload" | "youtube"; youtube_id: string | null; duration_s: number | null; titles: Record<string, string>; hemisphere: "left" | "right" | null; sha256: Buffer | null; has_file: boolean }>();
       if (videoIds.length) {
         const v = await db.query(
           `SELECT v.id, v.version, v.source, v.youtube_id, v.duration_s, f.sha256, v.file_id IS NOT NULL AS has_file,
+                  ${videoHemisphereSql("v.id")} AS hemisphere,
                   COALESCE((SELECT jsonb_object_agg(i.locale, i.title) FROM app.video_i18n i WHERE i.video_id = v.id), '{}') AS titles
              FROM app.video v LEFT JOIN app.file_object f ON f.id = v.file_id WHERE v.id = ANY($1::uuid[])`,
           [videoIds],
         );
         for (const r of v.rows) videos.set(r.id, r);
       }
+      const side = sessionSide(steps.rows, videos);
+      const sessionTones = row.tones_enabled && row.date_of_birth && side
+        ? toneParamsForPatient(row.date_of_birth, side, row.tone_age_group) ?? undefined
+        : undefined;
 
       const regions = steps.rows.some((s) => s.region_id) ? await loadRegionCatalog(db) : undefined;
 
@@ -413,10 +418,6 @@ export function parentRoutes(servicePool: pg.Pool, tickets?: TicketSigner) {
       const musicTracks = row.music_enabled
         ? (await withUser(servicePool, me, c.get("requestId"), (asMe) => sessionTracks(asMe, childId))).map((t) => ({ ...t, url: `/v1/parent/music/${t.id}/file` }))
         : [];
-      const firstGameStep = steps.rows.find((s) => s.step_type !== "video");
-      const sessionTones = row.tones_enabled && row.date_of_birth && firstGameStep
-        ? toneParamsForPatient(row.date_of_birth, firstGameStep.hemisphere as "left" | "right", row.tone_age_group) ?? undefined
-        : undefined;
 
       const pkg: LaunchPackage = {
         planned_session_id: sessionId,
@@ -432,6 +433,7 @@ export function parentRoutes(servicePool: pg.Pool, tickets?: TicketSigner) {
                 id: v.id, version: v.version, source: v.source, youtube_id: v.youtube_id, duration_s: v.duration_s,
                 title: pick(v.titles, row.preferred_locale) ?? "",
                 file_url: v.source === "upload" && v.has_file ? `/v1/parent/videos/${v.id}/file?v=${v.version}` : null,
+                hemisphere: v.hemisphere,
                 sha256: v.sha256 ? v.sha256.toString("hex") : null,
               },
               done: s.done,
