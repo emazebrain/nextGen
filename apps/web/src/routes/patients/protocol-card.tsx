@@ -32,6 +32,10 @@ export function ProtocolCard({ patientId, archived, canPlay }: { patientId: stri
   const done = live.filter((s) => s.status === "done").length;
   const next = live.find((s) => s.status === "planned" || s.status === "in_progress");
   const week = next?.week ?? a.weeks;
+  // What the family did with home sessions: skipped ones, and ones played after their planned day.
+  const skipped = live.filter((s) => s.status === "skipped").length;
+  const lateOnes = live.filter((s) => s.status === "done" && (s.days_late ?? 0) > 0);
+  const worst = Math.max(0, ...lateOnes.map((s) => s.days_late ?? 0));
 
   return (
     <Card as="section" labelledBy="p-protocol">
@@ -48,6 +52,11 @@ export function ProtocolCard({ patientId, archived, canPlay }: { patientId: stri
       <div className="meter" aria-hidden="true">
         <span style={{ inlineSize: `${live.length ? (done / live.length) * 100 : 0}%` }} />
       </div>
+      {(skipped > 0 || lateOnes.length > 0) && (
+        <p className="app-muted protocol-late">
+          {[skipped > 0 ? t("protocol.skipped", { n: skipped }) : null, lateOnes.length > 0 ? t("protocol.playedLate", { n: lateOnes.length, days: worst }) : null].filter(Boolean).join(" · ")}
+        </p>
+      )}
       <p className="app-muted">
         {next ? t("protocol.next", { date: intl.formatDate(calendarDate(next.planned_date), { weekday: "long", day: "numeric", month: "long" }) }) : t("protocol.noneLeft")}
       </p>

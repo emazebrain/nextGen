@@ -124,7 +124,13 @@ export interface HomePlannedSession {
   items?: StepItem[];
   /** Where the protocol's sessions happen; "mixed" sessions can be done at the clinic or started at home. */
   setting?: "clinic" | "home" | "mixed";
-  /** True for the one session that can be started from the portal now: the next in line for its protocol. */
+  /** The next open home session of its protocol. It opens on its planned day and stays open after it. */
+  next_in_line?: boolean;
+  /** Next in line and its day has passed: the guardian may skip it. */
+  skippable?: boolean;
+  /** Whole days past the planned day (0 when on time); for a finished session, how late it was played. */
+  days_late?: number;
+  /** True for the one session that can be started from the portal now: next in line, and its day has come. */
   startable?: boolean;
 }
 
@@ -186,3 +192,12 @@ export const useLaunchHomeSession = (childId: string) => {
     onSuccess: () => { void qc.invalidateQueries({ queryKey: [...parentKey, "sessions", childId] }); },
   });
 };
+
+/** Skips an overdue home session: it will not be played, and the next one opens on its own planned day. */
+export function useSkipHomeSession(childId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (sessionId: string) => apiSend<{ ok: true }>("POST", `/v1/parent/children/${encodeURIComponent(childId)}/sessions/${encodeURIComponent(sessionId)}/skip`),
+    onSettled: () => void qc.invalidateQueries({ queryKey: [...parentKey, "sessions", childId] }),
+  });
+}

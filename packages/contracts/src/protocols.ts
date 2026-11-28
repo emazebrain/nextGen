@@ -144,6 +144,8 @@ export interface PlannedSessionView {
   week: number;
   planned_date: string;
   status: "planned" | "in_progress" | "done" | "missed" | "skipped" | "cancelled";
+  /** For a done or skipped session: whole days between its planned day and the day that happened (0 = on time). */
+  days_late?: number | null;
 }
 
 export interface AssignmentView {

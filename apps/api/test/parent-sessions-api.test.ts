@@ -40,7 +40,7 @@ describe.skipIf(!ADMIN_URL)("parent portal: session contents and starting in ord
       const g = await env.db.query<{ id: string }>(`INSERT INTO app.guardian (clinic_id, full_name, phone, created_by, user_id) VALUES ($1,$2,'+972 50 000 0000',$3,$4) RETURNING id`, [ids.clinic, name, yael.userId, user]);
       await env.db.query(`INSERT INTO app.guardian_patient (guardian_id, patient_id, relationship, is_legal_guardian) VALUES ($1,$2,'parent',true)`, [g.rows[0]!.id, child]);
     }
-    const start = new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10); // the first session is planned for later this week
+    const start = new Date().toISOString().slice(0, 10);
     const res = await yael.api(`/v1/patients/${dana}/assignment`, {
       method: "POST",
       body: { template_id: null, name: "Home practice", description: null, weeks: 2, sessions_per_week: 2, setting: "home", start_date: start, steps: [step, { ...step, hemisphere: "right", timer_position: "left" }] },
@@ -49,17 +49,23 @@ describe.skipIf(!ADMIN_URL)("parent portal: session contents and starting in ord
     sessions = res.body.assignment.sessions;
     // The third session is held at the clinic.
     await env.db.query(`UPDATE app.planned_session SET location = 'clinic' WHERE id = $1`, [sessions[2]!.id]);
+    // Two sessions are already behind (five days and one day), two are still to come.
+    for (const [i, offset] of [[0, -5], [1, -1], [2, 2], [3, 5]] as const)
+      await env.db.query(`UPDATE app.planned_session SET planned_date = (now() AT TIME ZONE (SELECT timezone FROM app.clinic WHERE id = $2))::date + $3::int WHERE id = $1`, [sessions[i]!.id, ids.clinic, offset]);
   });
   afterAll(async () => env?.close());
 
   it("lists the child's coming sessions with what is in each, and marks the one that can be started", async () => {
     const res = await miri.api(`/v1/parent/children/${dana}/sessions`);
     expect(res.status).toBe(200);
-    const up = res.body.upcoming as { id: string; seq: number; location: string; startable: boolean; items: unknown[] }[];
+    const up = res.body.upcoming as { id: string; seq: number; location: string; startable: boolean; skippable: boolean; next_in_line: boolean; days_late: number; items: unknown[] }[];
     expect(up.map((s) => s.seq)).toEqual([1, 2, 3, 4]);
     expect(up.map((s) => s.location)).toEqual(["home", "home", "clinic", "home"]);
-    // Only the first open home session can be started — even though its planned date has not come yet.
+    // Only the first open home session can be started. It was not played on time: the list says by how many days.
     expect(up.map((s) => s.startable)).toEqual([true, false, false, false]);
+    expect(up.map((s) => s.skippable)).toEqual([true, false, false, false]);
+    expect(up.map((s) => s.next_in_line)).toEqual([true, false, false, false]);
+    expect(up.map((s) => s.days_late)).toEqual([5, 1, 0, 0]);
     for (const s of up) expect(s.items).toEqual([{ kind: "game", game_id: "catch-me-if-you-can" }, { kind: "game", game_id: "catch-me-if-you-can" }]);
     // Names only: no settings, levels or results travel with the list.
     expect(JSON.stringify(res.body)).not.toMatch(/difficulty|game_params|hemisphere/);
@@ -120,6 +126,40 @@ describe.skipIf(!ADMIN_URL)("parent portal: session contents and starting in ord
     const mine = (res.body.events as { kind: string; patient_id: string; items?: unknown[] }[]).filter((e) => e.kind === "session" && e.patient_id === dana);
     expect(mine.length).toBeGreaterThan(0);
     for (const e of mine) expect(e.items).toEqual([{ kind: "game", game_id: "catch-me-if-you-can" }, { kind: "game", game_id: "catch-me-if-you-can" }]);
+  });
+
+  it("a late session can be skipped; the one after it then waits for its own day", async () => {
+    const s2 = sessions[1]!.id; // one day late, next in line now that the first is done
+    const s4 = sessions[3]!.id; // five days ahead
+    const skip = (who: typeof miri, id: string) => who.api(`/v1/parent/children/${dana}/sessions/${id}/skip`, { method: "POST" });
+    // Not another guardian, not a session further down the line.
+    expect((await skip(other, s2)).status).toBe(403);
+    expect((await skip(miri, s4)).body.error).toBe("not_next_session");
+    expect((await skip(miri, s2)).body).toEqual({ ok: true });
+    expect((await env.db.query(`SELECT status, completed_at IS NOT NULL AS stamped FROM app.planned_session WHERE id = $1`, [s2])).rows[0]).toEqual({ status: "skipped", stamped: true });
+    expect((await skip(miri, s2)).body.error).toBe("session_closed"); // once
+
+    // The next home session is in five days: it is next in line, but neither opens nor can be skipped before its day.
+    const up = (await miri.api(`/v1/parent/children/${dana}/sessions`)).body.upcoming as { seq: number; next_in_line: boolean; startable: boolean; skippable: boolean; days_late: number }[];
+    expect(up.map((s) => [s.seq, s.next_in_line, s.startable, s.skippable, s.days_late])).toEqual([[3, false, false, false, 0], [4, true, false, false, 0]]);
+    expect((await miri.api(`/v1/parent/children/${dana}/sessions/${s4}/launch`, { method: "POST" })).body.error).toBe("not_yet_due");
+    expect((await skip(miri, s4)).body.error).toBe("not_overdue");
+
+    // What happened lately: the first was played five days late, the second was skipped.
+    const recent = (await miri.api(`/v1/parent/children/${dana}/sessions`)).body.recent as { seq: number; status: string; days_late: number }[];
+    expect(recent.map((r) => [r.seq, r.status, r.days_late]).sort()).toEqual([[1, "done", 5], [2, "skipped", 1]]);
+  });
+
+  it("a session whose steps were all played but which never closed is closed instead of started", async () => {
+    const s4 = sessions[3]!.id;
+    await env.db.query(`UPDATE app.planned_session SET planned_date = planned_date - 6 WHERE id = $1`, [s4]); // its day has come
+    const launch = (await miri.api(`/v1/parent/children/${dana}/sessions/${s4}/launch`, { method: "POST" })).body.launch;
+    for (const st of launch.steps) await miri.api("/v1/parent/results", { method: "POST", body: { ticket: st.ticket, envelope: envelope(st.params, 0.9) } });
+    await env.db.query(`UPDATE app.planned_session SET status = 'in_progress', completed_at = NULL WHERE id = $1`, [s4]); // as if closing had failed
+    const again = await miri.api(`/v1/parent/children/${dana}/sessions/${s4}/launch`, { method: "POST" });
+    expect(again.status).toBe(409);
+    expect(again.body.error).toBe("already_played");
+    expect((await env.db.query(`SELECT status FROM app.planned_session WHERE id = $1`, [s4])).rows[0].status).toBe("done");
   });
 
   it("a clinic-only protocol cannot be started at home until the therapist sets it to home or both", async () => {

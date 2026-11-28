@@ -50,7 +50,7 @@ function ChildCalendar({ childId, childName }: { childId: string; childName: str
   const intl = useIntl();
   const sessions = useChildSessions(childId);
   const appointments = useChildAppointments(childId);
-  const { start, starting, failed } = useStartHomeSession(childId);
+  const { start, starting, failed, reason } = useStartHomeSession(childId);
   const { locale } = usePrefs();
   const [all, setAll] = useState(false);
   /** "▶ Warm-up → Catch Me If You Can ×2": what the session includes, on one line. */
@@ -128,7 +128,8 @@ function ChildCalendar({ childId, childName }: { childId: string; childName: str
                     {t(e.s.setting === "mixed" ? "parent.eitherSession" : e.s.location === "home" ? "parent.homeSession" : "parent.clinicSession")} · {t("parent.sessionMeta", { seq: e.s.seq, total: e.s.total ?? 0, week: e.s.week })}
                   </span>
                   {(e.s.items ?? []).length > 0 && <span className="parent-calendar__steps">{stepLine(e.s.items ?? [])}</span>}
-                  {failed === e.s.id && <span className="parent-session__error" role="alert">{t("parent.startFailed")}</span>}
+                  {(e.s.days_late ?? 0) > 0 && e.s.location === "home" && <span className="parent-calendar__overdue">{t("parent.late", { days: e.s.days_late ?? 0 })}</span>}
+                  {failed === e.s.id && <span className="parent-session__error" role="alert">{t(reason === "alreadyPlayed" ? "parent.alreadyPlayed" : "parent.startFailed")}</span>}
                 </span>
                 <span className="parent-calendar__status">
                   {e.s.startable ? (
@@ -157,7 +158,7 @@ function ChildCalendar({ childId, childName }: { childId: string; childName: str
                 <span className="parent-calendar__details">
                   <span><bdi>{s.assignment_name}</bdi></span>
                 </span>
-                <span className="parent-calendar__status app-muted">{t("parent.sessionDone")}</span>
+                <span className="parent-calendar__status app-muted">{s.status === "skipped" ? t("parent.skipped") : (s.days_late ?? 0) > 0 ? t("parent.playedLate", { days: s.days_late ?? 0 }) : t("parent.sessionDone")}</span>
               </li>
             ))}
           </ul>

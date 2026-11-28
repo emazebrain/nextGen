@@ -18,7 +18,7 @@ const session = (i: number, accuracy: number) => ({
 const RISING = [0.5, 0.5, 0.62, 0.7, 0.78, 0.84].map((a, i) => session(i, a));
 const FALLING = [0.9, 0.9, 0.7, 0.6, 0.5, 0.45].map((a, i) => session(i, a));
 
-function mockApi(over: { sessions?: unknown[]; unread?: number; nothingLeft?: boolean } = {}) {
+function mockApi(over: { sessions?: unknown[]; unread?: number; nothingLeft?: boolean; late?: number } = {}) {
   const calls: string[] = [];
   vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, "http://localhost");
@@ -36,13 +36,16 @@ function mockApi(over: { sessions?: unknown[]; unread?: number; nothingLeft?: bo
     if (p === "/v1/parent/messages/threads") return ok({ threads: [{ id: "t1", patient_id: "c1", therapist_id: "th", guardian_id: "g1", status: "open", last_message_at: at(0), created_at: at(3), patient_given_name: "Ella", patient_family_name: "Navon", guardian_name: "Dan Navon", therapist_name: "Yael Bar", unread_count: over.unread ?? 2 }] });
     if (p.endsWith("/progress")) return ok({ patient: { id: "c1", given_name: "Ella", family_name: "Navon", status: "active" }, stats: { total_sessions: 6, last_session: at(1) }, protocols: [] });
     if (p.endsWith("/history")) return ok({ sessions: over.sessions ?? RISING });
+    if (p.endsWith("/skip")) return ok({ ok: true });
     if (p.endsWith("/launch")) return ok({ launch: { planned_session_id: "ps1", seq: 4, week: 2, total: 8, patient: { id: "c1", given_name: "Ella", family_name: "Navon", preferred_locale: "en", alert: null }, assignment: { id: "a1", name: "Visual attention starter" }, steps: [{ kind: "video", assignment_step_id: "st1", ordinal: 1, done: !!over.nothingLeft, video: { id: "v1", version: 1, source: "youtube", youtube_id: "aaaaaaaaaaa", duration_s: 60, title: "Warm-up stretches", file_url: null, sha256: null } }] } });
     if (p.endsWith("/sessions")) {
       const items = [{ kind: "video", video_id: "v1", title: "Warm-up stretches" }, { kind: "game", game_id: "catch-me-if-you-can" }];
       const base = { status: "planned", assignment_id: "a1", assignment_name: "Visual attention starter", total: 8, items };
       return ok({
         upcoming: [
-          { ...base, id: "ps1", seq: 4, week: 2, planned_date: ymd(2), location: "home", startable: true },
+          over.late
+            ? { ...base, id: "ps1", seq: 4, week: 2, planned_date: ymd(-over.late), location: "home", startable: true, skippable: true, next_in_line: true, days_late: over.late }
+            : { ...base, id: "ps1", seq: 4, week: 2, planned_date: ymd(2), location: "home", startable: true },
           { ...base, id: "ps2", seq: 5, week: 3, planned_date: ymd(4), location: "clinic", setting: "clinic", startable: false },
           { ...base, id: "ps3", seq: 6, week: 3, planned_date: ymd(6), location: "home", startable: false },
         ],
@@ -200,5 +203,32 @@ describe("parent portal", () => {
     show("/parent/calendar");
     expect((await screen.findAllByText(/Warm-up stretches → Catch Me If You Can/)).length).toBe(3);
     expect(screen.getAllByRole("button", { name: "Start" })).toHaveLength(1);
+  });
+
+  it("a session that was not played on time says how late it is, and can be started or skipped", async () => {
+    const calls = mockApi({ late: 3 });
+    show("/parent");
+    const user = userEvent.setup();
+    expect(await screen.findByText("Not played on time · 3 days late")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Skip" }));
+    // Skipping asks first, and says what it means.
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText(/The next session opens on its own planned day/)).toBeInTheDocument();
+    expect(calls.some((c) => c.endsWith("/skip"))).toBe(false);
+    await user.click(within(dialog).getByRole("button", { name: "Skip" }));
+    await waitFor(() => expect(calls).toContain("POST /v1/parent/children/c1/sessions/ps1/skip"));
+  });
+
+  it("an on-time session has no Skip, and one day late reads in the singular", async () => {
+    mockApi();
+    show("/parent");
+    await screen.findByRole("button", { name: "Start" });
+    expect(screen.queryByRole("button", { name: "Skip" })).toBeNull();
+    expect(screen.queryByText(/Not played on time/)).toBeNull();
+    cleanup();
+    mockApi({ late: 1 });
+    show("/parent");
+    expect(await screen.findByText("Not played on time · 1 day late")).toBeInTheDocument();
   });
 });

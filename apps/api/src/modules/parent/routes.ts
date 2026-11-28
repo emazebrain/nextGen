@@ -32,6 +32,9 @@ const LANGS = new Set(["en", "he", "ar", "ru", "fr", "es", "zh"]);
  * later one opens only after the one before it is finished. Sessions of a clinic-only protocol are never started
  * from the portal.
  */
+/** Today's date where the session's clinic is (`cl` is app.clinic): what "on time" is measured against. */
+const TODAY_SQL = `(now() AT TIME ZONE cl.timezone)::date`;
+
 const NEXT_HOME_SQL = `(SELECT x.id FROM app.planned_session x
                           WHERE x.assignment_id = a.id AND (x.location = 'home' OR a.setting = 'mixed') AND x.status IN ('planned', 'in_progress')
                           ORDER BY x.seq LIMIT 1)`;
@@ -225,10 +228,16 @@ export function parentRoutes(servicePool: pg.Pool, tickets?: TicketSigner) {
                 (SELECT count(*)::int FROM app.planned_session x WHERE x.assignment_id = a.id AND x.status <> 'cancelled') AS total,
                 (SELECT count(*)::int FROM app.planned_session x WHERE x.assignment_id = a.id AND x.status = 'done') AS completed,
                 a.setting,
-                COALESCE(ps.id = ${NEXT_HOME_SQL}, false) AS startable,
+                COALESCE(ps.id = ${NEXT_HOME_SQL}, false) AS next_in_line,
+                -- A session opens on its planned day (the clinic's own calendar day) and stays open after it.
+                COALESCE(ps.id = ${NEXT_HOME_SQL}, false) AND ps.planned_date <= ${TODAY_SQL} AS startable,
+                -- Once its day has passed it can also be skipped, so the next one can open on its own day.
+                COALESCE(ps.id = ${NEXT_HOME_SQL}, false) AND ps.planned_date < ${TODAY_SQL} AS skippable,
+                GREATEST(0, ${TODAY_SQL} - ps.planned_date) AS days_late,
                 ${ITEMS_SQL("assignment_step", "assignment_id", "a.id")}
            FROM app.planned_session ps
            JOIN app.protocol_assignment a ON a.id = ps.assignment_id
+           JOIN app.clinic cl ON cl.id = ps.clinic_id
           WHERE ps.patient_id = $1
             AND ps.status IN ('planned', 'in_progress')
             AND a.status = 'active'
@@ -239,12 +248,15 @@ export function parentRoutes(servicePool: pg.Pool, tickets?: TicketSigner) {
       // What is in each session: the names of its game-based activities and videos, in order. No settings, no results.
       const upcoming = upcomingRaw.map((r) => ({ ...r, items: toItems(r.items, lang) }));
 
+      // What happened lately at home: played (and how many days after its planned day) or skipped by a guardian.
       const { rows: recent } = await db.query(
         `SELECT ps.id, ps.seq, ps.week, ps.status, to_char(ps.planned_date, 'YYYY-MM-DD') AS planned_date,
-                ps.location, ps.completed_at, a.id AS assignment_id, a.name AS assignment_name
+                ps.location, ps.completed_at, a.id AS assignment_id, a.name AS assignment_name,
+                GREATEST(0, (ps.completed_at AT TIME ZONE cl.timezone)::date - ps.planned_date) AS days_late
            FROM app.planned_session ps
            JOIN app.protocol_assignment a ON a.id = ps.assignment_id
-          WHERE ps.patient_id = $1 AND ps.location = 'home' AND ps.status = 'done'
+           JOIN app.clinic cl ON cl.id = ps.clinic_id
+          WHERE ps.patient_id = $1 AND (ps.location = 'home' OR a.setting = 'mixed') AND ps.status IN ('done', 'skipped') AND ps.completed_at IS NOT NULL
           ORDER BY ps.completed_at DESC LIMIT 10`,
         [childId],
       );
@@ -254,6 +266,43 @@ export function parentRoutes(servicePool: pg.Pool, tickets?: TicketSigner) {
 
     if (!data) return c.json({ error: "not_found" }, 404);
     return c.json(data);
+  });
+
+  /**
+   * POST /v1/parent/children/:id/sessions/:sessionId/skip — a guardian skips a home session whose day has passed.
+   *
+   * Only the session that is next in line, only once its planned day is over, and only for the guardian's own child.
+   * The session is kept as "skipped" (never deleted) with the time it was skipped; the one after it then becomes
+   * next in line and opens on its own planned day.
+   */
+  app.post("/children/:id/sessions/:sessionId/skip", async (c) => {
+    const childId = c.req.param("id");
+    const sessionId = c.req.param("sessionId");
+    if (!UUID.test(childId) || !UUID.test(sessionId)) return c.json({ error: "not_found" }, 404);
+    const me = c.get("user").id;
+    const result = await withService(servicePool, async (db) => {
+      if (!(await isLinkedGuardian(db, childId, me))) return "forbidden" as const;
+      const { rows } = await db.query<{ status: string; location: string; setting: string; assignment_status: string; is_next: boolean; overdue: boolean }>(
+        `SELECT ps.status, ps.location, a.setting, a.status AS assignment_status,
+                COALESCE(ps.id = ${NEXT_HOME_SQL}, false) AS is_next, ps.planned_date < ${TODAY_SQL} AS overdue
+           FROM app.planned_session ps
+           JOIN app.protocol_assignment a ON a.id = ps.assignment_id
+           JOIN app.clinic cl ON cl.id = ps.clinic_id
+          WHERE ps.id = $1 AND ps.patient_id = $2`,
+        [sessionId, childId],
+      );
+      const row = rows[0];
+      if (!row) return "not_found" as const;
+      if (row.location !== "home" && row.setting !== "mixed") return "not_home_session" as const;
+      if (row.assignment_status !== "active") return "protocol_not_active" as const;
+      if (row.status !== "planned" && row.status !== "in_progress") return "session_closed" as const;
+      if (!row.is_next) return "not_next_session" as const;
+      if (!row.overdue) return "not_overdue" as const;
+      await db.query(`UPDATE app.planned_session SET status = 'skipped', completed_at = now() WHERE id = $1 AND status IN ('planned', 'in_progress')`, [sessionId]);
+      return "ok" as const;
+    });
+    if (result === "ok") return c.json({ ok: true });
+    return c.json({ error: result }, result === "not_found" ? 404 : result === "forbidden" || result === "not_home_session" ? 403 : 409);
   });
 
   /**
@@ -306,11 +355,13 @@ export function parentRoutes(servicePool: pg.Pool, tickets?: TicketSigner) {
                 a.id AS assignment_id, a.name AS assignment_name, a.status AS assignment_status, a.setting,
                 (SELECT count(*)::int FROM app.planned_session x WHERE x.assignment_id = a.id AND x.status <> 'cancelled') AS total,
                 COALESCE(ps.id = ${NEXT_HOME_SQL}, false) AS is_next,
+                ps.planned_date <= ${TODAY_SQL} AS due,
                 p.id AS patient_id, p.given_name, p.family_name, p.preferred_locale, p.alert, p.colour_vision_deficiency,
                 to_char(p.date_of_birth, 'YYYY-MM-DD') AS date_of_birth, p.tone_age_group, p.tones_enabled, p.music_enabled
            FROM app.planned_session ps
            JOIN app.protocol_assignment a ON a.id = ps.assignment_id
            JOIN app.patient p ON p.id = ps.patient_id
+           JOIN app.clinic cl ON cl.id = ps.clinic_id
           WHERE ps.id = $1 AND ps.patient_id = $2`,
         [sessionId, childId],
       );
@@ -320,6 +371,8 @@ export function parentRoutes(servicePool: pg.Pool, tickets?: TicketSigner) {
       if (row.assignment_status !== "active") return { error: "protocol_not_active" as const };
       if (row.status !== "planned" && row.status !== "in_progress") return { error: "session_closed" as const };
       if (!row.is_next) return { error: "not_next_session" as const };
+      // A session opens on its planned day. A late one stays open: it is played late, or skipped.
+      if (!row.due) return { error: "not_yet_due" as const };
 
       const steps = await db.query<StepRow & { done: boolean }>(
         `SELECT s.id, s.ordinal, s.step_type, s.video_id, s.game_id, s.session_mode, s.duration_s, s.lives, s.lives_auto,
@@ -331,6 +384,13 @@ export function parentRoutes(servicePool: pg.Pool, tickets?: TicketSigner) {
            FROM app.assignment_step s WHERE s.assignment_id = $1 ORDER BY s.ordinal`,
         [row.assignment_id, sessionId],
       );
+
+      // Everything in it was already played but the session never closed (for example the last result is waiting
+      // for the clinic's review): close it now, so it does not sit in the list as a session that will not start.
+      if (steps.rows.length > 0 && steps.rows.every((s) => s.done)) {
+        await db.query(`UPDATE app.planned_session SET status = 'done', completed_at = COALESCE(completed_at, now()) WHERE id = $1 AND status IN ('planned', 'in_progress')`, [sessionId]);
+        return { error: "already_played" as const };
+      }
 
       const videoIds = steps.rows.filter((s) => s.step_type === "video").map((s) => s.video_id!);
       const videos = new Map<string, { id: string; version: number; source: "upload" | "youtube"; youtube_id: string | null; duration_s: number | null; titles: Record<string, string>; sha256: Buffer | null; has_file: boolean }>();

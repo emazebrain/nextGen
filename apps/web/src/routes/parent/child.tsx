@@ -94,7 +94,7 @@ export function ParentChildPage() {
               <li key={s.id} className="parent-calendar__item parent-calendar__item--done">
                 <span className="parent-calendar__date emb-tnum">{formatDate(s.planned_date)}</span>
                 <span className="parent-calendar__details"><span><bdi>{s.assignment_name}</bdi></span></span>
-                <span className="parent-calendar__status app-muted">{t("parent.sessionDone")}</span>
+                <span className="parent-calendar__status app-muted">{s.status === "skipped" ? t("parent.skipped") : (s.days_late ?? 0) > 0 ? t("parent.playedLate", { days: s.days_late ?? 0 }) : t("parent.sessionDone")}</span>
               </li>
             ))}
           </ul>

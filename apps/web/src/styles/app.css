@@ -4654,3 +4654,8 @@ a.gamecard:hover {
   gap: var(--space-2);
   flex-wrap: wrap;
 }
+.parent-session__buttons {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}

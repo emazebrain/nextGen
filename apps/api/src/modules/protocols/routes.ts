@@ -132,7 +132,15 @@ export async function loadAssignment(db: pg.PoolClient, patientId: string): Prom
   if (!a) return null;
   const [steps, sessions] = await Promise.all([
     db.query(`SELECT id, ordinal, ${STEP_COLUMNS}, current_difficulty, sessions_completed FROM app.assignment_step WHERE assignment_id = $1 ORDER BY ordinal`, [a.id]).then((r) => ({ rows: r.rows.map(cleanStep) })),
-    db.query(`SELECT id, seq, week, to_char(planned_date, 'YYYY-MM-DD') AS planned_date, status FROM app.planned_session WHERE assignment_id = $1 ORDER BY seq`, [a.id]),
+    // days_late: for a finished or skipped session, how many days after its planned day that happened (the clinic's calendar).
+    db.query(
+      `SELECT ps.id, ps.seq, ps.week, to_char(ps.planned_date, 'YYYY-MM-DD') AS planned_date, ps.status,
+              CASE WHEN ps.status IN ('done', 'skipped') AND ps.completed_at IS NOT NULL
+                   THEN GREATEST(0, (ps.completed_at AT TIME ZONE cl.timezone)::date - ps.planned_date) END AS days_late
+         FROM app.planned_session ps JOIN app.clinic cl ON cl.id = ps.clinic_id
+        WHERE ps.assignment_id = $1 ORDER BY ps.seq`,
+      [a.id],
+    ),
   ]);
   return { ...a, steps: steps.rows, sessions: sessions.rows };
 }
