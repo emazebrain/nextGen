@@ -507,6 +507,7 @@
   "protocol.nowAt": "כרגע ברמת קושי {n}",
   "today.session": "שבוע {week} · מפגש {seq} מתוך {total}",
   "today.planned": "תוכנן ל-{date}",
+  "today.notStarted": "תוכנן ל‑{time} — עדיין לא התחיל",
   "today.start": "התחלה",
   "run.title": "מפגש",
   "run.startShort": "התחלה",

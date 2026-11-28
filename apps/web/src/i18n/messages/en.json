@@ -507,6 +507,7 @@
   "protocol.nowAt": "Now at difficulty {n}",
   "today.session": "Week {week} · Session {seq} of {total}",
   "today.planned": "Planned for {date}",
+  "today.notStarted": "Was due at {time} — not started yet",
   "today.start": "Start",
   "run.title": "Session",
   "run.startShort": "Start",

@@ -2,7 +2,7 @@
  * Clinic pages for this slice: Today, Patients, one patient, Settings, More,
  * and honest "coming next" pages for destinations built in the MVP.
  */
-import { useMemo, useState, type ComponentType, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ComponentType, type FormEvent, type ReactNode } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { useIntl } from "react-intl";
 import {
@@ -25,6 +25,7 @@ import {
   LogOut,
   ChevronRight,
   Play,
+  TriangleAlert,
 } from "lucide-react";
 import { Alert, Avatar, Button, Card, Chip, DataList, EmptyState, MazeLoader, PageHeader, Segmented, SelectField, TextField, type ChipTone, type Column } from "@emb/ui";
 import { useQueryClient } from "@tanstack/react-query";
@@ -366,7 +367,19 @@ function NextUp({ therapist }: { therapist: string | null }) {
   const { clinicId } = useClinic();
   const today = useToday(clinicId, therapist);
   const age = useAge();
-  const todayIso = new Date().toLocaleDateString("en-CA");
+  // The list follows the clock: a time that has passed without the session being started is flagged, and the list
+  // is read again every minute so a patient whose session was started (here or on another device) leaves it.
+  const [now, setNow] = useState(() => new Date());
+  const refetchToday = today.refetch;
+  useEffect(() => {
+    const tick = window.setInterval(() => {
+      setNow(new Date());
+      if (document.visibilityState === "visible") void refetchToday();
+    }, 60_000);
+    return () => window.clearInterval(tick);
+  }, [refetchToday]);
+  const todayIso = now.toLocaleDateString("en-CA");
+  const nowHhmm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   if (today.isPending) return <MazeLoader label={t("common.loading")} />;
   if (today.isError) return <LoadError error={today.error} retry={() => void today.refetch()} />;
   const sessions = today.data.items;
@@ -394,12 +407,14 @@ function NextUp({ therapist }: { therapist: string | null }) {
       const games = it.items ? it.items.map((i) => (i.kind === "video" ? `▶ ${i.title}` : gameName(i.game_id))) : [...new Set(it.games)].map(gameName);
       const overdue = it.planned_date < todayIso;
       const time = overdue ? null : hhmm(it.planned_time);
+      // Today's time has passed and the session was not started: not run yet, or the patient did not come.
+      const passed = !overdue && time !== null && time < nowHhmm;
       return {
         key: it.planned_session_id,
         overdue,
         time,
         node: (
-          <li key={it.planned_session_id} className="nextup__item">
+          <li key={it.planned_session_id} className={`nextup__item${overdue || passed ? " nextup__item--late" : ""}`}>
             <Avatar name={fullName(it.patient)} size={44} />
             <div className="nextup__text">
               <Link to={`/patients/${it.patient.id}`} className="nextup__name">
@@ -411,6 +426,11 @@ function NextUp({ therapist }: { therapist: string | null }) {
                 {age(it.patient.date_of_birth)} · {t("today.session", { week: it.week, seq: it.seq, total: it.total })}
               </p>
               <p className="nextup__games">{joinSteps(collapseRepeats(games), locale)}</p>
+              {passed && (
+                <p className="nextup__late">
+                  <TriangleAlert size={16} aria-hidden="true" /> {t("today.notStarted", { time: clock(time) ?? "" })}
+                </p>
+              )}
               {overdue && <p className="nextup__late">{t("today.planned", { date: intl.formatDate(calendarDate(it.planned_date), { weekday: "long", day: "numeric", month: "short" }) })}</p>}
               {!it.patient.can_play && <Chip tone="warning">{t("patient.pending.title")}</Chip>}
             </div>
@@ -428,12 +448,14 @@ function NextUp({ therapist }: { therapist: string | null }) {
       const name = `${appt.patient_given_name} ${appt.patient_family_name}`;
       const start = hhmm(appt.start_time);
       const end = hhmm(appt.end_time);
+      // The appointment's time has come and the patient's session was not started (once it is, they leave the list).
+      const passed = start !== null && start < nowHhmm;
       return {
         key: appt.id,
         overdue: false,
         time: start,
         node: (
-          <li key={appt.id} className="nextup__item">
+          <li key={appt.id} className={`nextup__item${passed ? " nextup__item--late" : ""}`}>
             <Avatar name={name} size={44} />
             <div className="nextup__text">
               <Link to={`/patients/${appt.patient_id}`} className="nextup__name">
@@ -450,6 +472,11 @@ function NextUp({ therapist }: { therapist: string | null }) {
                 {appt.title}
               </p>
               {appt.notes && <p className="nextup__games">{appt.notes}</p>}
+              {passed && (
+                <p className="nextup__late">
+                  <TriangleAlert size={16} aria-hidden="true" /> {t("today.notStarted", { time: clock(start) ?? "" })}
+                </p>
+              )}
             </div>
             <Link to="/calendar" className="emb-btn emb-btn--secondary nextup__start" aria-label={t("today.viewCalendar")}>
               <CalendarDays size={18} aria-hidden="true" />

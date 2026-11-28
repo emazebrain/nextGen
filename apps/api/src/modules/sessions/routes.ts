@@ -222,7 +222,7 @@ export function sessionRoutes(pool: pg.Pool, tickets: TicketSigner) {
           : undefined;
       const { row, steps, videos } = loaded;
       const regions = steps.some((s) => s.region_id) ? await loadRegionCatalog(db) : undefined;
-      await db.query(`UPDATE app.planned_session SET status = 'in_progress' WHERE id = $1 AND status = 'planned'`, [id]);
+      await db.query(`UPDATE app.planned_session SET status = 'in_progress', started_at = COALESCE(started_at, now()) WHERE id = $1 AND status = 'planned'`, [id]);
       // Session-level tones: from the patient's settings and the side the session works on (videos included).
       const side = sessionSide(steps, videos);
       const sessionTones = row.tones_enabled && row.date_of_birth && side

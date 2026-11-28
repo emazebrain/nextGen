@@ -325,7 +325,7 @@ export function useToday(clinicId: string | null, therapist: string | null = nul
         space,
         `today:${clinicId}`,
         () =>
-          apiGet<{ items: TodayItem[]; appointments?: TodayAppointment[]; review_count?: number }>(`/v1/today?lang=${locale}${clinicId ? `&clinic=${clinicId}` : ""}${therapist ? `&therapist=${therapist}` : ""}`, { signal }).then((r) => {
+          apiGet<{ items: TodayItem[]; appointments?: TodayAppointment[]; review_count?: number }>(`/v1/today?lang=${locale}&date=${new Date().toLocaleDateString("en-CA")}${clinicId ? `&clinic=${clinicId}` : ""}${therapist ? `&therapist=${therapist}` : ""}`, { signal }).then((r) => {
             qc.setQueryData(reviewCountKey(clinicId), r.review_count ?? 0);
             return { items: r.items, appointments: r.appointments ?? [] } as TodayData;
           }),

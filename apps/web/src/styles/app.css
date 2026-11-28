@@ -1332,7 +1332,16 @@ a.gamecard:hover {
 .nextup__games {
   font-weight: 500;
 }
+/* The planned time has passed and the session was not started: stands out from the rest of the day. */
+.nextup__item--late {
+  border-color: var(--status-warning);
+  border-inline-start-width: 4px;
+  background: var(--status-warning-subtle);
+}
 .nextup__late {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
   color: var(--status-warning);
   font-size: var(--text-14);
   font-weight: 600;

@@ -145,6 +145,15 @@ describe.skipIf(!ADMIN_URL)("protocols API", () => {
     expect(today.body.items[0].planned_time).toBeNull();
     expect((await yael(`/v1/calendar/sessions/${a.sessions[0].id}`, { method: "PATCH", body: { planned_date: start, planned_time: "09:30" } })).status).toBe(200);
     expect((await yael(`/v1/today?clinic=${ids.clinic}`)).body.items[0].planned_time).toBe("09:30");
+
+    // "Next up": once the patient's session is started today they are no longer waiting and leave the list; a
+    // session left unfinished on an earlier day stays on it. (Set directly: a launch needs consent, tested elsewhere.)
+    const open = (await yael(`/v1/today?clinic=${ids.clinic}`)).body.items[0];
+    await env.db.query(`UPDATE app.planned_session SET status = 'in_progress', started_at = now() WHERE id = $1`, [open.planned_session_id]);
+    expect((await yael(`/v1/today?clinic=${ids.clinic}`)).body.items).toEqual([]);
+    await env.db.query(`UPDATE app.planned_session SET started_at = now() - interval '2 days' WHERE id = $1`, [open.planned_session_id]);
+    expect((await yael(`/v1/today?clinic=${ids.clinic}`)).body.items.map((i: { planned_session_id: string }) => i.planned_session_id)).toEqual([open.planned_session_id]);
+    await env.db.query(`UPDATE app.planned_session SET status = 'planned', started_at = NULL WHERE id = $1`, [open.planned_session_id]);
     expect((await yael(`/v1/patients/${ids.patient}/assignment`, { method: "POST", body: { template_id: null, name: "x", weeks: 1, sessions_per_week: 1, setting: "clinic", start_date: start, steps: [step()] } })).status).toBe(409);
   });
 

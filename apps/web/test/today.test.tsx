@@ -13,7 +13,7 @@ const AMIT = { patient_id: "p2", given_name: "Amit", family_name: "Lavi", scores
 const DANA = { patient_id: "p1", given_name: "Dana", family_name: "Katz", scores: [100, 120, 130], summary: "improving", week: { done: 2, planned: 3 }, difficulty: 4, last_change: "up", last_session_at: day(0), reasons: [] };
 
 const asked: string[] = [];
-function mockApi(over: { caseload?: unknown[] | "fail"; role?: string; therapists?: unknown[] } = {}) {
+function mockApi(over: { caseload?: unknown[] | "fail"; role?: string; therapists?: unknown[]; today?: unknown } = {}) {
   asked.length = 0;
   vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, "http://localhost");
@@ -26,7 +26,7 @@ function mockApi(over: { caseload?: unknown[] | "fail"; role?: string; therapist
     // One therapist's list: only Amit is on Noam's care team.
     if (p === "/v1/patients" && url.searchParams.get("therapist")) return ok({ patients: [patient("p2", "Amit", "Lavi")] });
     if (p === "/v1/patients") return ok({ patients: [patient("p1", "Dana", "Katz"), patient("p2", "Amit", "Lavi"), patient("p3", "Eli", "Baron")] });
-    if (p === "/v1/today") return ok({ items: [], appointments: [], review_count: 0 });
+    if (p === "/v1/today") return ok(over.today ?? { items: [], appointments: [], review_count: 0 });
     if (p === "/v1/reports/caseload") return over.caseload === "fail" ? new Response("{}", { status: 500 }) : ok({ patients: over.caseload ?? [AMIT, DANA] });
     return ok({});
   });
@@ -105,6 +105,28 @@ describe("Today", () => {
     await waitFor(() => expect(asked.some((u) => u.startsWith("/v1/patients") && u.includes("therapist=t1"))).toBe(true));
     await waitFor(() => expect(screen.queryByText("Eli Baron")).toBeNull());
     expect(screen.getAllByText("Amit Lavi").length).toBeGreaterThan(0);
+  });
+
+  it("lists the day in calendar order and flags a time that passed without the session being started", async () => {
+    const day = new Date().toLocaleDateString("en-CA");
+    const item = (id: string, given: string, time: string) => ({
+      planned_session_id: id, planned_date: day, planned_time: time, seq: 1, week: 1, total: 12, games: [], items: [],
+      patient: { id, given_name: given, family_name: "Katz", date_of_birth: "2018-03-01", alert: null, can_play: true, therapists: [] },
+      assignment: { id: "a", name: "Plan", weeks: 6 },
+    });
+    // 00:00 has always passed and 23:59 has not (but for one minute a day).
+    mockApi({ today: { items: [item("s2", "Later", "23:59"), item("s1", "Earlier", "00:00")], appointments: [], review_count: 0 } });
+    show();
+    const rows = await waitFor(() => {
+      const found = [...document.querySelectorAll<HTMLElement>(".nextup__item")];
+      expect(found).toHaveLength(2);
+      return found;
+    });
+    expect(rows[0]).toHaveTextContent("Earlier Katz");
+    expect(rows[0]).toHaveClass("nextup__item--late");
+    expect(rows[0]).toHaveTextContent(/not started yet/);
+    expect(rows[1]).toHaveTextContent("Later Katz");
+    expect(rows[1]).not.toHaveClass("nextup__item--late");
   });
 
   it("shows a manager the therapists who are not using the system, under Needs attention", async () => {

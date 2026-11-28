@@ -412,7 +412,7 @@ export function parentRoutes(servicePool: pg.Pool, tickets?: TicketSigner) {
 
       const regions = steps.rows.some((s) => s.region_id) ? await loadRegionCatalog(db) : undefined;
 
-      await db.query(`UPDATE app.planned_session SET status = 'in_progress' WHERE id = $1 AND status = 'planned'`, [sessionId]);
+      await db.query(`UPDATE app.planned_session SET status = 'in_progress', started_at = COALESCE(started_at, now()) WHERE id = $1 AND status = 'planned'`, [sessionId]);
 
       // Uploaded music for this child, looked up as the guardian (the database checks the link once more).
       const musicTracks = row.music_enabled
