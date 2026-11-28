@@ -10,7 +10,7 @@ import { migrate } from "@emb/db";
 import { createApp } from "./app.ts";
 import { createAuth } from "./auth.ts";
 import { ticketSigner } from "./tickets.ts";
-import { localFileStore } from "./files.ts";
+import { fileStorePlan, localFileStore } from "./files.ts";
 import { createMailer } from "./email.ts";
 
 function required(name: string): string {
@@ -45,9 +45,12 @@ const auth = createAuth(
 if (!process.env.LAUNCH_SIGNING_KEY && process.env.NODE_ENV === "production") throw new Error("LAUNCH_SIGNING_KEY is not set");
 if (!process.env.DEVICE_SECRET_KEY && process.env.NODE_ENV === "production") throw new Error("DEVICE_SECRET_KEY is not set");
 const tickets = ticketSigner(process.env.LAUNCH_SIGNING_KEY?.replace(/\\n/g, "\n"));
-// FILE_STORE_DIR: where uploaded videos are kept on this machine (the cloud cells switch to S3 with deployment).
-const files = localFileStore(process.env.FILE_STORE_DIR ?? ".data/files");
-const app = createApp(info, { pool, auth, tickets, files, deviceKey: deviceKey(process.env.DEVICE_SECRET_KEY), mailer, publicAppUrl: process.env.PUBLIC_APP_URL });
+// Where uploaded videos and music are kept: FILE_STORE_DIR, else an attached Railway volume, else the container's
+// own disk (lost on every deploy — the app warns admins while that is so).
+const storage = fileStorePlan();
+const files = localFileStore(storage.dir);
+if (!storage.durable) console.warn(`[files] uploads are stored in ${storage.dir} on the container's own disk and will be lost on the next deploy. Attach a volume to this service, or set FILE_STORE_DIR.`);
+const app = createApp(info, { pool, auth, tickets, files, filesDurable: storage.durable, deviceKey: deviceKey(process.env.DEVICE_SECRET_KEY), mailer, publicAppUrl: process.env.PUBLIC_APP_URL });
 
 // Run pending migrations before accepting traffic.
 try {

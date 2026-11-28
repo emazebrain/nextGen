@@ -8,6 +8,7 @@ import { Film } from "lucide-react";
 import { Alert, Button, Card, Chip, DataList, EmptyState, MazeLoader, PageHeader, SelectField, TextAreaField, TextField, type Column } from "@emb/ui";
 import { youtubeId, type VideoInput, type VideoSummary } from "@emb/contracts";
 import { ApiError } from "../../api/http.ts";
+import { TemporaryFilesNotice } from "../music.tsx";
 import { uploadVideoFile, useBrainRegions, useMe, useSaveVideo, useVideo, useVideos } from "../../api/queries.ts";
 import { usePrefs, useT, type MessageId } from "../../i18n/index.tsx";
 import { useTitle } from "../../lib/title.ts";
@@ -269,6 +270,7 @@ export function VideoEditorPage() {
   return (
     <div className="app-page">
       <PageHeader title={t(id ? "videos.edit" : "videos.add")} eyebrow={<Link to="/admin/videos">{t("videos.title")}</Link>} />
+      <TemporaryFilesNotice />
       <form className="video-editor" onSubmit={onSubmit} noValidate>
         {error && <Alert tone="danger">{error}</Alert>}
         <Card>

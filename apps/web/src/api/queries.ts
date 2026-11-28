@@ -11,6 +11,7 @@ import type {
   StaffMember,
   UpdatePatient,
 } from "@emb/contracts";
+import { sendInParts } from "./upload.ts";
 import { ApiError, apiGet, apiSend } from "./http.ts";
 import { usePrefs } from "../i18n/index.tsx";
 import type { BrainRegion, VideoInput, VideoSummary } from "@emb/contracts";
@@ -612,58 +613,12 @@ export function uploadVideoFile(id: string, file: File, onProgress: (fraction: n
   return uploadInParts(id, file, onProgress);
 }
 
-/** Part size for uploads: at a slow 200 KB/s a part still takes only about 20 seconds. */
-const UPLOAD_PART_BYTES = 4 * 1024 * 1024;
-
-/**
- * Sends the file in parts and then asks the server to put them together. One long request does not survive the
- * proxy in front of the hosted API (a 70 MB video came back 502 after the last byte); short ones do, and a part
- * that fails is simply sent again.
- */
+/** Sends the file in parts and then asks the server to put them together (see api/upload.ts). */
 async function uploadInParts(id: string, file: File, onProgress: (fraction: number) => void): Promise<VideoSummary> {
   const uploadId = crypto.randomUUID();
-  const parts = Math.max(1, Math.ceil(file.size / UPLOAD_PART_BYTES));
-  let sent = 0;
-  for (let i = 0; i < parts; i++) {
-    const blob = file.slice(i * UPLOAD_PART_BYTES, (i + 1) * UPLOAD_PART_BYTES);
-    for (let attempt = 1; ; attempt++) {
-      try {
-        // Leave the last few percent for putting the parts together on the server.
-        await sendPart(`/v1/admin/videos/${id}/file/parts/${uploadId}/${i}`, blob, (loaded) => onProgress(((sent + loaded) / Math.max(1, file.size)) * 0.97));
-        break;
-      } catch (err) {
-        // A refusal (not allowed, too large) will not change on a second try; a dropped connection or a busy gateway may.
-        const status = err instanceof ApiError ? err.status : 0;
-        if (attempt >= 4 || (status >= 400 && status < 500)) throw err;
-        await new Promise((r) => setTimeout(r, attempt * 1500));
-      }
-    }
-    sent += blob.size;
-  }
+  // Leave the last few percent for putting the parts together on the server.
+  const parts = await sendInParts(file, (i) => `/v1/admin/videos/${id}/file/parts/${uploadId}/${i}`, (f) => onProgress(f * 0.97));
   const done = await apiSend<{ video: VideoSummary }>("POST", `/v1/admin/videos/${id}/file/complete`, { upload_id: uploadId, parts, mime: file.type || "video/mp4" });
   onProgress(1);
   return done.video;
-}
-
-function sendPart(url: string, blob: Blob, onLoaded: (bytes: number) => void): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("PUT", url);
-    xhr.withCredentials = true;
-    xhr.setRequestHeader("content-type", "application/octet-stream");
-    xhr.setRequestHeader("accept", "application/json");
-    xhr.upload.onprogress = (e) => e.lengthComputable && onLoaded(e.loaded);
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) return resolve();
-      let code = "unknown";
-      try {
-        code = JSON.parse(xhr.responseText)?.error ?? code;
-      } catch {
-        /* a gateway's own error page */
-      }
-      reject(new ApiError(xhr.status, code));
-    };
-    xhr.onerror = () => reject(new ApiError(0, "network"));
-    xhr.send(blob);
-  });
 }

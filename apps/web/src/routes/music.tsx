@@ -12,6 +12,7 @@ import { useT, type MessageId } from "../i18n/index.tsx";
 import { useTitle } from "../lib/title.ts";
 import { useClinic } from "../lib/clinic.tsx";
 import { ApiError } from "../api/http.ts";
+import { useFilesStatus } from "../api/upload.ts";
 import { musicFileUrl, useMusic, useRemoveMusic, useUpdateMusic, useUploadMusic, type MusicScope, type MusicSide, type MusicTrack } from "../api/music.ts";
 
 const MAX_BYTES = 20 * 1024 * 1024;
@@ -35,6 +36,7 @@ export function MusicSettingsPage() {
       <PageHeader title={t("music.title")} description={t("music.intro")} />
 
       <div className="settings">
+      <TemporaryFilesNotice />
       {list.isPending && <MazeLoader label={t("common.loading")} />}
       {list.isError && <Alert tone="danger">{t("music.loadFailed")}</Alert>}
 
@@ -54,9 +56,18 @@ export function MusicSettingsPage() {
   );
 }
 
+/** While the server has no permanent file storage, say so before anyone uploads something they want to keep. */
+export function TemporaryFilesNotice() {
+  const t = useT();
+  const status = useFilesStatus();
+  if (status.data?.durable !== false) return null;
+  return <Alert tone="warning" title={t("files.temporaryTitle")}>{t("files.temporaryBody")}</Alert>;
+}
+
 function UploadCard({ scopes, clinicId }: { scopes: MusicScope[]; clinicId: string | null }) {
   const t = useT();
-  const upload = useUploadMusic();
+  const [progress, setProgress] = useState(0);
+  const upload = useUploadMusic(setProgress);
   const input = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
@@ -79,6 +90,7 @@ function UploadCard({ scopes, clinicId }: { scopes: MusicScope[]; clinicId: stri
     e.preventDefault();
     if (!file || !title.trim() || !rights || problem) return;
     setDone(null);
+    setProgress(0);
     try {
       const track = await upload.mutateAsync({ file, title: title.trim(), hemisphere: side, scope: level, clinicId });
       setDone(track.title);
@@ -123,7 +135,7 @@ function UploadCard({ scopes, clinicId }: { scopes: MusicScope[]; clinicId: stri
         {done && <Alert tone="success">{t("music.uploaded", { title: done })}</Alert>}
         <div className="pform__actions">
           <Button type="submit" icon={<Upload size={18} aria-hidden="true" />} loading={upload.isPending} disabled={!file || !title.trim() || !rights || !!problem}>
-            {upload.isPending ? t("music.uploading") : t("music.upload")}
+            {upload.isPending ? t("music.progress", { pct: Math.round(progress * 100) }) : t("music.upload")}
           </Button>
         </div>
       </form>

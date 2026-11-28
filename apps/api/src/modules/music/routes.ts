@@ -10,7 +10,7 @@ import { Hono, type Context } from "hono";
 import type pg from "pg";
 import { randomUUID } from "node:crypto";
 import { withUser, type Env } from "../../context.ts";
-import { FileTooLarge, type FileStore } from "../../files.ts";
+import { FileTooLarge, UPLOAD_PART_MAX_BYTES, joinParts, type FileStore } from "../../files.ts";
 import { UUID } from "../patients/routes.ts";
 import { parseRange } from "../videos/routes.ts";
 
@@ -85,9 +85,8 @@ export function musicRoutes(pool: pg.Pool, files: FileStore) {
     return c.json(data);
   });
 
-  // Upload: the audio file is the body; where it goes, its hemisphere and its title are in the address. The uploader
-  // must confirm they hold the rights to use the music.
-  r.post("/music", async (c) => {
+  /** Reads and checks where an upload goes: the level, the hemisphere, the title and the rights confirmation. */
+  const uploadRequest = async (c: Context<Env>, mimeRaw: string) => {
     const q = (k: string) => (c.req.query(k) ?? "").trim();
     const scope = q("scope") as MusicScope;
     const hemisphere = q("hemisphere");
@@ -98,17 +97,12 @@ export function musicRoutes(pool: pg.Pool, files: FileStore) {
     if (hemisphere !== "left" && hemisphere !== "right") issues.push({ path: "hemisphere", code: "invalid_value" });
     if (title.length < 1 || title.length > 120) issues.push({ path: "title", code: "invalid_length" });
     if (scope !== "platform" && (!clinic || !UUID.test(clinic))) issues.push({ path: "clinic", code: "required" });
-    if (issues.length) return c.json({ error: "invalid", issues }, 400);
-    if (q("rights") !== "confirmed") return c.json({ error: "rights_required" }, 400);
-
-    const mime = (c.req.header("content-type") ?? "").split(";")[0]!.trim().toLowerCase();
+    if (issues.length) return { fail: c.json({ error: "invalid", issues }, 400) } as const;
+    if (q("rights") !== "confirmed") return { fail: c.json({ error: "rights_required" }, 400) } as const;
+    const mime = mimeRaw.split(";")[0]!.trim().toLowerCase();
     const ext = MUSIC_MIME[mime];
-    if (!ext) return c.json({ error: "unsupported_type" }, 415);
-    if (Number(c.req.header("content-length") ?? "0") > MUSIC_MAX_BYTES) return c.json({ error: "file_too_large" }, 413);
-    const body = c.req.raw.body;
-    if (!body) return c.json({ error: "empty_file" }, 400);
-
-    // Check the level is theirs to upload to before taking the file.
+    if (!ext) return { fail: c.json({ error: "unsupported_type" }, 415) } as const;
+    // The level must be theirs to upload to before any file is taken.
     const where = await run(c, async (db) => {
       const { rows } = await db.query<{ org: string | null; ok: boolean }>(
         `SELECT app.clinic_org($2) AS org, app.can_manage_music($1, app.clinic_org($2), CASE WHEN $1 = 'organization' THEN NULL ELSE $2::uuid END, app.current_user_id()) AS ok`,
@@ -116,18 +110,14 @@ export function musicRoutes(pool: pg.Pool, files: FileStore) {
       );
       return rows[0]!;
     });
-    if (!where.ok || (scope !== "platform" && !where.org)) return c.json({ error: "forbidden" }, 403);
+    if (!where.ok || (scope !== "platform" && !where.org)) return { fail: c.json({ error: "forbidden" }, 403) } as const;
+    return { scope, hemisphere, title, clinic, mime, org: where.org, key: `music/${randomUUID()}.${ext}` } as const;
+  };
 
-    const key = `music/${randomUUID()}.${ext}`;
-    let stored: { bytes: number; sha256: Buffer };
-    try {
-      stored = await files.put(key, body, MUSIC_MAX_BYTES);
-    } catch (err) {
-      if (err instanceof FileTooLarge) return c.json({ error: "file_too_large" }, 413);
-      throw err;
-    }
+  /** Records a stored file as a track; if that fails the file is removed, since nothing would point at it. */
+  const saveTrack = async (c: Context<Env>, u: { scope: MusicScope; hemisphere: string; title: string; clinic: string | null; mime: string; org: string | null; key: string }, stored: { bytes: number; sha256: Buffer }) => {
     if (stored.bytes === 0) {
-      await files.remove(key);
+      await files.remove(u.key);
       return c.json({ error: "empty_file" }, 400);
     }
     try {
@@ -135,16 +125,76 @@ export function musicRoutes(pool: pg.Pool, files: FileStore) {
         const ins = await db.query<{ id: string }>(
           `INSERT INTO app.music_track (scope, organization_id, clinic_id, owner_user_id, hemisphere, title, storage_key, sha256, bytes, mime)
            VALUES ($1, $2, $3, app.current_user_id(), $4, $5, $6, $7, $8, $9) RETURNING id`,
-          [scope, scope === "platform" ? null : where.org, scope === "clinic" || scope === "personal" ? clinic : null, hemisphere, title, key, stored.sha256, stored.bytes, mime],
+          [u.scope, u.scope === "platform" ? null : u.org, u.scope === "clinic" || u.scope === "personal" ? u.clinic : null, u.hemisphere, u.title, u.key, stored.sha256, stored.bytes, u.mime],
         );
         const { rows } = await db.query(`SELECT ${COLUMNS} FROM app.music_track t LEFT JOIN app.app_user u ON u.id = t.owner_user_id WHERE t.id = $1`, [ins.rows[0]!.id]);
         return rows[0];
       });
       return c.json({ track }, 201);
     } catch (err) {
-      await files.remove(key); // nothing points at the file: do not keep it
+      await files.remove(u.key);
       throw err;
     }
+  };
+
+  // Upload in one request: the audio file is the body; where it goes, its hemisphere and its title are in the
+  // address. The uploader must confirm they hold the rights to use the music.
+  r.post("/music", async (c) => {
+    const u = await uploadRequest(c, c.req.header("content-type") ?? "");
+    if ("fail" in u) return u.fail;
+    if (Number(c.req.header("content-length") ?? "0") > MUSIC_MAX_BYTES) return c.json({ error: "file_too_large" }, 413);
+    const body = c.req.raw.body;
+    if (!body) return c.json({ error: "empty_file" }, 400);
+    let stored: { bytes: number; sha256: Buffer };
+    try {
+      stored = await files.put(u.key, body, MUSIC_MAX_BYTES);
+    } catch (err) {
+      if (err instanceof FileTooLarge) return c.json({ error: "file_too_large" }, 413);
+      throw err;
+    }
+    return saveTrack(c, u, stored);
+  });
+
+  // Upload in parts, as the hosted app does (one long request does not survive the proxy in front of this API):
+  // each part is a short request of a few megabytes, kept under the uploader's own name until the parts are put
+  // together. The level, the rights confirmation and the kind of file are checked when they are.
+  const partKey = (user: string, upload: string, index: number) => `uploads/music/${user}/${upload}/${String(index).padStart(4, "0")}`;
+  const MAX_PARTS = Math.ceil(MUSIC_MAX_BYTES / (256 * 1024));
+
+  r.put("/music/parts/:upload/:index", async (c) => {
+    const upload = c.req.param("upload");
+    const index = Number(c.req.param("index"));
+    if (!UUID.test(upload) || !Number.isInteger(index) || index < 0 || index >= MAX_PARTS) return c.json({ error: "invalid_part" }, 400);
+    // Only someone who may upload music somewhere gets to leave parts on the server.
+    const may = await run(c, async (db) => (await db.query<{ ok: boolean }>(`SELECT app.is_platform_admin() OR EXISTS (SELECT 1 FROM app.membership m WHERE m.user_id = app.current_user_id() AND m.status = 'active' AND m.role IN ('therapist', 'clinic_manager', 'org_admin')) AS ok`)).rows[0]!.ok);
+    if (!may) return c.json({ error: "forbidden" }, 403);
+    const body = c.req.raw.body;
+    if (!body) return c.json({ error: "empty_file" }, 400);
+    try {
+      const stored = await files.put(partKey(c.get("user").id, upload, index), body, UPLOAD_PART_MAX_BYTES); // sending a part again replaces it
+      return c.json({ ok: true, bytes: stored.bytes });
+    } catch (err) {
+      if (err instanceof FileTooLarge) return c.json({ error: "part_too_large" }, 413);
+      throw err;
+    }
+  });
+
+  r.post("/music/complete", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { upload_id?: unknown; parts?: unknown; mime?: unknown } | null;
+    const upload = typeof body?.upload_id === "string" ? body.upload_id : "";
+    const parts = typeof body?.parts === "number" ? body.parts : 0;
+    if (!UUID.test(upload) || !Number.isInteger(parts) || parts < 1 || parts > MAX_PARTS) return c.json({ error: "invalid_part" }, 400);
+    const u = await uploadRequest(c, typeof body?.mime === "string" ? body.mime : "");
+    if ("fail" in u) return u.fail;
+    let stored: { bytes: number; sha256: Buffer } | { missing: number };
+    try {
+      stored = await joinParts(files, Array.from({ length: parts }, (_, i) => partKey(c.get("user").id, upload, i)), u.key, MUSIC_MAX_BYTES);
+    } catch (err) {
+      if (err instanceof FileTooLarge) return c.json({ error: "file_too_large" }, 413);
+      throw err;
+    }
+    if ("missing" in stored) return c.json({ error: "missing_part", part: stored.missing }, 409);
+    return saveTrack(c, u, stored);
   });
 
   // Rename, or move to the other hemisphere.

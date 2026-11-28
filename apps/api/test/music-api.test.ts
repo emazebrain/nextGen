@@ -160,4 +160,32 @@ describe.skipIf(!ADMIN_URL)("session music API", () => {
     expect(after.music_tracks.map((t: { title: string }) => t.title).sort()).toEqual(["Clinic left", "Clinic right"]);
     expect((await miri.api.raw(url)).status).toBe(404);
   });
+
+  it("takes a track in parts, with the same checks as a whole upload", async () => {
+    const upload = randomUUID();
+    const part = (who: Who, i: number, fill: number, up: string = upload) => who.api.raw(`/v1/music/parts/${up}/${i}`, { method: "PUT", headers: { "content-type": "application/octet-stream" }, body: new Uint8Array(500).fill(fill) });
+    const finish = (who: Who, q: Record<string, string>, parts = 2, up: string = upload) => who.api(`/v1/music/complete?${new URLSearchParams(q)}`, { method: "POST", body: { upload_id: up, parts, mime: "audio/mpeg" } });
+    const ok = { scope: "personal", clinic: ids.clinic, hemisphere: "left", title: "In parts", rights: "confirmed" };
+
+    expect((await part(miri, 0, 1)).status).toBe(403); // a guardian cannot leave parts on the server
+    expect((await part(yael, 0, 1)).status).toBe(200);
+    expect((await finish(yael, ok)).body).toMatchObject({ error: "missing_part", part: 1 });
+    expect((await part(yael, 0, 1)).status).toBe(200); // the parts were cleared: send them again
+    expect((await part(yael, 1, 2)).status).toBe(200);
+    // Still no upload without the rights confirmation, above one's level, or of another person's parts.
+    const { rights: _r, ...noRights } = ok;
+    expect((await finish(yael, noRights)).body.error).toBe("rights_required");
+    expect((await finish(yael, { ...ok, scope: "clinic" })).status).toBe(403);
+    expect((await finish(dan, ok)).body.error).toBe("missing_part");
+
+    const done = await finish(yael, ok);
+    expect(done.status, JSON.stringify(done.body)).toBe(201);
+    expect(done.body.track).toMatchObject({ title: "In parts", hemisphere: "left", scope: "personal", bytes: "1000" });
+    const file = new Uint8Array(await (await yael.api.raw(`/v1/music/${done.body.track.id}/file`)).arrayBuffer());
+    expect([file.length, file[0], file[499], file[500], file[999]]).toEqual([1000, 1, 1, 2, 2]);
+  });
+
+  it("tells the upload screens whether files are kept for good", async () => {
+    expect((await yael.api("/v1/files/status")).body).toEqual({ durable: true }); // the tests use their own folder
+  });
 });

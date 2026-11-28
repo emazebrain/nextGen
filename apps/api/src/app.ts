@@ -23,7 +23,7 @@ import { messagingRoutes, parentMessagingRoutes } from "./modules/messaging/rout
 import { calendarRoutes } from "./modules/calendar/routes.ts";
 import { searchRoutes } from "./modules/search/routes.ts";
 import { deviceKey, type DeviceKey } from "./device-crypto.ts";
-import { localFileStore, type FileStore } from "./files.ts";
+import { fileStorePlan, localFileStore, type FileStore } from "./files.ts";
 import { createMailer, type Mailer } from "./email.ts";
 import { ticketSigner, type TicketSigner } from "./tickets.ts";
 
@@ -38,6 +38,8 @@ export interface AppDeps {
   auth: Auth;
   /** Signs launch tickets. Defaults to a throwaway key (fine for dev and tests, not production). */
   tickets?: TicketSigner;
+  /** Whether uploaded files outlive a deploy (see fileStorePlan). Defaults to what the environment says. */
+  filesDurable?: boolean;
   /** Uploaded files (videos). Defaults to a folder on disk (FILE_STORE_DIR or .data/files). */
   files?: FileStore;
   /** Seals device and space secrets. Defaults to a random key per process (dev and tests only). */
@@ -133,7 +135,10 @@ export function createApp(info: AppInfo, deps?: AppDeps) {
     v1.route("/", sessions);
     v1.route("/", reportRoutes(deps.pool));
     v1.route("/", progressReportRoutes(deps.pool));
-    const fileStore = deps.files ?? localFileStore(process.env.FILE_STORE_DIR ?? ".data/files");
+    const fileStore = deps.files ?? localFileStore(fileStorePlan().dir);
+    // Whether uploads are kept for good, so the upload screens can warn while they are not.
+    const filesDurable = deps.filesDurable ?? (deps.files ? true : fileStorePlan().durable);
+    v1.get("/files/status", (c) => c.json({ durable: filesDurable }));
     const videos = videoRoutes(deps.pool, fileStore);
     v1.route("/", videos);
     const music = musicRoutes(deps.pool, fileStore);

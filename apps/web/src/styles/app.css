@@ -1655,13 +1655,44 @@ a.gamecard:hover {
 .steps__add { display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); }
 .videopick__filters { display: grid; gap: var(--space-3, 12px); margin-block-end: var(--space-3, 12px); }
 .videopick__chips { display: flex; flex-wrap: wrap; gap: var(--space-1, 4px); margin-block-start: var(--space-1, 4px); }
-.playscreen--video { display: grid; place-items: center; min-block-size: 100dvh; padding: var(--space-4, 16px); background: var(--surface-sunken, #0b0b14); color: #fff; }
-.videostep { display: grid; gap: var(--space-4, 16px); justify-items: center; inline-size: min(100%, 72rem); }
-.videostep__title { margin: 0; font-size: clamp(1.25rem, 3vw, 2rem); text-align: center; }
-.videostep__stage { inline-size: 100%; display: grid; place-items: center; }
-.videostep__video, .videostep__frame { inline-size: 100%; aspect-ratio: 16 / 9; max-block-size: 75dvh; border: 0; border-radius: 16px; background: #000; }
-.videostep__actions { min-block-size: 56px; display: grid; place-items: center; }
-.videostep__actions .app-muted { color: #d5d8e2; }
+/* A video step fills the whole screen, like a game: the picture as large as it fits, black around it, with the
+   title along the top edge and Continue floating above the player's own controls. */
+.playscreen--video { background: #000; color: #fff; }
+.videostep { position: absolute; inset: 0; }
+.videostep__stage { position: absolute; inset: 0; display: grid; place-items: center; padding: 0; }
+.videostep__stage > .emb-alert { max-inline-size: min(90%, 36rem); }
+.videostep__video, .videostep__frame { inline-size: 100%; block-size: 100%; border: 0; background: #000; object-fit: contain; }
+.videostep__title {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  z-index: 1;
+  margin: 0;
+  padding: calc(var(--space-3, 12px) + env(safe-area-inset-top, 0px)) var(--space-4, 16px) var(--space-6, 32px);
+  background: linear-gradient(rgb(0 0 0 / 0.7), rgb(0 0 0 / 0));
+  font-size: clamp(1rem, 2vw, 1.375rem);
+  text-align: center;
+  pointer-events: none;
+}
+.videostep__actions {
+  position: absolute;
+  /* Clear of the player's own control bar along the bottom edge. */
+  inset-block-end: calc(72px + env(safe-area-inset-bottom, 0px));
+  inset-inline: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.videostep__actions > * { pointer-events: auto; }
+.videostep__actions .app-muted {
+  margin: 0;
+  padding: var(--space-1, 4px) var(--space-3, 12px);
+  border-radius: var(--radius-pill, 999px);
+  background: rgb(0 0 0 / 0.6);
+  color: #e6e8ef;
+  font-size: var(--text-14);
+}
 
 /* Offline sign-in on a shared tablet (offline devices spec §7.5) */
 .offline__people {

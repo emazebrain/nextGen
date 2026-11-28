@@ -17,7 +17,7 @@ import {
   type VideoSummary,
 } from "../../../../../packages/contracts/src/index.ts";
 import { withUser, type Env } from "../../context.ts";
-import { FileTooLarge, type FileStore } from "../../files.ts";
+import { FileTooLarge, UPLOAD_PART_MAX_BYTES, joinParts, type FileStore } from "../../files.ts";
 import { parseBody } from "../../validate.ts";
 import { UUID } from "../patients/routes.ts";
 
@@ -87,8 +87,6 @@ export function parseRange(header: string | undefined, size: number): { start: n
   return { start, end };
 }
 
-/** One part of a video sent in parts: small enough to pass any proxy in seconds. */
-export const VIDEO_PART_MAX_BYTES = 8 * 1024 * 1024;
 const VIDEO_MAX_PARTS = 2048;
 
 export function videoRoutes(pool: pg.Pool, files: FileStore) {
@@ -326,7 +324,7 @@ export function videoRoutes(pool: pg.Pool, files: FileStore) {
     const body = c.req.raw.body;
     if (!body) return c.json({ error: "empty_file" }, 400);
     try {
-      const stored = await files.put(partKey(id, upload, index), body, VIDEO_PART_MAX_BYTES); // sending a part again replaces it
+      const stored = await files.put(partKey(id, upload, index), body, UPLOAD_PART_MAX_BYTES); // sending a part again replaces it
       return c.json({ ok: true, bytes: stored.bytes });
     } catch (err) {
       if (err instanceof FileTooLarge) return c.json({ error: "part_too_large" }, 413);
@@ -345,46 +343,15 @@ export function videoRoutes(pool: pg.Pool, files: FileStore) {
     if (!UUID.test(upload) || !Number.isInteger(parts) || parts < 1 || parts > VIDEO_MAX_PARTS) return c.json({ error: "invalid_part" }, 400);
     if (!(VIDEO_MIME as readonly string[]).includes(mime)) return c.json({ error: "unsupported_type" }, 415);
 
-    const cleanUp = async () => {
-      for (let i = 0; i < parts; i++) await files.remove(partKey(id, upload, i)).catch(() => undefined);
-    };
-    // Every part must be there before anything is put together.
-    for (let i = 0; i < parts; i++) {
-      const part = await files.open(partKey(id, upload, i));
-      if (!part) return c.json({ error: "missing_part", part: i }, 409);
-      await part.stream.cancel();
-    }
-    // One stream that reads the parts in order.
-    let at = 0;
-    let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
-    const whole = new ReadableStream<Uint8Array>({
-      async pull(controller) {
-        for (;;) {
-          if (!reader) {
-            if (at >= parts) return controller.close();
-            const part = await files.open(partKey(id, upload, at++));
-            if (!part) return controller.error(new Error("missing_part"));
-            reader = part.stream.getReader();
-          }
-          const { done, value } = await reader.read();
-          if (done) {
-            reader = null;
-            continue;
-          }
-          return controller.enqueue(value);
-        }
-      },
-    });
     const key = fileKey(id, target.version + 1, mime);
-    let stored: { bytes: number; sha256: Buffer };
+    let stored: { bytes: number; sha256: Buffer } | { missing: number };
     try {
-      stored = await files.put(key, whole, VIDEO_MAX_BYTES);
+      stored = await joinParts(files, Array.from({ length: parts }, (_, i) => partKey(id, upload, i)), key, VIDEO_MAX_BYTES);
     } catch (err) {
-      await cleanUp();
       if (err instanceof FileTooLarge) return c.json({ error: "file_too_large" }, 413);
       throw err;
     }
-    await cleanUp();
+    if ("missing" in stored) return c.json({ error: "missing_part", part: stored.missing }, 409);
     if (stored.bytes === 0) {
       await files.remove(key);
       return c.json({ error: "empty_file" }, 400);

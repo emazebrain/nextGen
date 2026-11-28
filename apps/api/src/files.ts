@@ -68,3 +68,58 @@ export function localFileStore(dir: string): FileStore {
     },
   };
 }
+
+/**
+ * Where uploaded files (videos, session music) are kept, and whether they outlive a deploy.
+ *   FILE_STORE_DIR             an explicit folder — the operator's choice, taken as durable;
+ *   RAILWAY_VOLUME_MOUNT_PATH  Railway sets this when a volume is attached to the service: files go to <mount>/files
+ *                              and survive deploys with no further setup;
+ *   otherwise                  .data/files on the container's own disk, which the host discards on every deploy.
+ * In development and tests nothing is deployed, so the local folder counts as durable there.
+ */
+export function fileStorePlan(env: Record<string, string | undefined> = process.env): { dir: string; durable: boolean } {
+  if (env.FILE_STORE_DIR) return { dir: env.FILE_STORE_DIR, durable: true };
+  if (env.RAILWAY_VOLUME_MOUNT_PATH) return { dir: join(env.RAILWAY_VOLUME_MOUNT_PATH, "files"), durable: true };
+  return { dir: ".data/files", durable: env.NODE_ENV !== "production" };
+}
+
+/**
+ * Puts the parts of an upload together into one file, in order. Used when a file arrives as several short requests
+ * (a single long upload does not survive the proxy in front of the hosted API). Every part must exist; the parts are
+ * removed afterwards whether or not the file was stored. Returns null when a part is missing.
+ */
+export async function joinParts(files: FileStore, partKeys: string[], key: string, maxBytes: number): Promise<{ bytes: number; sha256: Buffer } | { missing: number }> {
+  for (let i = 0; i < partKeys.length; i++) {
+    const part = await files.open(partKeys[i]!);
+    if (!part) return { missing: i };
+    await part.stream.cancel();
+  }
+  let at = 0;
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  const whole = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      for (;;) {
+        if (!reader) {
+          if (at >= partKeys.length) return controller.close();
+          const part = await files.open(partKeys[at++]!);
+          if (!part) return controller.error(new Error("missing_part"));
+          reader = part.stream.getReader();
+        }
+        const { done, value } = await reader.read();
+        if (done) {
+          reader = null;
+          continue;
+        }
+        return controller.enqueue(value);
+      }
+    },
+  });
+  try {
+    return await files.put(key, whole, maxBytes);
+  } finally {
+    for (const k of partKeys) await files.remove(k).catch(() => undefined);
+  }
+}
+
+/** One part of a file sent in parts: small enough to pass any proxy in seconds. */
+export const UPLOAD_PART_MAX_BYTES = 8 * 1024 * 1024;

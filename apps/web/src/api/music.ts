@@ -1,6 +1,7 @@
 /** Uploaded session music (apps/api modules/music). */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, apiGet, apiSend } from "./http.ts";
+import { apiGet, apiSend } from "./http.ts";
+import { sendInParts } from "./upload.ts";
 
 export type MusicScope = "platform" | "organization" | "clinic" | "personal";
 export type MusicSide = "left" | "right";
@@ -36,17 +37,21 @@ export interface MusicUpload {
   clinicId: string | null;
 }
 
-/** The file is the request body; the uploader's rights confirmation travels with it (the form requires the tick). */
-export function useUploadMusic() {
+/**
+ * Sends the file in parts, then asks the server to put them together as a track. The uploader's rights confirmation
+ * travels with that last request (the form requires the tick).
+ */
+export function useUploadMusic(onProgress?: (fraction: number) => void) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (u: MusicUpload) => {
       const q = new URLSearchParams({ scope: u.scope, hemisphere: u.hemisphere, title: u.title, rights: "confirmed" });
       if (u.clinicId && u.scope !== "platform") q.set("clinic", u.clinicId);
-      const res = await fetch(`/v1/music?${q}`, { method: "POST", credentials: "include", headers: { "content-type": u.file.type || "audio/mpeg", accept: "application/json" }, body: u.file });
-      const body = (await res.json().catch(() => ({}))) as { track?: MusicTrack; error?: string };
-      if (!res.ok || !body.track) throw new ApiError(res.status, body.error ?? "upload_failed");
-      return body.track;
+      const uploadId = crypto.randomUUID();
+      const parts = await sendInParts(u.file, (i) => `/v1/music/parts/${uploadId}/${i}`, (f) => onProgress?.(f * 0.97));
+      const done = await apiSend<{ track: MusicTrack }>("POST", `/v1/music/complete?${q}`, { upload_id: uploadId, parts, mime: u.file.type || "audio/mpeg" });
+      onProgress?.(1);
+      return done.track;
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: key }),
   });

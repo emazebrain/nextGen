@@ -103,7 +103,7 @@ describe.skipIf(!ADMIN_URL)("videos API", () => {
     const id = made.body.video.id as string;
     const upload = randomUUID();
     const parts = [new Uint8Array(1000).fill(1), new Uint8Array(1000).fill(2), new Uint8Array(300).fill(3)];
-    const put = (who: typeof admin, i: number, body: Uint8Array, up = upload) => who.raw(`/v1/admin/videos/${id}/file/parts/${up}/${i}`, { method: "PUT", headers: { "content-type": "application/octet-stream" }, body });
+    const put = (who: typeof admin, i: number, body: Uint8Array<ArrayBuffer>, up: string = upload) => who.raw(`/v1/admin/videos/${id}/file/parts/${up}/${i}`, { method: "PUT", headers: { "content-type": "application/octet-stream" }, body });
     const finish = (n: number, mime = "video/mp4", up = upload) => admin(`/v1/admin/videos/${id}/file/complete`, { method: "POST", body: { upload_id: up, parts: n, mime } });
 
     // Out of order, and the middle part sent twice (a retry): the last copy counts.
